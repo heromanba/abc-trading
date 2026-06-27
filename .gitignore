@@ -1,2 +1,7 @@
 
 spot/
+
+.idea/
+target/
+
+.ipynb_checkpoints/
