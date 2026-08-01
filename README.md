@@ -17,14 +17,14 @@ This repository includes a set of benchmark classes under `data/src/main/java/co
 Use Maven from the project root to compile and run a benchmark.
 
 ```bash
-mvn -f data/pom.xml clean package
-java -jar data/target/data-1.0-SNAPSHOT-shaded.jar <benchmark-class> -f 1
+mvn -f examples/java/pom.xml clean package
+java -jar examples/java/target/data-1.0-SNAPSHOT-shaded.jar <benchmark-class> -f 1
 ```
 
 Example:
 
 ```bash
-java -jar data/target/data-1.0-SNAPSHOT-shaded.jar com.abc.trading.CacheLocalityBenchmark -f 1
+java -jar examples/java/target/data-1.0-SNAPSHOT-shaded.jar com.abc.trading.CacheLocalityBenchmark -f 1
 ```
 
 ### If you want to run with `exec:java`
