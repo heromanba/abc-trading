@@ -30,3 +30,6 @@ public class MessageBusPrototype {
         bus.response(id, "ok");
     }
 }
+// Received typed: QuoteTick[symbol=ETHUSDT, bid=12.3, ask=12.4, ts=1785770157469]
+// Received typed: QuoteTick[symbol=BTCUSDT, bid=100.0, ask=101.0, ts=1785770157496]
+// Got response: ok
