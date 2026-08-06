@@ -5,3 +5,5 @@ spot/
 target/
 
 .ipynb_checkpoints/
+
+*gc.log*

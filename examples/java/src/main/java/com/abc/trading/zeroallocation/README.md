@@ -7,6 +7,19 @@
 
 The benchmark uses batches of 100,000 and 1,000,000 messages. JMH performs warm-up and measurement iterations, and forks two JVMs to reduce startup/JIT effects.
 
+## Memory barrier example
+
+The same folder also contains [MemoryBarrierExample.java](MemoryBarrierExample.java),
+which shows a minimal two-thread publication pattern:
+
+- the writer stores the payload first
+- the writer then sets a `volatile` flag
+- the reader spins until the flag becomes visible
+- the reader then safely observes the payload
+
+The `volatile` write acts as the memory barrier. Without it, the JVM and CPU
+may reorder or delay visibility of the payload write.
+
 ## Reusable-buffer optimizations
 
 The reusable path was optimized after the initial long run. It now avoids the
