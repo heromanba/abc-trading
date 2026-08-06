@@ -24,6 +24,12 @@ public final class MemoryBarrierExample {
         var mailbox = new VolatileMailbox();
 
         Thread consumer = new Thread(() -> {
+            /**
+             * Reading a volatile variable triggers an Acquire Barrier (LoadLoad and LoadStore).
+             * This barrier forces the reading CPU to invalidate its own local cache and reload
+             * all data fresh from main memory. If this thread just reads payload directly without
+             * checking flag, it might read a stale, cache value.
+             */
             while (!mailbox.ready) {
                 Thread.onSpinWait();
             }
@@ -32,6 +38,22 @@ public final class MemoryBarrierExample {
 
         consumer.start();
 
+        /**
+         * 
+            mailbox.ready = true;
+            mailbox.payload = 42;
+
+            If put the normal write after the volatile write, then yes. payload can absolutely be
+            seen as stale by other threads.
+            
+            In this layout, your code breaks the "happens-before" chain required for safe publication.
+
+            Why the data becomes stale.
+            Memory barries in java are directional. A volatile write acts as a release barrier, which 
+            behaves like a one-way gate:
+            - it guarantees that everything written before it is flushed to main memory.
+            - it does not catch or flush actions that occur after it.
+         */
         mailbox.payload = 42;
         mailbox.ready = true; // volatile write: acts like a release barrier
 
