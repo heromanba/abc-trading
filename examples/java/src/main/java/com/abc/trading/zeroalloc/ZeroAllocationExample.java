@@ -19,6 +19,37 @@ public final class ZeroAllocationExample {
     }
 
     public static final class QuoteFlyweight {
+        /**
+         * Enforces a fixed binary footprint for financial tickers (e.g."EURUSD", "AAPL")
+         * within a raw byte buffer. In HFT and ultra-low-latency engineering, this variable
+         * serves several critical architecture functions:
+         * 
+         * 1. Enables deterministic memory offsets
+         * Because every symbol is allocated exactly 24 bytes, the exact start position (offset)
+         * of every data field inside the buffer can be calculated via simple arithmetic.
+         * - Bid price always starts at byte 24.
+         * - Ask price always starts at byte 32.
+         * - Timestamp always starts at byte 40.  
+         * 
+         * Without a fixed width, fields would shift unpredictably depending on whether a symbol
+         * was 3 characters ("AMD") or 6 characters ("EURUSD"), forcing the code to dynamically 
+         * parse data sequentially.
+         * 
+         * 2. Eliminates object allocation
+         * In standard Java, strings vary in size and live on the managed heap as separate objects.
+         * By writing raw ASCII bytes directly into a pre-allocated ByteBuffer up to a limit of 24
+         * bytes, the program performs string tracking without creating Java objects. This keeps 
+         * garbage collection (GC) pauses at zero.
+         * 
+         * 3. Handling sizing and padding
+         * The variable directly governs how data is written and validated in the set and matchesSymbol
+         * functions:
+         * - Truncation: if a ticker string is accidentally longer than 24 bytes, it is safely truncated
+         * to 24 to prevent it from overwriting adjacent numeric data.
+         * - Zero-padding: if a ticker string is shorter than 24 bytes (like "AAPL", which is 4 bytes),
+         * the code pads the remaining 20 bytes with (byte) 0. This establishes clean boundaries for string
+         * retrieval and comparison routines.
+         */
         private static final int SYMBOL_BYTES = 24; // fixed-width ASCII symbol
         private static final int BID_OFFSET = SYMBOL_BYTES;
         private static final int ASK_OFFSET = BID_OFFSET + Double.BYTES;
