@@ -7,3 +7,5 @@ target/
 .ipynb_checkpoints/
 
 *gc.log*
+
+examples/java/gc-results/
