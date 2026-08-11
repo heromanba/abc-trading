@@ -9,3 +9,10 @@ target/
 *gc.log*
 
 examples/java/gc-results/
+
+.venv/
+
+*.pyc
+*.csv
+*.txt
+Cargo.lock

@@ -1,0 +1,51 @@
+"""Market data value objects backed by Java primitives."""
+
+from dataclasses import dataclass
+
+from abc_trading._java import java_class
+
+
+class Bar:
+    @classmethod
+    def _from_java(cls, java_bar: object) -> "Bar":
+        instance = cls.__new__(cls)
+        instance._java = java_bar
+        instance._symbol = str(java_bar.symbol())
+        instance._ts_init = int(java_bar.tsInit())
+        instance._close = float(java_bar.close())
+        instance._sequence = int(java_bar.sequence())
+        return instance
+
+    def __init__(self, symbol: str, timestamp: int, close: float, sequence: int = 0) -> None:
+        self._java = java_class("com.abc.trading.data.Bar")(
+            symbol, timestamp, close, sequence
+        )
+        self._symbol = str(self._java.symbol())
+        self._ts_init = int(self._java.tsInit())
+        self._close = float(self._java.close())
+        self._sequence = int(self._java.sequence())
+
+    @property
+    def symbol(self) -> str:
+        return self._symbol
+
+    @property
+    def ts_init(self) -> int:
+        return self._ts_init
+
+    @property
+    def close(self) -> float:
+        return self._close
+
+    @property
+    def sequence(self) -> int:
+        return self._sequence
+
+
+@dataclass(frozen=True)
+class BarType:
+    value: str
+
+    @classmethod
+    def from_str(cls, value: str) -> "BarType":
+        return cls(value)
