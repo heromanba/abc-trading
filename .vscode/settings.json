@@ -2,8 +2,11 @@
     "python-envs.defaultEnvManager": "ms-python.python:conda",
     "python-envs.defaultPackageManager": "ms-python.python:conda",
     "java.configuration.updateBuildConfiguration": "automatic",
-    // Tells the Language Server to locate and treat "data" as a valid project root
-    "java.project.sourcePaths": [
-        "data/src/main/java"
+    "python-envs.pythonProjects": [
+        {
+            "path": ".",
+            "envManager": "ms-python.python:venv",
+            "packageManager": "ms-python.python:pip"
+        }
     ]
 }
