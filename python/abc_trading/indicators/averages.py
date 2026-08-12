@@ -16,14 +16,14 @@ class SimpleMovingAverage:
 
     def update_raw(self, value: float) -> None:
         self.value = float(self._java.update(value))
-        self.count = int(self._java.count())
+        self.count = min(self.count + 1, self.period)
 
     def update(self, value: float) -> None:
         self.update_raw(value)
 
     @property
     def initialized(self) -> bool:
-        return bool(self._java.initialized())
+        return self.count >= self.period
 
 
 class ExponentialMovingAverage:
@@ -37,7 +37,7 @@ class ExponentialMovingAverage:
 
     def update_raw(self, value: float) -> None:
         self.value = float(self._java.update(value))
-        self.count = int(self._java.count())
+        self.count += 1
 
     def update(self, value: float) -> None:
         self.update_raw(value)
