@@ -11,7 +11,7 @@ import java.util.function.Consumer;
  * Minimal typed message bus implementation inspired by nautilus_trader design.
  */
 public class MessageBus {
-    private final Map<Class<?>, List<Handler<?>>> typedHandlers = new LinkedHashMap<>();
+    private final Map<Class<?>, List<TypedSubscription<?>>> typedHandlers = new LinkedHashMap<>();
     private final Map<String, Class<?>> nameToClass = new LinkedHashMap<>();
     private final Map<UUID, Consumer<Object>> correlation = new LinkedHashMap<>();
     private final Serializer serializer;
@@ -25,26 +25,53 @@ public class MessageBus {
     }
 
     public <T> void subscribe(Class<T> cls, Handler<T> handler) {
+        subscribe(cls, handler, 0);
+    }
+
+    public <T> void subscribe(Class<T> cls, Handler<T> handler, int priority) {
         if (cls == null) throw new IllegalArgumentException("message type is required");
         if (handler == null) throw new IllegalArgumentException("handler is required");
-        List<Handler<?>> handlers = typedHandlers.computeIfAbsent(cls, k -> new ArrayList<>());
-        if (!handlers.contains(handler)) handlers.add(handler);
+        List<TypedSubscription<?>> handlers = typedHandlers.computeIfAbsent(cls, k -> new ArrayList<>());
+        for (TypedSubscription<?> subscription : handlers) {
+            if (subscription.handler == handler) return;
+        }
+        handlers.add(new TypedSubscription<>(handler, priority, handlers.size()));
+        handlers.sort(TypedSubscription::compareDeliveryOrder);
     }
 
     public <T> void unsubscribe(Class<T> cls, Handler<T> handler) {
-        List<Handler<?>> list = typedHandlers.get(cls);
+        List<TypedSubscription<?>> list = typedHandlers.get(cls);
         if (list == null) return;
-        list.remove(handler);
+        list.removeIf(subscription -> subscription.handler == handler);
         if (list.isEmpty()) typedHandlers.remove(cls);
     }
 
     @SuppressWarnings("unchecked")
     public <T> void publish(T msg) {
         Class<?> cls = msg.getClass();
-        List<Handler<?>> handlers = typedHandlers.get(cls);
+        List<TypedSubscription<?>> handlers = typedHandlers.get(cls);
         if (handlers == null || handlers.isEmpty()) return;
-        for (Handler<?> h : List.copyOf(handlers)) {
-            ((Handler<T>) h).handle(msg);
+        for (TypedSubscription<?> subscription : List.copyOf(handlers)) {
+            ((Handler<T>) subscription.handler).handle(msg);
+        }
+    }
+
+    private static final class TypedSubscription<T> {
+        private final Handler<T> handler;
+        private final int priority;
+        private final long registrationSequence;
+
+        private TypedSubscription(Handler<T> handler, int priority, long registrationSequence) {
+            this.handler = handler;
+            this.priority = priority;
+            this.registrationSequence = registrationSequence;
+        }
+
+        private static int compareDeliveryOrder(TypedSubscription<?> left, TypedSubscription<?> right) {
+            int priorityOrder = Integer.compare(right.priority, left.priority);
+            return priorityOrder != 0
+                    ? priorityOrder
+                    : Long.compare(left.registrationSequence, right.registrationSequence);
         }
     }
 

@@ -64,6 +64,18 @@ public class MessageBusTest {
     }
 
     @Test
+    void deliversHigherPriorityHandlersFirst() {
+        MessageBus bus = new MessageBus(null);
+        List<String> calls = new ArrayList<>();
+
+        bus.subscribe(String.class, message -> calls.add("normal"));
+        bus.subscribe(String.class, message -> calls.add("high"), 10);
+        bus.publish("event");
+
+        assertEquals(List.of("high", "normal"), calls);
+    }
+
+    @Test
     void publishingWithoutSubscribersIsANoOp() {
         MessageBus bus = new MessageBus(null);
 
