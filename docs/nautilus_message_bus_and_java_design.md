@@ -388,7 +388,9 @@ bus.publish(
         bar);
 ```
 
-Start with exact topic matching. Add wildcard matching only when the use cases require it.
+Nautilus allows wildcard subscription patterns: `*` matches zero or more characters and `?` matches exactly one character. Published topics are concrete and must not contain wildcards.
+
+**Implemented in the Java rewrite:** `TypedTopicRouter<T>` provides typed topic routing with Nautilus-style wildcard matching. `MessageBus` exposes typed topic subscribe, unsubscribe, publish, and router accessors. The implementation caches matching handler indexes, invalidates the cache when subscriptions change, orders by priority then pattern then registration sequence, and rejects wildcard published topics. Registration sequence is the Java fallback for Nautilus's handler-ID tie-breaker because the current Java `Handler` interface has no explicit stable handler ID.
 
 Recommended first structures:
 

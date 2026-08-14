@@ -76,6 +76,49 @@ public class MessageBusTest {
     }
 
     @Test
+    void routesTypedMessagesByTopicAndKeepsTopicsSeparate() {
+        MessageBus bus = new MessageBus(null);
+        List<String> calls = new ArrayList<>();
+        Handler<String> handler = calls::add;
+
+        bus.subscribe("data.bar.*", String.class, handler);
+        bus.publish("data.bar.NVDA", "ignored");
+        bus.publish("data.quote.AAPL", "ignored");
+        bus.publish("data.bar.AAPL", "delivered");
+
+        assertEquals(List.of("ignored", "delivered"), calls);
+    }
+
+    @Test
+    void invalidatesTopicCacheAfterSubscriptionChanges() {
+        MessageBus bus = new MessageBus(null);
+        List<String> calls = new ArrayList<>();
+        Handler<String> first = message -> calls.add("first:" + message);
+        Handler<String> second = message -> calls.add("second:" + message);
+
+        bus.subscribe("topic", String.class, first);
+        bus.publish("topic", "one");
+        bus.subscribe("topic", String.class, second);
+        bus.publish("topic", "two");
+        bus.unsubscribe("topic", String.class, first);
+        bus.publish("topic", "three");
+
+        assertEquals(
+                List.of("first:one", "first:two", "second:two", "second:three"),
+                calls);
+    }
+
+    @Test
+    void rejectsWildcardPublishedTopicsButAcceptsWildcardPatterns() {
+        MessageBus bus = new MessageBus(null);
+        bus.subscribe("data.bar.????", String.class, message -> { });
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> bus.publish("data.*", "invalid"));
+    }
+
+    @Test
     void publishingWithoutSubscribersIsANoOp() {
         MessageBus bus = new MessageBus(null);
 

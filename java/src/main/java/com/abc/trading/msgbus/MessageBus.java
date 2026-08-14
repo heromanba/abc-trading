@@ -12,6 +12,7 @@ import java.util.function.Consumer;
  */
 public class MessageBus {
     private final Map<Class<?>, List<TypedSubscription<?>>> typedHandlers = new LinkedHashMap<>();
+    private final Map<Class<?>, TypedTopicRouter<?>> typedTopicRouters = new LinkedHashMap<>();
     private final Map<String, Class<?>> nameToClass = new LinkedHashMap<>();
     private final Map<UUID, Consumer<Object>> correlation = new LinkedHashMap<>();
     private final Serializer serializer;
@@ -39,11 +40,61 @@ public class MessageBus {
         handlers.sort(TypedSubscription::compareDeliveryOrder);
     }
 
+    public <T> void subscribe(String topic, Class<T> cls, Handler<T> handler) {
+        router(cls).subscribe(topic, handler);
+    }
+
+    public <T> void subscribe(String topic, Class<T> cls, Handler<T> handler, int priority) {
+        router(cls).subscribe(topic, handler, priority);
+    }
+
+    public <T> void subscribe(Class<T> cls, String topic, Handler<T> handler) {
+        subscribe(topic, cls, handler);
+    }
+
     public <T> void unsubscribe(Class<T> cls, Handler<T> handler) {
         List<TypedSubscription<?>> list = typedHandlers.get(cls);
         if (list == null) return;
         list.removeIf(subscription -> subscription.handler == handler);
         if (list.isEmpty()) typedHandlers.remove(cls);
+    }
+
+    public <T> void unsubscribe(String topic, Class<T> cls, Handler<T> handler) {
+        TypedTopicRouter<?> router = typedTopicRouters.get(cls);
+        if (router != null) typedRouter(router, cls).unsubscribe(topic, handler);
+    }
+
+    public <T> void unsubscribe(Class<T> cls, String topic, Handler<T> handler) {
+        unsubscribe(topic, cls, handler);
+    }
+
+    public <T> void publish(String topic, T msg) {
+        if (msg == null) throw new IllegalArgumentException("message is required");
+        publishTopicUntyped(topic, msg.getClass(), msg);
+    }
+
+    public <T> TypedTopicRouter<T> router(Class<T> cls) {
+        if (cls == null) throw new IllegalArgumentException("message type is required");
+        return typedRouter(
+                typedTopicRouters.computeIfAbsent(cls, ignored -> new TypedTopicRouter<>()),
+                cls);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> TypedTopicRouter<T> typedRouter(
+            TypedTopicRouter<?> router,
+            Class<T> cls) {
+        return (TypedTopicRouter<T>) router;
+    }
+
+    private <T> void publishTopic(String topic, Class<T> cls, T msg) {
+        TypedTopicRouter<?> router = typedTopicRouters.get(cls);
+        if (router != null) typedRouter(router, cls).publish(topic, msg);
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> void publishTopicUntyped(String topic, Class<?> cls, T msg) {
+        publishTopic(topic, (Class<T>) cls, msg);
     }
 
     @SuppressWarnings("unchecked")
