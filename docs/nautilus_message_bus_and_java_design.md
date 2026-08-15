@@ -411,6 +411,8 @@ Keep these concepts distinct:
 
 This separation will make execution, risk, portfolio, and persistence components easier to reason about.
 
+**Implemented in the Java rewrite:** `TypedEndpointMap<T>` now provides exact, typed, point-to-point endpoints. `MessageBus` exposes endpoint registration, replacement, deregistration, `isEndpointRegistered`, `trySend`, and `send`. Endpoint delivery is synchronous and invokes at most one handler. Endpoint names reject wildcards, while topic subscriptions retain wildcard pattern matching. Sending to an unregistered endpoint returns `false` through `trySend` and otherwise remains a no-op, matching Nautilus's non-throwing missing-handler send behavior.
+
 ### Stage 4: Add explicit event sequence numbers
 
 For reconciliation, every processed input and emitted event should have a deterministic sequence number:
@@ -770,6 +772,76 @@ PortfolioUpdate
 
 The initial proof only needs to compare the ordered `SIGNAL` and `ORDER_SUBMIT` rows. More event types can be added after that path is stable.
 
+**Implemented in the Java rewrite:** Stage 5 now has `ReconciliationComparator`, which validates the shared CSV schema and compares rows in order, returning the first differing row and column. This is intentionally stronger than comparing aggregate order counts.
+
+The recon example now persists Yahoo inputs under `recon/output/immutable_data/` and reuses those CSV files on later runs. The Python companion `recon/compare_event_logs.py` performs the same ordered, field-level comparison for two backend logs. The intended workflow is:
+
+```text
+Yahoo Finance download (once)
+    -> immutable_data/AAPL_*.csv and immutable_data/NVDA_*.csv
+    -> Nautilus backend
+    -> Java backend
+    -> compare_event_logs.py nautilus.csv java_events.csv
+```
+
+Do not compare runs that downloaded different market data. The input CSVs are part of the proof artifact.
+
+The current Java backtest now uses the runtime composition path rather than a parallel private engine:
+
+```text
+BacktestEngine facade
+    -> NautilusKernel
+        -> SimulatedClock
+        -> DataEngine
+        -> Trader
+        -> StrategyHandler
+        -> MessageBus
+        -> RiskEngine
+        -> ExecutionEngine
+        -> Portfolio
+        -> PositionUpdate
+```
+
+The available local Nautilus Python checkout is not currently importable in the selected environment (`nautilus_trader.core.data` is missing), so the validated comparator run is currently Java-versus-Java self-comparison. A real Nautilus adapter remains required before claiming cross-backend parity.
+
 ### What is the practical rule?
 
 Use an endpoint when one component owns a command. Use a topic when many components should observe an event. Use a typed router when the payload type is known and the path is important or high volume. Use the dynamic path when flexibility matters more than compile-time guarantees.
+
+## 14. Nautilus Architecture Mapping and Source References
+
+The reference architecture is described in the Nautilus documentation:
+
+`https://nautilustrader.io/docs/latest/concepts/architecture/`
+
+The local Rust checkout is the implementation reference. The Java project should preserve behavior and lifecycle boundaries, not copy Rust syntax.
+
+| Nautilus responsibility | Rust source reference | Java implementation | Status |
+|---|---|---|---|
+| Runtime composition | `nautilus_trader/crates/system/src/kernel.rs` (`NautilusKernel`) | `java/src/main/java/com/abc/trading/system/NautilusKernel.java` | Minimal counterpart implemented |
+| Trader and strategy lifecycle | `nautilus_trader/crates/system/src/trader.rs` (`Trader`) and `crates/trading/src/strategy/core.rs` (`StrategyCore`) | `java/src/main/java/com/abc/trading/system/Trader.java` and `trading/StrategyHandler.java` | Minimal lifecycle implemented |
+| Message bus | `nautilus_trader/crates/common/src/msgbus/core.rs` | `java/src/main/java/com/abc/trading/msgbus/MessageBus.java` | Stages 1-3 implemented |
+| Typed pub/sub | `nautilus_trader/crates/common/src/msgbus/typed_router.rs` | `java/src/main/java/com/abc/trading/msgbus/TypedTopicRouter.java` | Typed wildcard router implemented |
+| Typed endpoints | `nautilus_trader/crates/common/src/msgbus/typed_endpoints.rs` | `java/src/main/java/com/abc/trading/msgbus/TypedEndpointMap.java` | Exact synchronous endpoints implemented |
+| Clock | `nautilus_trader/crates/common/src/clock.rs` (`Clock`) | `java/src/main/java/com/abc/trading/system/Clock.java` and `SimulatedClock.java` | Minimal simulated clock implemented |
+| Data engine | `nautilus_trader/crates/data/src/engine/mod.rs` (`DataEngine`) | `java/src/main/java/com/abc/trading/data/DataEngine.java` | Bar publication shell implemented |
+| Risk engine | `nautilus_trader/crates/risk/src/engine/mod.rs` (`RiskEngine`) | `java/src/main/java/com/abc/trading/risk/RiskEngine.java` | Quantity-limit shell implemented |
+| Execution engine | `nautilus_trader/crates/execution/src/engine/mod.rs` (`ExecutionEngine`) | `java/src/main/java/com/abc/trading/execution/ExecutionEngine.java` | Synchronous risk-to-portfolio shell implemented |
+| Portfolio | `nautilus_trader/crates/portfolio/src/portfolio.rs` (`Portfolio`) | `java/src/main/java/com/abc/trading/portfolio/Portfolio.java` | Minimal position/order state implemented |
+| Cache | `nautilus_trader/crates/common/src/cache/mod.rs` (`Cache`) | `java/src/main/java/com/abc/trading/cache/Cache.java` | Instruments, positions, and orders implemented |
+| Structured logging | `nautilus_trader/crates/common/src/logging/logger.rs` (`Logger`) | `java/src/main/java/com/abc/trading/events/CsvEventLogger.java` | CSV lifecycle logger implemented |
+| Execution reconciliation | `nautilus_trader/crates/execution/src/reconciliation/mod.rs` | `java/src/main/java/com/abc/trading/reconciliation/ReconciliationComparator.java` | Ordered CSV comparison implemented |
+
+### Remaining parity gaps
+
+The new Java classes are deliberately minimal shells. The following Nautilus behaviors are not yet implemented and must not be inferred from the class names:
+
+- Data clients, subscriptions, aggregators, and order-book processing from `crates/data/src/engine/mod.rs`.
+- Full risk rules, account state, and portfolio-aware validation from `crates/risk/src/engine/mod.rs`.
+- Venue adapters, order state machines, fills, execution reports, and reconciliation workflows from `crates/execution/src/engine/mod.rs` and `crates/execution/src/reconciliation/mod.rs`.
+- Account balances, mark-to-market PnL, currencies, positions, and snapshots from `crates/portfolio/src/portfolio.rs`.
+- Timers and event scheduling beyond the simulated timestamp in `crates/common/src/clock.rs`.
+- Actor registration and component-specific lifecycle state from `crates/system/src/trader.rs` and `crates/trading/src/strategy/core.rs`.
+- Cache namespaces for accounts, instruments, orders, positions, and market data beyond the current minimal maps in `crates/common/src/cache/mod.rs`.
+
+Each future Java component should add its Rust source location to this table and a focused parity test before it is used by the reconciliation flow.

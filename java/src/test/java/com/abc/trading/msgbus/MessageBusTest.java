@@ -2,9 +2,15 @@ package com.abc.trading.msgbus;
 
 import org.junit.jupiter.api.Test;
 
+import com.abc.trading.reconciliation.ReconciliationComparator;
+import com.abc.trading.reconciliation.ReconciliationResult;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -117,6 +123,77 @@ public class MessageBusTest {
                 IllegalArgumentException.class,
                 () -> bus.publish("data.*", "invalid"));
     }
+
+            @Test
+            void sendsCommandsToOneExactEndpointWithoutPublishingToSubscribers() {
+            MessageBus bus = new MessageBus(null);
+            List<String> calls = new ArrayList<>();
+            bus.subscribe(String.class, message -> calls.add("topic:" + message));
+            bus.registerEndpoint("RiskEngine.execute", String.class,
+                message -> calls.add("endpoint:" + message));
+
+            assertEquals(true, bus.trySend("RiskEngine.execute", String.class, "order"));
+            assertEquals(List.of("endpoint:order"), calls);
+            }
+
+            @Test
+            void replacesEndpointHandlersAndSupportsDeregistration() {
+            MessageBus bus = new MessageBus(null);
+            List<String> calls = new ArrayList<>();
+            bus.registerEndpoint("ExecEngine.execute", String.class,
+                message -> calls.add("old:" + message));
+            bus.registerEndpoint("ExecEngine.execute", String.class,
+                message -> calls.add("new:" + message));
+
+            bus.send("ExecEngine.execute", String.class, "first");
+            bus.deregisterEndpoint("ExecEngine.execute", String.class);
+            assertEquals(false, bus.trySend("ExecEngine.execute", String.class, "second"));
+
+            assertEquals(List.of("new:first"), calls);
+            }
+
+            @Test
+            void rejectsWildcardEndpoints() {
+            MessageBus bus = new MessageBus(null);
+
+            assertThrows(
+                IllegalArgumentException.class,
+                () -> bus.registerEndpoint("ExecEngine.*", String.class, message -> { }));
+            }
+
+            @Test
+            void requestSendsToEndpointAndRoutesResponseByCorrelationId() {
+            MessageBus bus = new MessageBus(null);
+            List<String> responses = new ArrayList<>();
+                bus.registerEndpoint("RiskEngine.request", String.class, message -> { });
+
+            UUID requestId = bus.request(
+                "RiskEngine.request",
+                String.class,
+                "00000000-0000-0000-0000-000000000000",
+                response -> responses.add((String) response));
+
+            assertNotNull(requestId);
+        bus.response(requestId, "approved");
+            assertEquals(List.of("approved"), responses);
+            }
+
+        @Test
+        void reconciliationComparesOrderedLifecycleRows() throws Exception {
+            String header = "input_sequence,lifecycle_sequence,market_timestamp,symbol,source_event_type,event_type,strategy_id,signal_direction,correlation_id,order_id,price,quantity,current_position,realized_pnl\n";
+            String row = "1,1,100,AAPL,StrategySignal,SIGNAL,s,BUY,c,o,10.0,0,0,0.0\n";
+            Path expected = Files.createTempFile("expected-events", ".csv");
+            Path actual = Files.createTempFile("actual-events", ".csv");
+            Files.writeString(expected, header + row);
+            Files.writeString(actual, header + row);
+
+            ReconciliationResult result = new ReconciliationComparator().compare(expected, actual);
+
+            assertEquals(true, result.matched());
+            assertEquals(1, result.comparedRows());
+            Files.deleteIfExists(expected);
+            Files.deleteIfExists(actual);
+        }
 
     @Test
     void publishingWithoutSubscribersIsANoOp() {

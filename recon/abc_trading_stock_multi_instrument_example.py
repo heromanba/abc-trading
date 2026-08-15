@@ -103,7 +103,14 @@ class MeanReversionStrategy(Strategy):
         self.signals += 1
 
 
-def download_symbol_data(symbol: str, start: str, end: str) -> pd.DataFrame:
+def download_symbol_data(symbol: str, start: str, end: str, data_dir: Path) -> pd.DataFrame:
+    data_dir.mkdir(parents=True, exist_ok=True)
+    cache_path = data_dir / f"{symbol}_{start}_{end}.csv"
+    if cache_path.exists():
+        df = pd.read_csv(cache_path, index_col=0, parse_dates=True)
+        df.index = pd.to_datetime(df.index, utc=True)
+        return df
+
     df = yf.download(symbol, start=start, end=end, progress=False, auto_adjust=False)
     if df.empty:
         raise RuntimeError(f"No data returned for {symbol}")
@@ -127,11 +134,12 @@ def download_symbol_data(symbol: str, start: str, end: str) -> pd.DataFrame:
 
     df = df[needed].copy()
     df.index = pd.to_datetime(df.index, utc=True)
+    df.to_csv(cache_path)
     return df
 
 
-def build_bars(symbol: str, start: str, end: str) -> list[Bar]:
-    data = download_symbol_data(symbol=symbol, start=start, end=end)
+def build_bars(symbol: str, start: str, end: str, data_dir: Path) -> list[Bar]:
+    data = download_symbol_data(symbol=symbol, start=start, end=end, data_dir=data_dir)
     bars: list[Bar] = []
     for sequence, (timestamp, row) in enumerate(data.iterrows(), start=1):
         close = float(row["close"])
@@ -204,7 +212,11 @@ def write_markdown_report(all_bars_summary: dict[str, Any], strategies: list[dic
 def run_backtest(start: str, end: str, output_dir: Path) -> Path:
     symbols = ["AAPL", "NVDA"]
     output_dir.mkdir(parents=True, exist_ok=True)
-    bars_by_symbol = {symbol: build_bars(symbol, start, end) for symbol in symbols}
+    data_dir = output_dir / "immutable_data"
+    bars_by_symbol = {
+        symbol: build_bars(symbol, start, end, data_dir)
+        for symbol in symbols
+    }
     all_bars = sorted(
         (bar for bars in bars_by_symbol.values() for bar in bars),
         key=lambda bar: (bar.ts_init, bar.symbol),

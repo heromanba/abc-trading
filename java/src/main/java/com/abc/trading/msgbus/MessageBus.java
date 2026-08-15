@@ -13,6 +13,7 @@ import java.util.function.Consumer;
 public class MessageBus {
     private final Map<Class<?>, List<TypedSubscription<?>>> typedHandlers = new LinkedHashMap<>();
     private final Map<Class<?>, TypedTopicRouter<?>> typedTopicRouters = new LinkedHashMap<>();
+    private final Map<Class<?>, TypedEndpointMap<?>> typedEndpointMaps = new LinkedHashMap<>();
     private final Map<String, Class<?>> nameToClass = new LinkedHashMap<>();
     private final Map<UUID, Consumer<Object>> correlation = new LinkedHashMap<>();
     private final Serializer serializer;
@@ -52,6 +53,29 @@ public class MessageBus {
         subscribe(topic, cls, handler);
     }
 
+    public <T> void registerEndpoint(String endpoint, Class<T> cls, Handler<T> handler) {
+        endpointMap(cls).register(endpoint, handler);
+    }
+
+    public <T> void deregisterEndpoint(String endpoint, Class<T> cls) {
+        TypedEndpointMap<?> endpointMap = typedEndpointMaps.get(cls);
+        if (endpointMap != null) typedEndpointMap(endpointMap, cls).deregister(endpoint);
+    }
+
+    public <T> boolean isEndpointRegistered(String endpoint, Class<T> cls) {
+        TypedEndpointMap<?> endpointMap = typedEndpointMaps.get(cls);
+        return endpointMap != null && typedEndpointMap(endpointMap, cls).isRegistered(endpoint);
+    }
+
+    public <T> boolean trySend(String endpoint, Class<T> cls, T msg) {
+        TypedEndpointMap<?> endpointMap = typedEndpointMaps.get(cls);
+        return endpointMap != null && typedEndpointMap(endpointMap, cls).trySend(endpoint, msg);
+    }
+
+    public <T> void send(String endpoint, Class<T> cls, T msg) {
+        trySend(endpoint, cls, msg);
+    }
+
     public <T> void unsubscribe(Class<T> cls, Handler<T> handler) {
         List<TypedSubscription<?>> list = typedHandlers.get(cls);
         if (list == null) return;
@@ -80,11 +104,25 @@ public class MessageBus {
                 cls);
     }
 
+    public <T> TypedEndpointMap<T> endpointMap(Class<T> cls) {
+        if (cls == null) throw new IllegalArgumentException("message type is required");
+        return typedEndpointMap(
+                typedEndpointMaps.computeIfAbsent(cls, ignored -> new TypedEndpointMap<>()),
+                cls);
+    }
+
     @SuppressWarnings("unchecked")
     private static <T> TypedTopicRouter<T> typedRouter(
             TypedTopicRouter<?> router,
             Class<T> cls) {
         return (TypedTopicRouter<T>) router;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> TypedEndpointMap<T> typedEndpointMap(
+            TypedEndpointMap<?> endpointMap,
+            Class<T> cls) {
+        return (TypedEndpointMap<T>) endpointMap;
     }
 
     private <T> void publishTopic(String topic, Class<T> cls, T msg) {
@@ -134,14 +172,33 @@ public class MessageBus {
     }
 
     public void send(String endpoint, Object msg) {
-        // simple endpoint registry could be added; for prototype, just publish by class
-        publish(msg);
+        if (msg == null) throw new IllegalArgumentException("message is required");
+        sendUntyped(endpoint, msg.getClass(), msg);
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> void sendUntyped(String endpoint, Class<?> cls, T msg) {
+        send(endpoint, (Class<T>) cls, msg);
     }
 
     public UUID request(Object req, Consumer<Object> callback) {
         UUID id = UUID.randomUUID();
         correlation.put(id, callback);
-        // in full impl, attach id to request object and send to endpoint
+        return id;
+    }
+
+    public <T> UUID request(
+            String endpoint,
+            Class<T> cls,
+            T req,
+            Consumer<Object> callback) {
+        if (callback == null) throw new IllegalArgumentException("callback is required");
+        UUID id = UUID.randomUUID();
+        correlation.put(id, callback);
+        if (!trySend(endpoint, cls, req)) {
+            correlation.remove(id);
+            return null;
+        }
         return id;
     }
 

@@ -22,7 +22,7 @@ public final class CsvEventLogger implements EventLogger {
                     StandardOpenOption.TRUNCATE_EXISTING,
                     StandardOpenOption.WRITE
             );
-            writer.write("market_timestamp,event_type,strategy_id,signal_direction,correlation_id,order_id,price,quantity,current_position,realized_pnl");
+            writer.write("input_sequence,lifecycle_sequence,market_timestamp,symbol,source_event_type,event_type,strategy_id,signal_direction,correlation_id,order_id,price,quantity,current_position,realized_pnl");
             writer.newLine();
             writer.flush();
         } catch (IOException e) {
@@ -51,7 +51,11 @@ public final class CsvEventLogger implements EventLogger {
     }
 
     private static String toCsvRow(Event event) {
-        return event.marketTimestamp() + ","
+        return event.inputSequence() + ","
+            + event.lifecycleSequence() + ","
+            + event.marketTimestamp() + ","
+            + nullSafe(event.symbol()) + ","
+            + nullSafe(event.sourceEventType()) + ","
                 + event.eventType().name() + ","
                 + event.strategyId() + ","
                 + event.signalDirection().name() + ","
