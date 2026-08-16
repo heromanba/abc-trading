@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class NautilusKernelTest {
     @Test
@@ -31,5 +32,40 @@ class NautilusKernelTest {
             assertEquals(200L, kernel.clock().timestampNs());
             assertEquals(2L, kernel.currentInputSequence());
         }
+    }
+
+    @Test
+    void enforcesKernelLifecycleTransitions() {
+        try (NautilusKernel kernel = new NautilusKernel()) {
+            assertEquals(ComponentState.PRE_INITIALIZED, kernel.state());
+
+            kernel.initialize();
+            assertEquals(ComponentState.READY, kernel.state());
+            kernel.start();
+            assertEquals(ComponentState.RUNNING, kernel.state());
+            kernel.stop();
+            assertEquals(ComponentState.STOPPED, kernel.state());
+            kernel.reset();
+            assertEquals(ComponentState.READY, kernel.state());
+            kernel.dispose();
+            assertEquals(ComponentState.DISPOSED, kernel.state());
+            assertThrows(IllegalStateException.class, kernel::start);
+        }
+    }
+
+    @Test
+    void sharesRustTransitionRulesForInvalidTriggers() {
+        ComponentLifecycle lifecycle = new ComponentLifecycle();
+
+        assertThrows(IllegalStateException.class, lifecycle::start);
+        lifecycle.initialize();
+        lifecycle.start();
+        assertThrows(IllegalStateException.class, lifecycle::reset);
+        lifecycle.startCompleted();
+        lifecycle.stop();
+        lifecycle.stopCompleted();
+        lifecycle.dispose();
+        lifecycle.disposeCompleted();
+        assertEquals(ComponentState.DISPOSED, lifecycle.state());
     }
 }

@@ -10,6 +10,7 @@ import com.abc.trading.execution.OrderIntent;
 import com.abc.trading.execution.SignalDirection;
 import com.abc.trading.execution.OrderFill;
 import com.abc.trading.portfolio.PositionUpdate;
+import com.abc.trading.system.ComponentState;
 import com.abc.trading.system.NautilusKernel;
 import com.abc.trading.trading.StrategyHandler;
 
@@ -76,7 +77,7 @@ public final class BacktestEngine implements AutoCloseable {
     }
 
     public boolean isStarted() {
-        return started;
+        return started && kernel.state() == ComponentState.RUNNING;
     }
 
     public int position(String symbol) {

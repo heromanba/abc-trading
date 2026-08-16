@@ -11,6 +11,7 @@ import java.util.Map;
 public final class Trader {
     private final MessageBus bus;
     private final Map<String, StrategyHandler> strategies = new LinkedHashMap<>();
+    private final ComponentLifecycle lifecycle = new ComponentLifecycle();
 
     public Trader(MessageBus bus) {
         this.bus = bus;
@@ -24,10 +25,37 @@ public final class Trader {
     }
 
     public void start() {
+        if (lifecycle.state() != ComponentState.READY && lifecycle.state() != ComponentState.STOPPED) {
+            throw new IllegalStateException("Invalid trader state: " + lifecycle.state());
+        }
+        lifecycle.start();
         strategies.values().forEach(StrategyHandler::onStart);
+        lifecycle.startCompleted();
     }
 
     public void stop() {
+        if (lifecycle.state() != ComponentState.RUNNING) return;
+        lifecycle.stop();
         strategies.values().forEach(StrategyHandler::onStop);
+        lifecycle.stopCompleted();
+    }
+
+    public void initialize() {
+        lifecycle.initialize();
+    }
+
+    public void reset() {
+        lifecycle.reset();
+        lifecycle.resetCompleted();
+    }
+
+    public void dispose() {
+        if (lifecycle.state() == ComponentState.RUNNING) stop();
+        lifecycle.dispose();
+        lifecycle.disposeCompleted();
+    }
+
+    public ComponentState state() {
+        return lifecycle.state();
     }
 }
