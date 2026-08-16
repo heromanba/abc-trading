@@ -24,7 +24,9 @@ public final class ReconciliationComparator {
             "price",
             "quantity",
             "current_position",
-            "realized_pnl");
+            "realized_pnl",
+            "commission",
+            "commission_currency");
 
     public ReconciliationResult compare(Path expected, Path actual) {
         try (BufferedReader left = Files.newBufferedReader(expected);

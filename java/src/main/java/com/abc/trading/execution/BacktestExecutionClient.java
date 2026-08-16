@@ -14,8 +14,8 @@ public final class BacktestExecutionClient implements ExecutionClient {
     }
 
     @Override
-    public OrderFill submitMarketOrder(OrderIntent order) {
-        return new OrderMatchingEngine().matchMarketOrder(order, exchange.currentPrice(order.symbol()));
+    public void submitMarketOrder(OrderIntent order) {
+        exchange.submitMarketOrder(order);
     }
 
     @Override

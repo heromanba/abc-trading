@@ -28,7 +28,7 @@ public final class Portfolio {
                 ? fill.quantity()
                 : -fill.quantity();
         int nextPosition = previousPosition + signedQuantity;
-        double pnl = realizedPnl.getOrDefault(fill.symbol(), 0.0);
+        double pnl = realizedPnl.getOrDefault(fill.symbol(), 0.0) - fill.commission().amount();
 
         if (previousPosition != 0 && Integer.signum(previousPosition) != Integer.signum(signedQuantity)) {
             int closedQuantity = Math.min(Math.abs(previousPosition), Math.abs(signedQuantity));

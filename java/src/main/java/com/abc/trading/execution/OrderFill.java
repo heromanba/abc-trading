@@ -11,8 +11,25 @@ public record OrderFill(
         int quantity,
                 double price,
                 int position,
-                double realizedPnl
+                double realizedPnl,
+                Commission commission
 ) {
+        public OrderFill(
+                String strategyId,
+                String symbol,
+                long inputSequence,
+                long marketTimestamp,
+                String correlationId,
+                String orderId,
+                SignalDirection side,
+                int quantity,
+                double price,
+                int position,
+                double realizedPnl) {
+                this(strategyId, symbol, inputSequence, marketTimestamp, correlationId, orderId,
+                        side, quantity, price, position, realizedPnl, Commission.zero("USD"));
+        }
+
         public OrderFill withState(int nextPosition, double nextRealizedPnl) {
                 return new OrderFill(
                                 strategyId,
@@ -25,6 +42,23 @@ public record OrderFill(
                                 quantity,
                                 price,
                                 nextPosition,
-                                nextRealizedPnl);
+                                nextRealizedPnl,
+                                commission);
+        }
+
+        public OrderFill withCommission(Commission nextCommission) {
+                return new OrderFill(
+                                strategyId,
+                                symbol,
+                                inputSequence,
+                                marketTimestamp,
+                                correlationId,
+                                orderId,
+                                side,
+                                quantity,
+                                price,
+                                position,
+                                realizedPnl,
+                                nextCommission);
         }
 }

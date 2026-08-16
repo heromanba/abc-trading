@@ -180,8 +180,8 @@ public class MessageBusTest {
 
         @Test
         void reconciliationComparesOrderedLifecycleRows() throws Exception {
-            String header = "input_sequence,lifecycle_sequence,market_timestamp,symbol,source_event_type,event_type,strategy_id,signal_direction,correlation_id,order_id,price,quantity,current_position,realized_pnl\n";
-            String row = "1,1,100,AAPL,StrategySignal,SIGNAL,s,BUY,c,o,10.0,0,0,0.0\n";
+            String header = "input_sequence,lifecycle_sequence,market_timestamp,symbol,source_event_type,event_type,strategy_id,signal_direction,correlation_id,order_id,price,quantity,current_position,realized_pnl,commission,commission_currency\n";
+            String row = "1,1,100,AAPL,StrategySignal,SIGNAL,s,BUY,c,o,10.0,0,0,0.0,0.0,USD\n";
             Path expected = Files.createTempFile("expected-events", ".csv");
             Path actual = Files.createTempFile("actual-events", ".csv");
             Files.writeString(expected, header + row);

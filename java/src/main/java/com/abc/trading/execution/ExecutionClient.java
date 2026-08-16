@@ -4,7 +4,7 @@ package com.abc.trading.execution;
 public interface ExecutionClient {
     VenueId venue();
 
-    OrderFill submitMarketOrder(OrderIntent order);
+    void submitMarketOrder(OrderIntent order);
 
     void submitLimitOrder(LimitOrderIntent order);
 }

@@ -29,10 +29,7 @@ public final class ExecutionEngine {
         bus.registerEndpoint(EXECUTION_ENDPOINT, OrderIntent.class, order -> {
             bus.publish(new OrderAccepted(order));
             ExecutionClient client = clientFor(order);
-            OrderFill fill = client.submitMarketOrder(order);
-            PositionUpdate positionUpdate = portfolio.applyFill(fill);
-            bus.publish(fill.withState(positionUpdate.position(), positionUpdate.realizedPnl()));
-            bus.publish(positionUpdate);
+            client.submitMarketOrder(order);
         });
         bus.subscribe(LimitOrderIntent.class, this::submitLimit);
         bus.registerEndpoint("RiskEngine.execute_limit", LimitOrderIntent.class, this::onLimitRiskCommand);
@@ -41,6 +38,10 @@ public final class ExecutionEngine {
             clientFor(order).submitLimitOrder(order);
         });
         bus.subscribe(OrderAccepted.class, accepted -> portfolio.applyOrderIntent(accepted.order()));
+        bus.subscribe(OrderFill.class, fill -> {
+            PositionUpdate positionUpdate = portfolio.applyFill(fill);
+            bus.publish(positionUpdate);
+        });
     }
 
     public void submit(OrderIntent order) {

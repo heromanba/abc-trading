@@ -10,6 +10,11 @@ import com.abc.trading.execution.ExecutionEngine;
 import com.abc.trading.execution.BacktestExecutionClient;
 import com.abc.trading.execution.SimulatedExchange;
 import com.abc.trading.execution.VenueId;
+import com.abc.trading.execution.FeeModel;
+import com.abc.trading.execution.LatencyModel;
+import com.abc.trading.execution.MakerTakerFeeModel;
+import com.abc.trading.execution.StaticLatencyModel;
+import com.abc.trading.backtest.SimulatedVenueConfig;
 import com.abc.trading.trading.StrategyHandler;
 
 import java.util.Arrays;
@@ -56,11 +61,19 @@ public final class NautilusKernel implements AutoCloseable {
     }
 
     public void addVenue(String venue) {
-        VenueId venueId = new VenueId(venue);
+        addVenue(SimulatedVenueConfig.defaults(new VenueId(venue)));
+    }
+
+    public void addVenue(SimulatedVenueConfig config) {
+        VenueId venueId = config.venue();
+        LatencyModel latencyModel = config.latencyModel() == null
+                ? StaticLatencyModel.zero() : config.latencyModel();
+        FeeModel feeModel = config.feeModel() == null
+                ? MakerTakerFeeModel.zero() : config.feeModel();
         if (exchanges.containsKey(venueId)) {
-            throw new IllegalArgumentException("Venue already registered: " + venue);
+            throw new IllegalArgumentException("Venue already registered: " + venueId.value());
         }
-        SimulatedExchange exchange = new SimulatedExchange(venueId, bus::publish);
+        SimulatedExchange exchange = new SimulatedExchange(venueId, bus::publish, latencyModel, feeModel);
         exchanges.put(venueId, exchange);
         executionEngine.registerClient(new BacktestExecutionClient(exchange));
         bus.subscribe("data.bar.*", Bar.class, exchange::processBar, 100);

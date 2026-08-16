@@ -22,7 +22,7 @@ public final class CsvEventLogger implements EventLogger {
                     StandardOpenOption.TRUNCATE_EXISTING,
                     StandardOpenOption.WRITE
             );
-            writer.write("input_sequence,lifecycle_sequence,market_timestamp,symbol,source_event_type,event_type,strategy_id,signal_direction,correlation_id,order_id,price,quantity,current_position,realized_pnl");
+            writer.write("input_sequence,lifecycle_sequence,market_timestamp,symbol,source_event_type,event_type,strategy_id,signal_direction,correlation_id,order_id,price,quantity,current_position,realized_pnl,commission,commission_currency");
             writer.newLine();
             writer.flush();
         } catch (IOException e) {
@@ -64,7 +64,9 @@ public final class CsvEventLogger implements EventLogger {
                 + formatDouble(event.price()) + ","
                 + event.quantity() + ","
                 + event.currentPosition() + ","
-                + formatDouble(event.realizedPnl());
+                + formatDouble(event.realizedPnl()) + ","
+                + formatDouble(event.commission()) + ","
+                + nullSafe(event.commissionCurrency());
     }
 
     private static String nullSafe(String value) {

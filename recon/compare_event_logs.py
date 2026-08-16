@@ -22,6 +22,8 @@ COLUMNS = (
     "quantity",
     "current_position",
     "realized_pnl",
+    "commission",
+    "commission_currency",
 )
 
 

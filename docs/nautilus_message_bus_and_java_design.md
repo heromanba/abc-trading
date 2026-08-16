@@ -613,6 +613,8 @@ A useful initial CSV schema is:
 | `quantity` | Order quantity |
 | `current_position` | Position after the event |
 | `realized_pnl` | Realized PnL at this state transition |
+| `commission` | Commission charged on the fill |
+| `commission_currency` | Currency of the commission |
 
 The comparison tool should compare rows in order, not just aggregate totals. Aggregate counts can match while event ordering is wrong.
 
@@ -930,10 +932,18 @@ The Java package structure now exposes the larger Rust engine boundary without p
 | `risk.RiskEngineConfig` | `crates/risk/src/engine/config.rs` | Risk configuration boundary |
 | `execution.ExecutionEngineConfig` | `crates/execution/src/engine/config.rs` | Execution configuration boundary |
 | `execution.OrderStatus` / `OrderState` | `crates/model/src/enums.rs` / `crates/model/src/events/order.rs` | Order lifecycle shape |
-| `execution.OrderMatchingEngine` | `crates/execution/src/matching_engine/engine.rs` | Market matching implemented; limit matching explicitly pending |
+| `execution.OrderMatchingEngine` | `crates/execution/src/matching_engine/engine.rs` | Market and limit close-price matching implemented |
 | `portfolio.PortfolioConfig` | `crates/portfolio/src/config.rs` | Portfolio configuration boundary |
 | `trading.Actor` | `crates/common/src/actor/mod.rs` | Lifecycle contract only |
 | `trading.ExecutionAlgorithm` | `crates/trading/src/algorithm/mod.rs` | Execution-algorithm contract only |
 | `system.NautilusKernelConfig` / `NautilusKernelBuilder` | `crates/system/src/config.rs` / `builder.rs` | Construction boundary |
 
-`EngineCapabilities.current()` is the honest status surface for this skeleton. A class existing in the package tree does not mean its Rust behavior is complete. Pending areas include limit matching, order books, latency, fees, account/margin accounting, data aggregation, historical request clients, persistence, and live adapters.
+`EngineCapabilities.current()` is the honest status surface for this skeleton. Latency and core fee models are now implemented: static base-plus-operation latency, deterministic `(delivery timestamp, sequence)` scheduling, fixed fees, maker/taker notional fees, per-contract fees, probability-price fees, capped option fees, and notional option fees. Pending areas include order books, partial fills, account/margin accounting, instrument-specific precision and fee metadata, data aggregation, historical request clients, persistence, and live adapters.
+
+Rust references for this step:
+
+- Latency: `nautilus_trader/crates/execution/src/models/latency.rs`
+- Fees: `nautilus_trader/crates/execution/src/models/fee.rs`
+- Exchange timing: `nautilus_trader/crates/backtest/src/exchange.rs`
+- Fill commission hook: `nautilus_trader/crates/execution/src/matching_engine/engine.rs`
+- Position commission accounting: `nautilus_trader/crates/model/src/position.rs`

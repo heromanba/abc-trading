@@ -70,7 +70,7 @@ public final class BacktestEngine implements AutoCloseable {
             fill.inputSequence(), ++lifecycleSequence, fill.marketTimestamp(), fill.symbol(),
             OrderFill.class.getSimpleName(), EventType.ORDER_FILL, fill.strategyId(), fill.side(),
             fill.correlationId(), fill.orderId(), fill.price(), fill.quantity(),
-            fill.position(), fill.realizedPnl())), 100);
+            fill.position(), fill.realizedPnl(), fill.commission().amount(), fill.commission().currency())), 100);
         kernel.bus().subscribe(PositionUpdate.class, update -> logger.log(new Event(
             update.inputSequence(), ++lifecycleSequence, update.marketTimestamp(), update.symbol(),
             PositionUpdate.class.getSimpleName(), EventType.POSITION_UPDATE, "", SignalDirection.HOLD,
@@ -86,6 +86,10 @@ public final class BacktestEngine implements AutoCloseable {
     public void addVenue(String venue) {
         if (venue == null || venue.isBlank()) throw new IllegalArgumentException("venue is required");
         kernel.addVenue(venue);
+    }
+
+    public void addVenue(SimulatedVenueConfig config) {
+        kernel.addVenue(config);
     }
 
     public void start() {
