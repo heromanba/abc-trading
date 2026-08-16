@@ -27,16 +27,22 @@ public final class NautilusKernel implements AutoCloseable {
     private final RiskEngine riskEngine;
     private final ExecutionEngine executionEngine;
     private final Trader trader;
+    private final NautilusKernelConfig config;
     private final Map<VenueId, SimulatedExchange> exchanges = new LinkedHashMap<>();
     private final ComponentLifecycle lifecycle = new ComponentLifecycle();
     private long inputSequence;
 
     public NautilusKernel() {
+        this(NautilusKernelConfig.defaults());
+    }
+
+    public NautilusKernel(NautilusKernelConfig config) {
+        this.config = config;
         bus = new MessageBus(null);
         clock = new SimulatedClock();
         cache = new Cache();
         portfolio = new Portfolio(cache);
-        riskEngine = new RiskEngine(Integer.MAX_VALUE);
+        riskEngine = new RiskEngine(Integer.MAX_VALUE, cache);
         executionEngine = new ExecutionEngine(bus, riskEngine, portfolio, cache);
         dataEngine = new DataEngine(bus);
         trader = new Trader(bus);
@@ -132,6 +138,7 @@ public final class NautilusKernel implements AutoCloseable {
     }
 
     public MessageBus bus() { return bus; }
+    public NautilusKernelConfig config() { return config; }
     public Clock clock() { return clock; }
     public Cache cache() { return cache; }
     public Portfolio portfolio() { return portfolio; }

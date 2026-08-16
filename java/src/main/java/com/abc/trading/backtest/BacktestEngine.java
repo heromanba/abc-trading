@@ -6,6 +6,7 @@ import com.abc.trading.events.Event;
 import com.abc.trading.events.EventLogger;
 import com.abc.trading.events.EventType;
 import com.abc.trading.execution.OrderAccepted;
+import com.abc.trading.execution.OrderDenied;
 import com.abc.trading.execution.OrderIntent;
 import com.abc.trading.execution.SignalDirection;
 import com.abc.trading.execution.OrderFill;
@@ -35,6 +36,14 @@ public final class BacktestEngine implements AutoCloseable {
             logger.log(new Event(
                 intent.inputSequence(), ++lifecycleSequence, intent.marketTimestamp(),
                 intent.symbol(), OrderAccepted.class.getSimpleName(), EventType.ORDER_ACCEPT,
+                intent.strategyId(), intent.side(), intent.correlationId(), intent.orderId(),
+                intent.price(), intent.quantity(), intent.currentPosition(), intent.realizedPnl()));
+        });
+        kernel.bus().subscribe(OrderDenied.class, denied -> {
+            OrderIntent intent = denied.order();
+            logger.log(new Event(
+                intent.inputSequence(), ++lifecycleSequence, intent.marketTimestamp(),
+                intent.symbol(), OrderDenied.class.getSimpleName(), EventType.ORDER_DENY,
                 intent.strategyId(), intent.side(), intent.correlationId(), intent.orderId(),
                 intent.price(), intent.quantity(), intent.currentPosition(), intent.realizedPnl()));
         });

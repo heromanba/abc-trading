@@ -3,7 +3,9 @@ package com.abc.trading.execution;
 import com.abc.trading.msgbus.MessageBus;
 import com.abc.trading.cache.Cache;
 import com.abc.trading.portfolio.Portfolio;
+import com.abc.trading.portfolio.PositionUpdate;
 import com.abc.trading.risk.RiskEngine;
+import com.abc.trading.risk.RiskDecision;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -28,7 +30,7 @@ public final class ExecutionEngine {
             bus.publish(new OrderAccepted(order));
             ExecutionClient client = clientFor(order);
             OrderFill fill = client.submitMarketOrder(order);
-            var positionUpdate = portfolio.applyFill(fill);
+            PositionUpdate positionUpdate = portfolio.applyFill(fill);
             bus.publish(fill.withState(positionUpdate.position(), positionUpdate.realizedPnl()));
             bus.publish(positionUpdate);
         });
@@ -53,8 +55,11 @@ public final class ExecutionEngine {
     }
 
     private void onRiskCommand(OrderIntent order) {
-        if (riskEngine.evaluate(order).approved()) {
+        RiskDecision decision = riskEngine.evaluate(order);
+        if (decision.approved()) {
             bus.send(EXECUTION_ENDPOINT, OrderIntent.class, order);
+        } else {
+            bus.publish(new OrderDenied(order, decision.reason()));
         }
     }
 }

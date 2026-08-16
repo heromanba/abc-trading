@@ -846,3 +846,26 @@ The new Java classes are deliberately minimal shells. The following Nautilus beh
 - Cache namespaces for accounts, instruments, orders, positions, and market data beyond the current minimal maps in `crates/common/src/cache/mod.rs`.
 
 Each future Java component should add its Rust source location to this table and a focused parity test before it is used by the reconciliation flow.
+
+## 15. Full Engine Skeleton
+
+The Java package structure now exposes the larger Rust engine boundary without pretending that every behavior is implemented:
+
+| Java skeleton | Rust reference | Current scope |
+|---|---|---|
+| `backtest.BacktestEngineConfig` | `crates/backtest/src/config.rs` | Configuration boundary |
+| `backtest.BacktestDataIterator` | `crates/backtest/src/data_iterator.rs` | Chronological bar iteration |
+| `backtest.SimulatedVenueConfig` | `crates/backtest/src/config.rs` / `exchange.rs` | Simulated venue configuration |
+| `backtest.BacktestResult` | `crates/backtest/src/result.rs` | Result-shape boundary |
+| `backtest.EngineCapabilities` | `crates/backtest/src/engine.rs` | Explicit implemented/pending inventory |
+| `data.DataEngineConfig` / `DataClient` | `crates/data/src/engine/config.rs` / `client.rs` | Configuration and client contracts |
+| `risk.RiskEngineConfig` | `crates/risk/src/engine/config.rs` | Risk configuration boundary |
+| `execution.ExecutionEngineConfig` | `crates/execution/src/engine/config.rs` | Execution configuration boundary |
+| `execution.OrderStatus` / `OrderState` | `crates/model/src/enums.rs` / `crates/model/src/events/order.rs` | Order lifecycle shape |
+| `execution.OrderMatchingEngine` | `crates/execution/src/matching_engine/engine.rs` | Market matching implemented; limit matching explicitly pending |
+| `portfolio.PortfolioConfig` | `crates/portfolio/src/config.rs` | Portfolio configuration boundary |
+| `trading.Actor` | `crates/common/src/actor/mod.rs` | Lifecycle contract only |
+| `trading.ExecutionAlgorithm` | `crates/trading/src/algorithm/mod.rs` | Execution-algorithm contract only |
+| `system.NautilusKernelConfig` / `NautilusKernelBuilder` | `crates/system/src/config.rs` / `builder.rs` | Construction boundary |
+
+`EngineCapabilities.current()` is the honest status surface for this skeleton. A class existing in the package tree does not mean its Rust behavior is complete. Pending areas include limit matching, order books, latency, fees, account/margin accounting, data aggregation, historical request clients, persistence, and live adapters.
