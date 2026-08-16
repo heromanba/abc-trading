@@ -82,6 +82,26 @@ class BacktestEngine:
             price,
         )
 
+    def submit_limit_order(
+        self,
+        strategy_id: str,
+        symbol: str,
+        market_timestamp: int,
+        sequence: int,
+        side: str,
+        quantity: int,
+        limit_price: float,
+    ) -> None:
+        self._java.submitLimitOrder(
+            strategy_id,
+            symbol,
+            market_timestamp,
+            sequence,
+            side,
+            quantity,
+            limit_price,
+        )
+
     def close(self) -> None:
         self._java.close()
 

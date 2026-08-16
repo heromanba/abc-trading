@@ -1,6 +1,7 @@
 package com.abc.trading.risk;
 
 import com.abc.trading.execution.OrderIntent;
+import com.abc.trading.execution.LimitOrderIntent;
 import com.abc.trading.cache.Cache;
 import com.abc.trading.execution.SignalDirection;
 
@@ -42,6 +43,35 @@ public final class RiskEngine {
         }
         Double maxNotional = maxNotionalPerOrder.get(order.symbol());
         if (maxNotional != null && order.quantity() * order.price() > maxNotional) {
+            return RiskDecision.rejected("notional exceeds maxNotionalPerOrder");
+        }
+        if (tradingState == TradingState.REDUCING && cache != null) {
+            int position = cache.position(order.symbol());
+            boolean increasesExposure = position > 0 && order.side() == SignalDirection.BUY
+                    || position < 0 && order.side() == SignalDirection.SELL;
+            if (increasesExposure) return RiskDecision.rejected("trading is reducing exposure");
+        }
+        return RiskDecision.allow();
+    }
+
+    public RiskDecision evaluate(LimitOrderIntent order) {
+        if (order == null) return RiskDecision.rejected("order is required");
+        if (tradingState == TradingState.HALTED) return RiskDecision.rejected("trading is halted");
+        if (cache != null && !cache.hasInstrument(order.symbol())) {
+            return RiskDecision.rejected("unknown instrument: " + order.symbol());
+        }
+        if (order.side() == null || order.side() == SignalDirection.HOLD) {
+            return RiskDecision.rejected("order side must be BUY or SELL");
+        }
+        if (order.quantity() <= 0) return RiskDecision.rejected("quantity must be positive");
+        if (order.quantity() > maxQuantity) {
+            return RiskDecision.rejected("quantity exceeds maxQuantity");
+        }
+        if (!Double.isFinite(order.limitPrice()) || order.limitPrice() <= 0.0) {
+            return RiskDecision.rejected("limitPrice must be finite and positive");
+        }
+        Double maxNotional = maxNotionalPerOrder.get(order.symbol());
+        if (maxNotional != null && order.quantity() * order.limitPrice() > maxNotional) {
             return RiskDecision.rejected("notional exceeds maxNotionalPerOrder");
         }
         if (tradingState == TradingState.REDUCING && cache != null) {

@@ -5,6 +5,7 @@ public enum EventType {
     ORDER_DENY,
     ORDER_SUBMIT,
     ORDER_ACCEPT,
+    ORDER_LIMIT_ACCEPT,
     ORDER_FILL,
     POSITION_UPDATE
 }

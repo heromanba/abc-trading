@@ -6,6 +6,9 @@ import com.abc.trading.events.Event;
 import com.abc.trading.events.EventLogger;
 import com.abc.trading.events.EventType;
 import com.abc.trading.execution.OrderAccepted;
+import com.abc.trading.execution.LimitOrderAccepted;
+import com.abc.trading.execution.LimitOrderDenied;
+import com.abc.trading.execution.LimitOrderIntent;
 import com.abc.trading.execution.OrderDenied;
 import com.abc.trading.execution.OrderIntent;
 import com.abc.trading.execution.SignalDirection;
@@ -46,6 +49,22 @@ public final class BacktestEngine implements AutoCloseable {
                 intent.symbol(), OrderDenied.class.getSimpleName(), EventType.ORDER_DENY,
                 intent.strategyId(), intent.side(), intent.correlationId(), intent.orderId(),
                 intent.price(), intent.quantity(), intent.currentPosition(), intent.realizedPnl()));
+        });
+        kernel.bus().subscribe(LimitOrderAccepted.class, accepted -> {
+            LimitOrderIntent intent = accepted.order();
+            logger.log(new Event(
+                intent.inputSequence(), ++lifecycleSequence, intent.marketTimestamp(),
+                intent.symbol(), LimitOrderAccepted.class.getSimpleName(), EventType.ORDER_LIMIT_ACCEPT,
+                intent.strategyId(), intent.side(), intent.correlationId(), intent.orderId(),
+                intent.limitPrice(), intent.quantity(), intent.currentPosition(), intent.realizedPnl()));
+        });
+        kernel.bus().subscribe(LimitOrderDenied.class, denied -> {
+            LimitOrderIntent intent = denied.order();
+            logger.log(new Event(
+                intent.inputSequence(), ++lifecycleSequence, intent.marketTimestamp(),
+                intent.symbol(), LimitOrderDenied.class.getSimpleName(), EventType.ORDER_DENY,
+                intent.strategyId(), intent.side(), intent.correlationId(), intent.orderId(),
+                intent.limitPrice(), intent.quantity(), intent.currentPosition(), intent.realizedPnl()));
         });
         kernel.bus().subscribe(OrderFill.class, fill -> logger.log(new Event(
             fill.inputSequence(), ++lifecycleSequence, fill.marketTimestamp(), fill.symbol(),
@@ -113,6 +132,22 @@ public final class BacktestEngine implements AutoCloseable {
             com.abc.trading.execution.DeterministicOrderId.fromCorrelation(correlationId),
             direction, quantity, price, targetPosition, 0.0));
     }
+
+            public void submitLimitOrder(String strategyId, String symbol, long marketTimestamp,
+                         int sequence, String side, int quantity, double limitPrice) {
+            if (!started) throw new IllegalStateException("Engine must be started before submitting orders");
+            if (quantity <= 0) throw new IllegalArgumentException("quantity must be positive");
+            SignalDirection direction = SignalDirection.valueOf(side);
+            int existingPosition = position(symbol);
+            int targetPosition = direction == SignalDirection.BUY
+                ? existingPosition + quantity
+                : existingPosition - quantity;
+            String correlationId = symbol + "-limit-" + marketTimestamp + "-" + sequence;
+            kernel.bus().publish(new LimitOrderIntent(
+                strategyId, symbol, kernel.currentInputSequence(), marketTimestamp, correlationId,
+                com.abc.trading.execution.DeterministicOrderId.fromCorrelation(correlationId),
+                direction, quantity, limitPrice, targetPosition, 0.0));
+            }
 
     @Override
     public void close() {

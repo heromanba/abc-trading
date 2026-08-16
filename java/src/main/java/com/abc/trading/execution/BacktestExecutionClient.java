@@ -15,17 +15,11 @@ public final class BacktestExecutionClient implements ExecutionClient {
 
     @Override
     public OrderFill submitMarketOrder(OrderIntent order) {
-        return new OrderFill(
-                order.strategyId(),
-                order.symbol(),
-                order.inputSequence(),
-                order.marketTimestamp(),
-                order.correlationId(),
-                order.orderId(),
-                order.side(),
-                order.quantity(),
-                exchange.currentPrice(order.symbol()),
-                order.currentPosition(),
-                order.realizedPnl());
+        return new OrderMatchingEngine().matchMarketOrder(order, exchange.currentPrice(order.symbol()));
+    }
+
+    @Override
+    public void submitLimitOrder(LimitOrderIntent order) {
+        exchange.submitLimitOrder(order);
     }
 }

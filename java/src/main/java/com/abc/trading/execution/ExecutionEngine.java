@@ -34,11 +34,21 @@ public final class ExecutionEngine {
             bus.publish(fill.withState(positionUpdate.position(), positionUpdate.realizedPnl()));
             bus.publish(positionUpdate);
         });
+        bus.subscribe(LimitOrderIntent.class, this::submitLimit);
+        bus.registerEndpoint("RiskEngine.execute_limit", LimitOrderIntent.class, this::onLimitRiskCommand);
+        bus.registerEndpoint("ExecEngine.execute_limit", LimitOrderIntent.class, order -> {
+            bus.publish(new LimitOrderAccepted(order));
+            clientFor(order).submitLimitOrder(order);
+        });
         bus.subscribe(OrderAccepted.class, accepted -> portfolio.applyOrderIntent(accepted.order()));
     }
 
     public void submit(OrderIntent order) {
         bus.send(RISK_ENDPOINT, OrderIntent.class, order);
+    }
+
+    public void submitLimit(LimitOrderIntent order) {
+        bus.send("RiskEngine.execute_limit", LimitOrderIntent.class, order);
     }
 
     public void registerClient(ExecutionClient client) {
@@ -54,12 +64,28 @@ public final class ExecutionEngine {
         return client;
     }
 
+    private ExecutionClient clientFor(LimitOrderIntent order) {
+        String venue = cache.venue(order.symbol());
+        ExecutionClient client = clients.get(new VenueId(venue));
+        if (client == null) throw new IllegalStateException("No execution client for " + venue);
+        return client;
+    }
+
     private void onRiskCommand(OrderIntent order) {
         RiskDecision decision = riskEngine.evaluate(order);
         if (decision.approved()) {
             bus.send(EXECUTION_ENDPOINT, OrderIntent.class, order);
         } else {
             bus.publish(new OrderDenied(order, decision.reason()));
+        }
+    }
+
+    private void onLimitRiskCommand(LimitOrderIntent order) {
+        RiskDecision decision = riskEngine.evaluate(order);
+        if (decision.approved()) {
+            bus.send("ExecEngine.execute_limit", LimitOrderIntent.class, order);
+        } else {
+            bus.publish(new LimitOrderDenied(order, decision.reason()));
         }
     }
 }
