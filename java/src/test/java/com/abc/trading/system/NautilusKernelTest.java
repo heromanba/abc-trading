@@ -4,6 +4,9 @@ import com.abc.trading.data.Bar;
 import com.abc.trading.execution.OrderFill;
 import com.abc.trading.execution.OrderIntent;
 import com.abc.trading.execution.SignalDirection;
+import com.abc.trading.execution.MakerTakerFeeModel;
+import com.abc.trading.execution.StaticLatencyModel;
+import com.abc.trading.backtest.SimulatedVenueConfig;
 import com.abc.trading.trading.StrategyHandler;
 import org.junit.jupiter.api.Test;
 
@@ -88,6 +91,38 @@ class NautilusKernelTest {
 
             assertEquals(List.of(123.45), fillPrices);
             assertEquals(2, kernel.portfolio().position("AAPL"));
+        }
+    }
+
+    @Test
+    void kernelDeliversDelayedFillAndBooksTakerCommission() {
+        List<com.abc.trading.execution.OrderFill> fills = new ArrayList<>();
+        try (NautilusKernel kernel = new NautilusKernel()) {
+            kernel.bus().subscribe(com.abc.trading.execution.OrderFill.class, fills::add, 100);
+            kernel.addVenue(new SimulatedVenueConfig(
+                    new com.abc.trading.execution.VenueId("XNAS"),
+                    true,
+                    true,
+                    new StaticLatencyModel(10, 0, 0, 0),
+                    new MakerTakerFeeModel(0.001, 0.01, "USD")));
+            kernel.addInstrument("AAPL", "XNAS");
+            kernel.start();
+            kernel.runBars(new Bar[] {new Bar("AAPL", 100, 100.0, 1)});
+
+            kernel.bus().publish(new OrderIntent(
+                    "strategy", "AAPL", 1, 100, "corr", "order-latency",
+                    SignalDirection.BUY, 2, 100.0, 0, 0.0));
+            assertEquals(0, fills.size());
+
+            kernel.runBars(new Bar[] {new Bar("AAPL", 109, 109.0, 2)});
+            assertEquals(0, fills.size());
+            kernel.runBars(new Bar[] {new Bar("AAPL", 110, 110.0, 3)});
+
+            assertEquals(1, fills.size());
+            assertEquals(110.0, fills.get(0).price());
+            assertEquals(2.2, fills.get(0).commission().amount());
+            assertEquals(2, kernel.portfolio().position("AAPL"));
+            assertEquals(-2.2, kernel.portfolio().realizedPnl("AAPL"));
         }
     }
 }

@@ -9,6 +9,24 @@ from abc_trading._java import ensure_jvm, java_class
 from abc_trading.model.data import Bar
 
 
+class StrategyContext:
+    """Python view of the Java strategy context and order API."""
+
+    def __init__(self, java_context: object) -> None:
+        self._java = java_context
+
+    def position(self, symbol: str) -> int:
+        return int(self._java.position(symbol))
+
+    def market(self, symbol: str, side: str, quantity: int, price: float) -> None:
+        signal_direction = java_class("com.abc.trading.execution.SignalDirection")
+        self._java.market(symbol, signal_direction.valueOf(side), quantity, price)
+
+    def limit(self, symbol: str, side: str, quantity: int, limit_price: float) -> None:
+        signal_direction = java_class("com.abc.trading.execution.SignalDirection")
+        self._java.limit(symbol, signal_direction.valueOf(side), quantity, limit_price)
+
+
 class BacktestEngine:
     """Python-importable engine backed by ``com.abc.trading`` Java classes."""
 
@@ -39,15 +57,21 @@ class BacktestEngine:
         def on_bar(java_bar: object) -> None:
             strategy.on_bar(Bar._from_java(java_bar))
 
+        def on_bar_with_context(java_bar: object, java_context: object) -> None:
+            java_context.onBar(java_bar)
+            strategy.context = StrategyContext(java_context)
+            strategy.on_bar(Bar._from_java(java_bar))
+
         def on_stop() -> None:
             strategy.on_stop()
 
         proxy = jpype.JProxy(
             interface,
-            dict(onStart=on_start, onBar=on_bar, onStop=on_stop),
+            dict(onStart=on_start, onBar=on_bar, onBarWithContext=on_bar_with_context, onStop=on_stop),
         )
         self._strategy_proxies.append(proxy)
-        self._java.addStrategy(symbol, proxy)
+        strategy_id = str(getattr(strategy, "strategy_id", symbol))
+        self._java.addStrategy(symbol, strategy_id, proxy)
 
     def run(self, bars: list[Bar]) -> None:
         """Run bars through the Java event loop and Python strategy callbacks."""

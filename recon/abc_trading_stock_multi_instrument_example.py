@@ -21,7 +21,7 @@ DEFAULT_OUTPUT = ROOT / "output"
 
 class MomentumStrategy(Strategy):
     def __init__(self, engine: BacktestEngine, trade_size: int = 10) -> None:
-        self.engine = engine
+        self.strategy_id = "momentum"
         self.instrument_id = "AAPL"
         self.fast_ema = ExponentialMovingAverage(3)
         self.slow_ema = ExponentialMovingAverage(8)
@@ -38,7 +38,7 @@ class MomentumStrategy(Strategy):
         self.fast_ema.update(bar.close)
         self.slow_ema.update(bar.close)
         signal = "flat"
-        position = self.engine.position(self.instrument_id)
+        position = self.context.position(self.instrument_id)
         if self.slow_ema.count >= 8 and self.fast_ema.value > self.slow_ema.value and position == 0:
             self._submit_order(bar, "BUY")
             signal = "buy"
@@ -51,20 +51,20 @@ class MomentumStrategy(Strategy):
                 "ts": bar.ts_init,
                 "bar_close": bar.close,
                 "signal": signal,
-                "position": self.engine.position(self.instrument_id),
+                "position": self.context.position(self.instrument_id),
                 "unrealized_pnl": 0.0,
             },
         )
 
     def _submit_order(self, bar: Bar, side: str) -> None:
-        self.engine.submit_market_order("momentum", self.instrument_id, bar.ts_init, bar.sequence, side, self.trade_size, bar.close)
+        self.context.market(self.instrument_id, side, self.trade_size, bar.close)
         self.orders_submitted += 1
         self.signals += 1
 
 
 class MeanReversionStrategy(Strategy):
     def __init__(self, engine: BacktestEngine, trade_size: int = 10) -> None:
-        self.engine = engine
+        self.strategy_id = "mean_reversion"
         self.instrument_id = "NVDA"
         self.sma = SimpleMovingAverage(5)
         self.trade_size = trade_size
@@ -78,7 +78,7 @@ class MeanReversionStrategy(Strategy):
     def on_bar(self, bar: Bar) -> None:
         signal = "flat"
         self.sma.update(bar.close)
-        position = self.engine.position(self.instrument_id)
+        position = self.context.position(self.instrument_id)
         if self.sma.initialized and bar.close < self.sma.value * 0.995 and position == 0:
             self._submit_order(bar, "BUY")
             signal = "buy"
@@ -92,13 +92,13 @@ class MeanReversionStrategy(Strategy):
                 "ts": bar.ts_init,
                 "bar_close": bar.close,
                 "signal": signal,
-                "position": self.engine.position(self.instrument_id),
+                "position": self.context.position(self.instrument_id),
                 "unrealized_pnl": 0.0,
             },
         )
 
     def _submit_order(self, bar: Bar, side: str) -> None:
-        self.engine.submit_market_order("mean_reversion", self.instrument_id, bar.ts_init, bar.sequence, side, self.trade_size, bar.close)
+        self.context.market(self.instrument_id, side, self.trade_size, bar.close)
         self.orders_submitted += 1
         self.signals += 1
 

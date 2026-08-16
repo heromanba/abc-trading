@@ -3,6 +3,8 @@ package com.abc.trading.system;
 import com.abc.trading.data.Bar;
 import com.abc.trading.msgbus.MessageBus;
 import com.abc.trading.trading.StrategyHandler;
+import com.abc.trading.trading.StrategyContext;
+import com.abc.trading.cache.Cache;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -11,17 +13,26 @@ import java.util.Map;
 public final class Trader {
     private final MessageBus bus;
     private final Map<String, StrategyHandler> strategies = new LinkedHashMap<>();
+    private final Cache cache;
+    private final Map<String, StrategyContext> contexts = new LinkedHashMap<>();
     private final ComponentLifecycle lifecycle = new ComponentLifecycle();
 
-    public Trader(MessageBus bus) {
+    public Trader(MessageBus bus, Cache cache) {
         this.bus = bus;
+        this.cache = cache;
     }
 
     public void registerStrategy(String symbol, StrategyHandler strategy) {
+        registerStrategy(symbol, symbol, strategy);
+    }
+
+    public void registerStrategy(String symbol, String strategyId, StrategyHandler strategy) {
         if (strategies.putIfAbsent(symbol, strategy) != null) {
             throw new IllegalArgumentException("A strategy is already registered for: " + symbol);
         }
-        bus.subscribe("data.bar." + symbol, Bar.class, strategy::onBar);
+        StrategyContext context = new StrategyContext(bus, cache, strategyId);
+        contexts.put(symbol, context);
+        bus.subscribe("data.bar." + symbol, Bar.class, bar -> strategy.onBarWithContext(bar, context));
     }
 
     public void start() {

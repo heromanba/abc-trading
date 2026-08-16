@@ -50,7 +50,7 @@ public final class NautilusKernel implements AutoCloseable {
         riskEngine = new RiskEngine(Integer.MAX_VALUE, cache);
         executionEngine = new ExecutionEngine(bus, riskEngine, portfolio, cache);
         dataEngine = new DataEngine(bus);
-        trader = new Trader(bus);
+        trader = new Trader(bus, cache);
     }
 
     public void addInstrument(String symbol, String venue) {
@@ -80,11 +80,15 @@ public final class NautilusKernel implements AutoCloseable {
     }
 
     public void addStrategy(String symbol, StrategyHandler strategy) {
+        addStrategy(symbol, symbol, strategy);
+    }
+
+    public void addStrategy(String symbol, String strategyId, StrategyHandler strategy) {
         if (lifecycle.state() != ComponentState.PRE_INITIALIZED && lifecycle.state() != ComponentState.READY) {
             throw new IllegalStateException("Cannot add strategies after initialization");
         }
         if (!cache.hasInstrument(symbol)) throw new IllegalArgumentException("Unknown instrument: " + symbol);
-        trader.registerStrategy(symbol, strategy);
+        trader.registerStrategy(symbol, strategyId, strategy);
     }
 
     public void start() {
