@@ -359,6 +359,74 @@ The current Java design already matches the important first-stage properties:
 
 These are good foundations for a reconciliation framework.
 
+## 7.1 ExecutionEngine: Event-Driven Logic
+
+The current Java execution path is synchronous, but event-driven: components publish typed events and the bus routes them to interested handlers.
+
+```mermaid
+flowchart TD
+    Strategy[Python Strategy] -->|publish OrderIntent| Bus[MessageBus]
+    Bus -->|RiskEngine.execute| Risk[RiskEngine]
+    Risk -->|approved| ExecEndpoint[ExecEngine.execute]
+    Risk -->|rejected| Denied[OrderDenied]
+    ExecEndpoint --> Accepted[OrderAccepted]
+    Accepted --> PortfolioIntent[Portfolio records order]
+    ExecEndpoint --> Client[ExecutionClient]
+    Client --> Exchange[SimulatedExchange]
+    Exchange --> Fill[OrderFill]
+    Fill --> PortfolioFill[Portfolio applies fill]
+    PortfolioFill --> Position[PositionUpdate]
+    Position --> Observers[Logger / Strategy / Reconciliation]
+    Denied --> Observers
+```
+
+The important property is that `ExecutionEngine` does not need to know every observer. It routes commands to the risk and execution endpoints, while order acceptance, fills, and position changes are independently observable typed events.
+
+## 7.2 ExecutionEngine: Direct Function Calls
+
+The same workflow implemented as tightly coupled direct calls would look like this:
+
+```mermaid
+sequenceDiagram
+    participant S as Strategy
+    participant E as ExecutionEngine
+    participant R as RiskEngine
+    participant C as ExecutionClient
+    participant X as SimulatedExchange
+    participant P as Portfolio
+    participant L as Logger
+
+    S->>E: submit(order)
+    E->>R: evaluate(order)
+    alt rejected
+        R-->>E: RiskDecision(false)
+        E->>L: log(OrderDenied)
+    else approved
+        R-->>E: RiskDecision(true)
+        E->>L: log(OrderAccepted)
+        E->>C: submit(order)
+        C->>X: match(order)
+        X-->>C: OrderFill
+        C->>P: applyFill(fill)
+        P-->>E: PositionUpdate
+        E->>L: log(OrderFill)
+        E->>L: log(PositionUpdate)
+    end
+```
+
+## 7.3 Event-Driven Benefits
+
+| Event-driven design | Direct-call design |
+|---|---|
+| New observers can subscribe without changing `ExecutionEngine` | `ExecutionEngine` must call each new observer explicitly |
+| Risk, execution, portfolio, logging, and reconciliation have clear boundaries | Components become more tightly coupled |
+| Typed events provide an audit trail of state transitions | Intermediate transitions can be hidden inside nested calls |
+| Synchronous bus delivery preserves deterministic ordering in backtests | Call ordering is embedded in one call graph |
+| Endpoints can later support queued or external execution paths | Asynchronous behavior requires redesigning direct calls |
+| The same event can feed logging, replay, monitoring, and reconciliation | Each consumer needs a separate integration path |
+
+Event-driven design does not automatically mean asynchronous execution. In this Java backtest, the bus dispatches synchronously, so the system remains deterministic while retaining loose coupling and explicit lifecycle events.
+
 ## 8. Recommended Evolution Path
 
 ### Stage 1: Verify the existing bus
