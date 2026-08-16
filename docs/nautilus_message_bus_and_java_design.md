@@ -827,6 +827,7 @@ The local Rust checkout is the implementation reference. The Java project should
 | Data engine | `nautilus_trader/crates/data/src/engine/mod.rs` (`DataEngine`) | `java/src/main/java/com/abc/trading/data/DataEngine.java` | Bar publication shell implemented |
 | Risk engine | `nautilus_trader/crates/risk/src/engine/mod.rs` (`RiskEngine`) | `java/src/main/java/com/abc/trading/risk/RiskEngine.java` | Quantity-limit shell implemented |
 | Execution engine | `nautilus_trader/crates/execution/src/engine/mod.rs` (`ExecutionEngine`) | `java/src/main/java/com/abc/trading/execution/ExecutionEngine.java` | Synchronous risk-to-portfolio shell implemented |
+| Venue identity | `nautilus_trader/crates/model/src/identifiers/venue.rs` (`Venue`) and `crates/model/src/venues.rs` (`VENUE_MAP`) | `java/src/main/java/com/abc/trading/execution/VenueId.java` | Validated value object plus supported-code registry implemented |
 | Portfolio | `nautilus_trader/crates/portfolio/src/portfolio.rs` (`Portfolio`) | `java/src/main/java/com/abc/trading/portfolio/Portfolio.java` | Minimal position/order state implemented |
 | Cache | `nautilus_trader/crates/common/src/cache/mod.rs` (`Cache`) | `java/src/main/java/com/abc/trading/cache/Cache.java` | Instruments, positions, and orders implemented |
 | Structured logging | `nautilus_trader/crates/common/src/logging/logger.rs` (`Logger`) | `java/src/main/java/com/abc/trading/events/CsvEventLogger.java` | CSV lifecycle logger implemented |

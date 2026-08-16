@@ -20,6 +20,12 @@ public final class Cache {
         return instruments.containsKey(symbol);
     }
 
+    public String venue(String symbol) {
+        String venue = instruments.get(symbol);
+        if (venue == null) throw new IllegalArgumentException("Unknown instrument: " + symbol);
+        return venue;
+    }
+
     public int position(String symbol) {
         return positions.getOrDefault(symbol, 0);
     }

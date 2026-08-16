@@ -1,6 +1,9 @@
 package com.abc.trading.system;
 
 import com.abc.trading.data.Bar;
+import com.abc.trading.execution.OrderFill;
+import com.abc.trading.execution.OrderIntent;
+import com.abc.trading.execution.SignalDirection;
 import com.abc.trading.trading.StrategyHandler;
 import org.junit.jupiter.api.Test;
 
@@ -67,5 +70,24 @@ class NautilusKernelTest {
         lifecycle.dispose();
         lifecycle.disposeCompleted();
         assertEquals(ComponentState.DISPOSED, lifecycle.state());
+    }
+
+    @Test
+    void simulatedVenueFillsMarketOrderAtCurrentBarPrice() {
+        try (NautilusKernel kernel = new NautilusKernel()) {
+            List<Double> fillPrices = new ArrayList<>();
+            kernel.addVenue("XNAS");
+            kernel.addInstrument("AAPL", "XNAS");
+            kernel.bus().subscribe(OrderFill.class, fill -> fillPrices.add(fill.price()), 100);
+            kernel.start();
+            kernel.runBars(new Bar[] {new Bar("AAPL", 100, 123.45, 1)});
+
+            kernel.bus().publish(new OrderIntent(
+                    "strategy", "AAPL", 1, 100, "corr", "order-1",
+                    SignalDirection.BUY, 2, 999.0, 2, 0.0));
+
+            assertEquals(List.of(123.45), fillPrices);
+            assertEquals(2, kernel.portfolio().position("AAPL"));
+        }
     }
 }

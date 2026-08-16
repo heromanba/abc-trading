@@ -7,10 +7,15 @@ import com.abc.trading.msgbus.MessageBus;
 import com.abc.trading.portfolio.Portfolio;
 import com.abc.trading.risk.RiskEngine;
 import com.abc.trading.execution.ExecutionEngine;
+import com.abc.trading.execution.BacktestExecutionClient;
+import com.abc.trading.execution.SimulatedExchange;
+import com.abc.trading.execution.VenueId;
 import com.abc.trading.trading.StrategyHandler;
 
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /** Minimal Java runtime composition root modeled after NautilusKernel. */
 public final class NautilusKernel implements AutoCloseable {
@@ -22,6 +27,7 @@ public final class NautilusKernel implements AutoCloseable {
     private final RiskEngine riskEngine;
     private final ExecutionEngine executionEngine;
     private final Trader trader;
+    private final Map<VenueId, SimulatedExchange> exchanges = new LinkedHashMap<>();
     private final ComponentLifecycle lifecycle = new ComponentLifecycle();
     private long inputSequence;
 
@@ -31,7 +37,7 @@ public final class NautilusKernel implements AutoCloseable {
         cache = new Cache();
         portfolio = new Portfolio(cache);
         riskEngine = new RiskEngine(Integer.MAX_VALUE);
-        executionEngine = new ExecutionEngine(bus, riskEngine, portfolio);
+        executionEngine = new ExecutionEngine(bus, riskEngine, portfolio, cache);
         dataEngine = new DataEngine(bus);
         trader = new Trader(bus);
     }
@@ -41,6 +47,17 @@ public final class NautilusKernel implements AutoCloseable {
             throw new IllegalStateException("Cannot add instruments after initialization");
         }
         cache.addInstrument(symbol, venue);
+    }
+
+    public void addVenue(String venue) {
+        VenueId venueId = new VenueId(venue);
+        if (exchanges.containsKey(venueId)) {
+            throw new IllegalArgumentException("Venue already registered: " + venue);
+        }
+        SimulatedExchange exchange = new SimulatedExchange(venueId);
+        exchanges.put(venueId, exchange);
+        executionEngine.registerClient(new BacktestExecutionClient(exchange));
+        bus.subscribe("data.bar.*", Bar.class, exchange::processBar, 100);
     }
 
     public void addStrategy(String symbol, StrategyHandler strategy) {
@@ -120,6 +137,12 @@ public final class NautilusKernel implements AutoCloseable {
     public Portfolio portfolio() { return portfolio; }
     public RiskEngine riskEngine() { return riskEngine; }
     public ExecutionEngine executionEngine() { return executionEngine; }
+
+    public SimulatedExchange exchange(String venue) {
+        SimulatedExchange exchange = exchanges.get(new VenueId(venue));
+        if (exchange == null) throw new IllegalArgumentException("Unknown venue: " + venue);
+        return exchange;
+    }
 
     @Override
     public void close() {

@@ -57,6 +57,7 @@ public final class BacktestEngine implements AutoCloseable {
 
     public void addVenue(String venue) {
         if (venue == null || venue.isBlank()) throw new IllegalArgumentException("venue is required");
+        kernel.addVenue(venue);
     }
 
     public void start() {

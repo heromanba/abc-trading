@@ -1,8 +1,12 @@
 package com.abc.trading.execution;
 
 import com.abc.trading.msgbus.MessageBus;
+import com.abc.trading.cache.Cache;
 import com.abc.trading.portfolio.Portfolio;
 import com.abc.trading.risk.RiskEngine;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /** Minimal deterministic execution boundary composed through typed endpoints. */
 public final class ExecutionEngine {
@@ -11,26 +15,19 @@ public final class ExecutionEngine {
 
     private final MessageBus bus;
     private final RiskEngine riskEngine;
+    private final Cache cache;
+    private final Map<VenueId, ExecutionClient> clients = new LinkedHashMap<>();
 
-    public ExecutionEngine(MessageBus bus, RiskEngine riskEngine, Portfolio portfolio) {
+    public ExecutionEngine(MessageBus bus, RiskEngine riskEngine, Portfolio portfolio, Cache cache) {
         this.bus = bus;
         this.riskEngine = riskEngine;
+        this.cache = cache;
         bus.subscribe(OrderIntent.class, this::submit);
         bus.registerEndpoint(RISK_ENDPOINT, OrderIntent.class, this::onRiskCommand);
         bus.registerEndpoint(EXECUTION_ENDPOINT, OrderIntent.class, order -> {
             bus.publish(new OrderAccepted(order));
-            OrderFill fill = new OrderFill(
-                order.strategyId(),
-                order.symbol(),
-                order.inputSequence(),
-                order.marketTimestamp(),
-                order.correlationId(),
-                order.orderId(),
-                order.side(),
-                order.quantity(),
-                order.price(),
-                order.currentPosition(),
-                order.realizedPnl());
+            ExecutionClient client = clientFor(order);
+            OrderFill fill = client.submitMarketOrder(order);
             var positionUpdate = portfolio.applyFill(fill);
             bus.publish(fill.withState(positionUpdate.position(), positionUpdate.realizedPnl()));
             bus.publish(positionUpdate);
@@ -40,6 +37,19 @@ public final class ExecutionEngine {
 
     public void submit(OrderIntent order) {
         bus.send(RISK_ENDPOINT, OrderIntent.class, order);
+    }
+
+    public void registerClient(ExecutionClient client) {
+        if (clients.putIfAbsent(client.venue(), client) != null) {
+            throw new IllegalArgumentException("Execution client already registered for " + client.venue().value());
+        }
+    }
+
+    private ExecutionClient clientFor(OrderIntent order) {
+        String venue = cache.venue(order.symbol());
+        ExecutionClient client = clients.get(new VenueId(venue));
+        if (client == null) throw new IllegalStateException("No execution client for " + venue);
+        return client;
     }
 
     private void onRiskCommand(OrderIntent order) {
