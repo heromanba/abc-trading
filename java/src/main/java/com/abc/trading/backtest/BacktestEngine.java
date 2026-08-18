@@ -122,20 +122,6 @@ public final class BacktestEngine implements AutoCloseable {
         kernel.addInstrument(symbol, venue);
     }
 
-    public void addVenue(String venue) {
-        if (venue == null || venue.isBlank()) throw new IllegalArgumentException("venue is required");
-        kernel.addVenue(venue);
-    }
-
-    public void addVenue(SimulatedVenueConfig config) {
-        kernel.addVenue(config);
-    }
-
-    public void start() {
-        kernel.start();
-        started = true;
-    }
-
     public void addStrategy(String symbol, StrategyHandler strategy) {
         addStrategy(symbol, symbol, strategy);
     }
@@ -145,11 +131,13 @@ public final class BacktestEngine implements AutoCloseable {
         kernel.addStrategy(symbol, strategyId, strategy);
     }
 
-    public void runBars(Bar[] bars) {
-        if (!started) throw new IllegalStateException("Engine must be started before running");
-        if (bars == null) throw new IllegalArgumentException("bars are required");
+    public void addVenue(String venue) {
+        if (venue == null || venue.isBlank()) throw new IllegalArgumentException("venue is required");
+        kernel.addVenue(venue);
+    }
 
-        kernel.runBars(bars);
+    public void addVenue(SimulatedVenueConfig config) {
+        kernel.addVenue(config);
     }
 
     public boolean isStarted() {
@@ -158,6 +146,18 @@ public final class BacktestEngine implements AutoCloseable {
 
     public int position(String symbol) {
         return kernel.portfolio().position(symbol);
+    }
+
+    public void runBars(Bar[] bars) {
+        if (!started) throw new IllegalStateException("Engine must be started before running");
+        if (bars == null) throw new IllegalArgumentException("bars are required");
+
+        kernel.runBars(bars);
+    }
+
+    public void start() {
+        kernel.start();
+        started = true;
     }
 
     @Override

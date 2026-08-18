@@ -15,6 +15,23 @@ public final class StrategyContext {
         this.orders = new OrderApi(bus, strategyId, this);
     }
 
+    public long inputSequence() {
+        return currentBar == null ? 0 : currentBar.sequence();
+    }
+
+    public void limit(String symbol, SignalDirection side, int quantity, double limitPrice) {
+        orders.limit(symbol, side, quantity, limitPrice);
+    }
+
+    public void market(String symbol, SignalDirection side, int quantity, double price) {
+        orders.market(symbol, side, quantity, price);
+    }
+
+    public long marketTimestamp() {
+        if (currentBar == null) throw new IllegalStateException("No current bar");
+        return currentBar.tsInit();
+    }
+
     public void onBar(Bar bar) {
         currentBar = bar;
     }
@@ -27,24 +44,8 @@ public final class StrategyContext {
         return cache.position(symbol);
     }
 
-    public long inputSequence() {
-        return currentBar == null ? 0 : currentBar.sequence();
-    }
-
-    public long marketTimestamp() {
-        if (currentBar == null) throw new IllegalStateException("No current bar");
-        return currentBar.tsInit();
-    }
-
     public long sequence() {
         return currentBar == null ? 0 : currentBar.sequence();
     }
 
-    public void market(String symbol, SignalDirection side, int quantity, double price) {
-        orders.market(symbol, side, quantity, price);
-    }
-
-    public void limit(String symbol, SignalDirection side, int quantity, double limitPrice) {
-        orders.limit(symbol, side, quantity, limitPrice);
-    }
 }

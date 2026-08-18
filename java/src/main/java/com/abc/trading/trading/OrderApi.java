@@ -1,9 +1,9 @@
 package com.abc.trading.trading;
 
 import com.abc.trading.execution.DeterministicOrderId;
-import com.abc.trading.execution.LimitOrderIntent;
-import com.abc.trading.execution.OrderIntent;
 import com.abc.trading.execution.SignalDirection;
+import com.abc.trading.execution.commands.OrderType;
+import com.abc.trading.execution.commands.SubmitOrder;
 import com.abc.trading.msgbus.MessageBus;
 
 public final class OrderApi {
@@ -17,51 +17,47 @@ public final class OrderApi {
         this.context = context;
     }
 
-    public void market(String symbol, SignalDirection side, int quantity, double price) {
-        submitMarket(symbol, side, quantity, price);
-    }
-
     public void limit(String symbol, SignalDirection side, int quantity, double limitPrice) {
-        int position = context.position(symbol);
-        String correlationId = symbol + "-limit-" + context.marketTimestamp() + "-" + context.sequence();
-        bus.publish(new LimitOrderIntent(
-                strategyId,
-                symbol,
-                context.inputSequence(),
-                context.marketTimestamp(),
-                correlationId,
-                DeterministicOrderId.fromCorrelation(correlationId),
-                side,
-                quantity,
-                limitPrice,
-                targetPosition(position, side, quantity),
-                0.0));
+        bus.publish(createSubmitOrder(symbol, side, quantity, limitPrice, OrderType.LIMIT));
     }
 
-    private void submitMarket(String symbol, SignalDirection side, int quantity, double price) {
+        public void market(String symbol, SignalDirection side, int quantity, double price) {
+        SubmitOrder order = createSubmitOrder(symbol, side, quantity, price, OrderType.MARKET);
+        bus.publish(new StrategySignal(
+            strategyId,
+            symbol,
+            context.inputSequence(),
+            context.marketTimestamp(),
+            order.correlationId(),
+            side,
+            price,
+            context.position(symbol)));
+        bus.publish(order);
+        }
+
+        private SubmitOrder createSubmitOrder(
+            String symbol,
+            SignalDirection side,
+            int quantity,
+            double price,
+            OrderType orderType) {
         int position = context.position(symbol);
         String correlationId = symbol + "-" + context.marketTimestamp() + "-" + context.sequence();
-        bus.publish(new StrategySignal(
-                strategyId,
-                symbol,
-                context.inputSequence(),
-                context.marketTimestamp(),
-                correlationId,
-                side,
-                price,
-                position));
-        bus.publish(new OrderIntent(
-                strategyId,
+        return new SubmitOrder(
+            "BACKTEST",
+            strategyId,
                 symbol,
                 context.inputSequence(),
                 context.marketTimestamp(),
                 correlationId,
                 DeterministicOrderId.fromCorrelation(correlationId),
+                correlationId,
                 side,
+            orderType,
                 quantity,
                 price,
                 targetPosition(position, side, quantity),
-                0.0));
+            0.0);
     }
 
     private static int targetPosition(int position, SignalDirection side, int quantity) {

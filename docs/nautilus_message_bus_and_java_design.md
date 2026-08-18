@@ -931,6 +931,7 @@ The Java package structure now exposes the larger Rust engine boundary without p
 | `data.DataEngineConfig` / `DataClient` | `crates/data/src/engine/config.rs` / `client.rs` | Configuration and client contracts |
 | `risk.RiskEngineConfig` | `crates/risk/src/engine/config.rs` | Risk configuration boundary |
 | `execution.ExecutionEngineConfig` | `crates/execution/src/engine/config.rs` | Execution configuration boundary |
+| `execution.commands.SubmitOrder` / `OrderType` | `crates/common/src/messages/execution/submit.rs` | Typed strategy-to-risk command |
 | `execution.OrderStatus` / `OrderState` | `crates/model/src/enums.rs` / `crates/model/src/events/order.rs` | Order lifecycle shape |
 | `execution.OrderMatchingEngine` | `crates/execution/src/matching_engine/engine.rs` | Market and limit close-price matching implemented |
 | `portfolio.PortfolioConfig` | `crates/portfolio/src/config.rs` | Portfolio configuration boundary |
@@ -947,3 +948,22 @@ Rust references for this step:
 - Exchange timing: `nautilus_trader/crates/backtest/src/exchange.rs`
 - Fill commission hook: `nautilus_trader/crates/execution/src/matching_engine/engine.rs`
 - Position commission accounting: `nautilus_trader/crates/model/src/position.rs`
+
+### Java package organization
+
+The Java layout now follows the Rust ownership boundary for order submission:
+
+```text
+com.abc.trading.execution.commands
+    SubmitOrder
+    OrderType
+
+com.abc.trading.execution
+    ExecutionEngine
+    ExecutionClient
+    BacktestExecutionClient
+    SimulatedExchange
+    OrderMatchingEngine
+```
+
+This corresponds to Rust's split between `crates/common/src/messages/execution/` for command messages and `crates/execution/` plus `crates/backtest/` for execution clients, matching, and simulation. The Java public methods touched in this restructure are ordered by method name, with overloads grouped together; a workspace-wide method sort is intentionally avoided because it would create unrelated churn.

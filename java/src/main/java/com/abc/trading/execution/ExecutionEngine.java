@@ -6,6 +6,8 @@ import com.abc.trading.portfolio.Portfolio;
 import com.abc.trading.portfolio.PositionUpdate;
 import com.abc.trading.risk.RiskEngine;
 import com.abc.trading.risk.RiskDecision;
+import com.abc.trading.execution.commands.OrderType;
+import com.abc.trading.execution.commands.SubmitOrder;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -24,6 +26,7 @@ public final class ExecutionEngine {
         this.bus = bus;
         this.riskEngine = riskEngine;
         this.cache = cache;
+        bus.subscribe(SubmitOrder.class, this::submit);
         bus.subscribe(OrderIntent.class, this::submit);
         bus.registerEndpoint(RISK_ENDPOINT, OrderIntent.class, this::onRiskCommand);
         bus.registerEndpoint(EXECUTION_ENDPOINT, OrderIntent.class, order -> {
@@ -44,18 +47,26 @@ public final class ExecutionEngine {
         });
     }
 
+    public void registerClient(ExecutionClient client) {
+        if (clients.putIfAbsent(client.venue(), client) != null) {
+            throw new IllegalArgumentException("Execution client already registered for " + client.venue().value());
+        }
+    }
+
+    public void submit(SubmitOrder command) {
+        if (command.orderType() == OrderType.MARKET) {
+            bus.publish(command.toMarketIntent());
+        } else {
+            bus.publish(command.toLimitIntent());
+        }
+    }
+
     public void submit(OrderIntent order) {
         bus.send(RISK_ENDPOINT, OrderIntent.class, order);
     }
 
     public void submitLimit(LimitOrderIntent order) {
         bus.send("RiskEngine.execute_limit", LimitOrderIntent.class, order);
-    }
-
-    public void registerClient(ExecutionClient client) {
-        if (clients.putIfAbsent(client.venue(), client) != null) {
-            throw new IllegalArgumentException("Execution client already registered for " + client.venue().value());
-        }
     }
 
     private ExecutionClient clientFor(OrderIntent order) {
