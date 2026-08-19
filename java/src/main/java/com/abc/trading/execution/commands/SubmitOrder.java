@@ -2,6 +2,7 @@ package com.abc.trading.execution.commands;
 
 import com.abc.trading.execution.LimitOrderIntent;
 import com.abc.trading.execution.OrderIntent;
+import com.abc.trading.model.orders.Order;
 import com.abc.trading.execution.SignalDirection;
 
 /** Trading command analogous to Nautilus SubmitOrder. */
@@ -19,7 +20,8 @@ public record SubmitOrder(
         int quantity,
         double price,
         int currentPosition,
-        double realizedPnl
+        double realizedPnl,
+        Order order
 ) {
     public SubmitOrder {
         if (traderId == null || traderId.isBlank()) throw new IllegalArgumentException("traderId is required");
@@ -31,6 +33,9 @@ public record SubmitOrder(
         if (orderType == null) throw new IllegalArgumentException("orderType is required");
         if (quantity <= 0) throw new IllegalArgumentException("quantity must be positive");
         if (!Double.isFinite(price) || price <= 0.0) throw new IllegalArgumentException("price must be finite and positive");
+        if (order == null) throw new IllegalArgumentException("order is required");
+        if (!order.clientOrderId().equals(clientOrderId)) throw new IllegalArgumentException("order/clientOrderId mismatch");
+        if (!order.strategyId().equals(strategyId)) throw new IllegalArgumentException("order/strategyId mismatch");
     }
 
     public LimitOrderIntent toLimitIntent() {

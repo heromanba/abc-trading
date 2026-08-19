@@ -1,28 +1,34 @@
 package com.abc.trading.trading;
 
-import com.abc.trading.execution.DeterministicOrderId;
 import com.abc.trading.execution.SignalDirection;
 import com.abc.trading.execution.commands.OrderType;
 import com.abc.trading.execution.commands.SubmitOrder;
+import com.abc.trading.common.factories.OrderFactory;
+import com.abc.trading.model.orders.Order;
+import com.abc.trading.model.orders.MarketOrder;
 import com.abc.trading.msgbus.MessageBus;
 
 public final class OrderApi {
     private final MessageBus bus;
     private final String strategyId;
     private final StrategyContext context;
+    private final OrderFactory orderFactory;
 
     OrderApi(MessageBus bus, String strategyId, StrategyContext context) {
         this.bus = bus;
         this.strategyId = strategyId;
         this.context = context;
+        this.orderFactory = new OrderFactory("BACKTEST", strategyId);
     }
 
     public void limit(String symbol, SignalDirection side, int quantity, double limitPrice) {
-        bus.publish(createSubmitOrder(symbol, side, quantity, limitPrice, OrderType.LIMIT));
+        bus.publish(createSubmitOrder(orderFactory.limit(
+                symbol, side, quantity, limitPrice, context.marketTimestamp())));
     }
 
-        public void market(String symbol, SignalDirection side, int quantity, double price) {
-        SubmitOrder order = createSubmitOrder(symbol, side, quantity, price, OrderType.MARKET);
+    public void market(String symbol, SignalDirection side, int quantity, double price) {
+        SubmitOrder order = createSubmitOrder(orderFactory.market(
+            symbol, side, quantity, price, context.marketTimestamp()));
         bus.publish(new StrategySignal(
             strategyId,
             symbol,
@@ -33,31 +39,27 @@ public final class OrderApi {
             price,
             context.position(symbol)));
         bus.publish(order);
-        }
+    }
 
-        private SubmitOrder createSubmitOrder(
-            String symbol,
-            SignalDirection side,
-            int quantity,
-            double price,
-            OrderType orderType) {
-        int position = context.position(symbol);
-        String correlationId = symbol + "-" + context.marketTimestamp() + "-" + context.sequence();
+    private SubmitOrder createSubmitOrder(Order order) {
+        int position = context.position(order.symbol());
+        String correlationId = order.symbol() + "-" + context.marketTimestamp() + "-" + context.sequence();
         return new SubmitOrder(
-            "BACKTEST",
-            strategyId,
-                symbol,
+                orderFactory.traderId(),
+                orderFactory.strategyId(),
+                order.symbol(),
                 context.inputSequence(),
                 context.marketTimestamp(),
+                order.clientOrderId(),
+                    correlationId,
                 correlationId,
-                DeterministicOrderId.fromCorrelation(correlationId),
-                correlationId,
-                side,
-            orderType,
-                quantity,
-                price,
-                targetPosition(position, side, quantity),
-            0.0);
+                order.side(),
+                order instanceof MarketOrder ? OrderType.MARKET : OrderType.LIMIT,
+                order.quantity(),
+                order.price(),
+                targetPosition(position, order.side(), order.quantity()),
+                0.0,
+                order);
     }
 
     private static int targetPosition(int position, SignalDirection side, int quantity) {
