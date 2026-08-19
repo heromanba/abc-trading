@@ -13,6 +13,7 @@ import com.abc.trading.execution.OrderDenied;
 import com.abc.trading.execution.OrderIntent;
 import com.abc.trading.execution.SignalDirection;
 import com.abc.trading.execution.OrderFill;
+import com.abc.trading.execution.SettledOrderFill;
 import com.abc.trading.portfolio.PositionUpdate;
 import com.abc.trading.system.ComponentState;
 import com.abc.trading.system.NautilusKernel;
@@ -41,6 +42,7 @@ public final class BacktestEngine implements AutoCloseable {
         kernel.bus().subscribe(LimitOrderAccepted.class, accepted -> logLimitOrderAccepted(accepted.order()));
         kernel.bus().subscribe(LimitOrderDenied.class, denied -> logLimitOrderDenied(denied.order()));
         kernel.bus().subscribe(OrderFill.class, this::logOrderFill, 100);
+        kernel.bus().subscribe(SettledOrderFill.class, this::logSettledOrderFill, 100);
         kernel.bus().subscribe(PositionUpdate.class, this::logPositionUpdate);
     }
 
@@ -93,11 +95,16 @@ public final class BacktestEngine implements AutoCloseable {
     }
 
     private void logOrderFill(OrderFill fill) {
+        // Raw fills are settled by ExecutionEngine before the canonical fill event is logged.
+    }
+
+    private void logSettledOrderFill(SettledOrderFill settledFill) {
+        OrderFill fill = settledFill.fill();
         log(new Event(
                 fill.inputSequence(), nextLifecycleSequence(), fill.marketTimestamp(), fill.symbol(),
-                OrderFill.class.getSimpleName(), EventType.ORDER_FILL, fill.strategyId(), fill.side(),
+                SettledOrderFill.class.getSimpleName(), EventType.ORDER_FILL, fill.strategyId(), fill.side(),
                 fill.correlationId(), fill.orderId(), fill.price(), fill.quantity(),
-                kernel.portfolio().position(fill.symbol()), kernel.portfolio().realizedPnl(fill.symbol()),
+                settledFill.position(), fill.realizedPnl(),
                 fill.commission().amount(), fill.commission().currency()));
     }
 

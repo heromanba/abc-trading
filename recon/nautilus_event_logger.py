@@ -6,13 +6,13 @@ from __future__ import annotations
 import argparse
 import csv
 import sys
+from collections import deque
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
 NAUTILUS_ROOT = Path(__file__).resolve().parents[2] / "nautilus_trader"
-sys.path.insert(0, str(NAUTILUS_ROOT))
 try:
     from nautilus_trader.trading.strategy import Strategy
 except ImportError:
@@ -63,20 +63,26 @@ class EventLogger:
 
 
 def _format_float(value: object) -> str:
-    if value is None or value == "":
+    if value is None or (isinstance(value, str) and value == ""):
         return ""
     try:
         return f"{float(value):.8f}"
     except (TypeError, ValueError):
-        return str(value)
+        as_decimal = getattr(value, "as_decimal", None)
+        if callable(as_decimal):
+            return f"{float(as_decimal()):.8f}"
+        return str(value).split(" ", 1)[0]
 
 
 def _value(event: object, name: str, default: object = None) -> object:
     return getattr(event, name, default)
 
 
+def _canonical_symbol(instrument_id: object) -> str:
+    return str(instrument_id).split(".", 1)[0]
+
+
 def _load_nautilus(root: Path) -> None:
-    sys.path.insert(0, str(root))
     try:
         import nautilus_trader  # noqa: F401
     except ImportError as error:
@@ -110,9 +116,11 @@ class ReconStrategy(Strategy):
         self.strategy_id = strategy_id
         self.logger = logger
         self.sequences = sequences
+        self.use_sma = strategy_id == "mean_reversion"
         self.fast = 0.0
         self.slow = 0.0
         self.count = 0
+        self.sma_values: deque[float] = deque(maxlen=5)
 
     def on_start(self) -> None:
         self.subscribe_bars(self.bar_type)
@@ -120,17 +128,26 @@ class ReconStrategy(Strategy):
     def on_bar(self, bar: Any) -> None:
         close = float(bar.close)
         self.count += 1
-        if self.count == 1:
-            self.fast = close
-            self.slow = close
+        if self.use_sma:
+            self.sma_values.append(close)
+            average = sum(self.sma_values) / len(self.sma_values)
+            buy_signal = close < average * 0.995
+            sell_signal = close > average * 1.005
         else:
-            self.fast += (2.0 / 4.0) * (close - self.fast)
-            self.slow += (2.0 / 9.0) * (close - self.slow)
+            if self.count == 1:
+                self.fast = close
+                self.slow = close
+            else:
+                self.fast += (2.0 / 4.0) * (close - self.fast)
+                self.slow += (2.0 / 9.0) * (close - self.slow)
+            buy_signal = self.fast > self.slow
+            sell_signal = self.fast < self.slow
 
         position = float(self.portfolio.net_position(self.instrument_id))
-        if self.count >= 8 and self.fast > self.slow and position == 0:
+        ready = self.count >= 5 if self.use_sma else self.count >= 8
+        if ready and buy_signal and position == 0:
             self._submit(bar, "BUY")
-        elif self.count >= 8 and self.fast < self.slow and position > 0:
+        elif ready and sell_signal and position > 0:
             self._submit(bar, "SELL")
 
     def _submit(self, bar: Any, side: str) -> None:
@@ -138,15 +155,17 @@ class ReconStrategy(Strategy):
         from nautilus_trader.model.objects import Quantity
 
         sequence = self.sequences[(str(self.instrument_id), int(bar.ts_init))]
+        canonical_symbol = _canonical_symbol(self.instrument_id)
+        correlation_id = f"{canonical_symbol}-{bar.ts_init}-{sequence}"
         self.logger.write(
             input_sequence=sequence,
             market_timestamp=int(bar.ts_init),
-            symbol=str(self.instrument_id),
+            symbol=_canonical_symbol(self.instrument_id),
             source_event_type="StrategySignal",
             event_type="SIGNAL",
             strategy_id=self.strategy_id,
             signal_direction=side,
-            correlation_id=f"{self.instrument_id}-{bar.ts_init}-{sequence}",
+            correlation_id=correlation_id,
             price=float(bar.close),
             quantity=0,
             current_position=int(self.portfolio.net_position(self.instrument_id)),
@@ -184,10 +203,15 @@ class ReconStrategy(Strategy):
         timestamp = int(_value(event, "ts_event", _value(event, "ts_init", 0)))
         sequence = self.sequences.get((instrument_id, timestamp), 0)
         side = _value(event, "order_side", _value(event, "side", ""))
+        commission = _value(event, "commission", 0.0)
+        commission_currency = _value(event, "commission_currency", None)
+        has_commission = commission is not None and not (isinstance(commission, str) and commission == "")
+        if commission_currency is None and has_commission:
+            commission_currency = _value(commission, "currency", "USD")
         self.logger.write(
             input_sequence=sequence,
             market_timestamp=timestamp,
-            symbol=instrument_id,
+            symbol=_canonical_symbol(instrument_id),
             source_event_type=type(event).__name__,
             event_type=event_type,
             strategy_id=self.strategy_id,
@@ -198,8 +222,8 @@ class ReconStrategy(Strategy):
             quantity=_value(event, "last_qty", _value(event, "quantity", 0)),
             current_position=int(self.portfolio.net_position(self.instrument_id)),
             realized_pnl=_value(event, "realized_pnl", 0.0),
-            commission=_value(event, "commission", 0.0),
-            commission_currency=_value(event, "commission_currency", "USD"),
+            commission=commission,
+            commission_currency=commission_currency or "USD",
         )
 
     def _log_position_event(self, event: Any) -> None:
@@ -208,7 +232,7 @@ class ReconStrategy(Strategy):
         self.logger.write(
             input_sequence=sequence,
             market_timestamp=timestamp,
-            symbol=str(self.instrument_id),
+            symbol=_canonical_symbol(self.instrument_id),
             source_event_type=type(event).__name__,
             event_type="POSITION_UPDATE",
             strategy_id=self.strategy_id,
@@ -261,7 +285,8 @@ def run(input_dir: Path, output_path: Path, start: str, end: str, nautilus_root:
     for symbol in symbols:
         engine.add_instrument(instruments[symbol])
         engine.add_data(prepared[symbol][1])
-        engine.add_strategy(ReconStrategy(instruments[symbol], prepared[symbol][0], symbol.lower(), logger, sequences))
+        strategy_id = "momentum" if symbol == "AAPL" else "mean_reversion"
+        engine.add_strategy(ReconStrategy(instruments[symbol], prepared[symbol][0], strategy_id, logger, sequences))
     try:
         engine.run()
     finally:

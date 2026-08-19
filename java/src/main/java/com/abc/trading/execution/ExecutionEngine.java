@@ -43,6 +43,7 @@ public final class ExecutionEngine {
         bus.subscribe(OrderAccepted.class, accepted -> portfolio.applyOrderIntent(accepted.order()));
         bus.subscribe(OrderFill.class, fill -> {
             PositionUpdate positionUpdate = portfolio.applyFill(fill);
+            bus.publish(new SettledOrderFill(fill, positionUpdate.position(), positionUpdate.realizedPnl()));
             bus.publish(positionUpdate);
         });
     }

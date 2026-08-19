@@ -5,18 +5,26 @@ import com.abc.trading.msgbus.MessageBus;
 import com.abc.trading.execution.SignalDirection;
 import com.abc.trading.cache.Cache;
 
+import java.util.function.LongSupplier;
+
 public final class StrategyContext {
     private final Cache cache;
     private final OrderApi orders;
+    private final LongSupplier inputSequenceSupplier;
     private Bar currentBar;
 
     public StrategyContext(MessageBus bus, Cache cache, String strategyId) {
+        this(bus, cache, strategyId, () -> 0L);
+    }
+
+    public StrategyContext(MessageBus bus, Cache cache, String strategyId, LongSupplier inputSequenceSupplier) {
         this.cache = cache;
+        this.inputSequenceSupplier = inputSequenceSupplier;
         this.orders = new OrderApi(bus, strategyId, this);
     }
 
     public long inputSequence() {
-        return currentBar == null ? 0 : currentBar.sequence();
+        return inputSequenceSupplier.getAsLong();
     }
 
     public void limit(String symbol, SignalDirection side, int quantity, double limitPrice) {

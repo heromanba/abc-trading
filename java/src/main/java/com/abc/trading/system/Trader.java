@@ -8,18 +8,25 @@ import com.abc.trading.cache.Cache;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.LongSupplier;
 
 /** Strategy lifecycle and data subscription owner. */
 public final class Trader {
     private final MessageBus bus;
     private final Map<String, StrategyHandler> strategies = new LinkedHashMap<>();
     private final Cache cache;
+    private final LongSupplier inputSequenceSupplier;
     private final Map<String, StrategyContext> contexts = new LinkedHashMap<>();
     private final ComponentLifecycle lifecycle = new ComponentLifecycle();
 
     public Trader(MessageBus bus, Cache cache) {
+        this(bus, cache, () -> 0L);
+    }
+
+    public Trader(MessageBus bus, Cache cache, LongSupplier inputSequenceSupplier) {
         this.bus = bus;
         this.cache = cache;
+        this.inputSequenceSupplier = inputSequenceSupplier;
     }
 
     public void registerStrategy(String symbol, StrategyHandler strategy) {
@@ -30,7 +37,7 @@ public final class Trader {
         if (strategies.putIfAbsent(symbol, strategy) != null) {
             throw new IllegalArgumentException("A strategy is already registered for: " + symbol);
         }
-        StrategyContext context = new StrategyContext(bus, cache, strategyId);
+        StrategyContext context = new StrategyContext(bus, cache, strategyId, inputSequenceSupplier);
         contexts.put(symbol, context);
         bus.subscribe("data.bar." + symbol, Bar.class, bar -> strategy.onBarWithContext(bar, context));
     }

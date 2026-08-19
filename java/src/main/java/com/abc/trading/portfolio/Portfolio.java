@@ -28,12 +28,12 @@ public final class Portfolio {
                 ? fill.quantity()
                 : -fill.quantity();
         int nextPosition = previousPosition + signedQuantity;
-        double pnl = realizedPnl.getOrDefault(fill.symbol(), 0.0) - fill.commission().amount();
+        double realizedPnlDelta = -fill.commission().amount();
 
         if (previousPosition != 0 && Integer.signum(previousPosition) != Integer.signum(signedQuantity)) {
             int closedQuantity = Math.min(Math.abs(previousPosition), Math.abs(signedQuantity));
             double direction = previousPosition > 0 ? 1.0 : -1.0;
-            pnl += (fill.price() - previousAverage) * closedQuantity * direction;
+            realizedPnlDelta += (fill.price() - previousAverage) * closedQuantity * direction;
         }
 
         if (nextPosition == 0) {
@@ -45,16 +45,17 @@ public final class Portfolio {
             averagePrices.put(fill.symbol(), total / Math.abs(nextPosition));
         }
 
-        realizedPnl.put(fill.symbol(), pnl);
+        double cumulativeRealizedPnl = realizedPnl.getOrDefault(fill.symbol(), 0.0) + realizedPnlDelta;
+        realizedPnl.put(fill.symbol(), cumulativeRealizedPnl);
         cache.updatePosition(fill.symbol(), nextPosition);
         return new PositionUpdate(
                 fill.symbol(),
                 fill.inputSequence(),
                 fill.marketTimestamp(),
                 fill.orderId(),
-                fill.quantity(),
                 nextPosition,
-                pnl);
+                nextPosition,
+                realizedPnlDelta);
     }
 
     public int position(String symbol) {

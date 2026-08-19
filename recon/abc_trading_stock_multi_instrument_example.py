@@ -142,7 +142,7 @@ def build_bars(symbol: str, start: str, end: str, data_dir: Path) -> list[Bar]:
     data = download_symbol_data(symbol=symbol, start=start, end=end, data_dir=data_dir)
     bars: list[Bar] = []
     for sequence, (timestamp, row) in enumerate(data.iterrows(), start=1):
-        close = float(row["close"])
+        close = round(float(row["close"]), 2)
         if pd.isna(close):
             continue
         bars.append(Bar(symbol, pd.Timestamp(timestamp).value, close, sequence))
@@ -221,6 +221,10 @@ def run_backtest(start: str, end: str, output_dir: Path) -> Path:
         (bar for bars in bars_by_symbol.values() for bar in bars),
         key=lambda bar: (bar.ts_init, bar.symbol),
     )
+    all_bars = [
+        Bar(bar.symbol, bar.ts_init, bar.close, sequence)
+        for sequence, bar in enumerate(all_bars, start=1)
+    ]
 
     java_engine = BacktestEngine(output_dir / "java_events.csv")
     all_bars_summary: dict[str, Any] = {}
