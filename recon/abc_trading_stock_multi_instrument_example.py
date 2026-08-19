@@ -142,7 +142,7 @@ def build_bars(symbol: str, start: str, end: str, data_dir: Path) -> list[Bar]:
     data = download_symbol_data(symbol=symbol, start=start, end=end, data_dir=data_dir)
     bars: list[Bar] = []
     for sequence, (timestamp, row) in enumerate(data.iterrows(), start=1):
-        close = round(float(row["close"]), 2)
+        close = float(row["close"])
         if pd.isna(close):
             continue
         bars.append(Bar(symbol, pd.Timestamp(timestamp).value, close, sequence))

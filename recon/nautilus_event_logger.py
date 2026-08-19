@@ -107,6 +107,34 @@ def _load_bars(data_dir: Path, symbol: str, start: str, end: str, instrument: An
     return bar_type, list(bars)
 
 
+def _source_price_precision(path: Path) -> int:
+    from decimal import Decimal
+
+    precision = 0
+    with path.open(newline="", encoding="utf-8") as source:
+        for row in csv.DictReader(source):
+            precision = max(precision, max(0, -Decimal(row["close"]).as_tuple().exponent))
+    return precision
+
+
+def _raw_equity(symbol: str, venue: str, price_precision: int, currency: Any) -> Any:
+    from nautilus_trader.model.identifiers import InstrumentId, Symbol, Venue
+    from nautilus_trader.model.instruments import Equity
+    from nautilus_trader.model.objects import Price, Quantity
+
+    increment = "1" if price_precision == 0 else f"0.{'0' * (price_precision - 1)}1"
+    return Equity(
+        instrument_id=InstrumentId(Symbol(symbol), Venue(venue)),
+        raw_symbol=Symbol(symbol),
+        currency=currency,
+        price_precision=price_precision,
+        price_increment=Price.from_str(increment),
+        lot_size=Quantity.from_int(1),
+        ts_event=0,
+        ts_init=0,
+    )
+
+
 class ReconStrategy(Strategy):
     def __init__(self, instrument: Any, bar_type: Any, strategy_id: str, logger: EventLogger, sequences: dict[tuple[str, int], int]) -> None:
         super().__init__()
@@ -253,14 +281,27 @@ def run(input_dir: Path, output_path: Path, start: str, end: str, nautilus_root:
     from nautilus_trader.backtest.engine import BacktestEngine
     from nautilus_trader.config import BacktestEngineConfig
     from nautilus_trader.model import TraderId
-    from nautilus_trader.model.currencies import USD
-    from nautilus_trader.model.objects import Money
-    from nautilus_trader.model.enums import AccountType, OmsType
-    from nautilus_trader.test_kit.providers import TestInstrumentProvider
+    from nautilus_trader.model.enums import AccountType, CurrencyType, OmsType
+    from nautilus_trader.model.objects import Currency, Money
     from nautilus_trader.model.identifiers import Venue
 
     symbols = ("AAPL", "NVDA")
-    instruments = {symbol: TestInstrumentProvider.equity(symbol, "XNAS") for symbol in symbols}
+    recon_currency = Currency(
+        code="RUSD",
+        precision=15,
+        iso4217=0,
+        name="Recon decimal USD",
+        currency_type=CurrencyType.FIAT,
+    )
+    instruments = {
+        symbol: _raw_equity(
+            symbol,
+            "XNAS",
+            _source_price_precision(input_dir / f"{symbol}_{start}_{end}.csv"),
+            recon_currency,
+        )
+        for symbol in symbols
+    }
     prepared = {
         symbol: _load_bars(input_dir, symbol, start, end, instruments[symbol]) for symbol in symbols
     }
@@ -278,8 +319,8 @@ def run(input_dir: Path, output_path: Path, start: str, end: str, nautilus_root:
         venue=Venue("XNAS"),
         oms_type=OmsType.NETTING,
         account_type=AccountType.CASH,
-        starting_balances=[Money(1_000_000, USD)],
-        base_currency=USD,
+        starting_balances=[Money(1_000_000, recon_currency)],
+        base_currency=recon_currency,
         default_leverage=Decimal(1),
     )
     for symbol in symbols:

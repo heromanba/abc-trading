@@ -12,6 +12,8 @@ public final class Cache {
     private final Map<String, OrderIntent> orders = new LinkedHashMap<>();
 
     public void addInstrument(String symbol, String venue) {
+        if (symbol == null || symbol.isBlank()) throw new IllegalArgumentException("symbol is required");
+        if (venue == null || venue.isBlank()) throw new IllegalArgumentException("venue is required");
         instruments.put(symbol, venue);
         positions.putIfAbsent(symbol, 0);
     }

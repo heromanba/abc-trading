@@ -50,7 +50,7 @@ public final class NautilusKernel implements AutoCloseable {
         riskEngine = new RiskEngine(Integer.MAX_VALUE, cache);
         executionEngine = new ExecutionEngine(bus, riskEngine, portfolio, cache);
         dataEngine = new DataEngine(bus);
-        trader = new Trader(bus, cache);
+        trader = new Trader(bus, cache, () -> inputSequence);
     }
 
     public void addInstrument(String symbol, String venue) {
