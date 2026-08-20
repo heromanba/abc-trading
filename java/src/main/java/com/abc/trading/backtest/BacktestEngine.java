@@ -1,6 +1,7 @@
 package com.abc.trading.backtest;
 
 import com.abc.trading.data.Bar;
+import com.abc.trading.data.MarketDataSnapshot;
 import com.abc.trading.events.CsvEventLogger;
 import com.abc.trading.events.Event;
 import com.abc.trading.events.EventLogger;
@@ -18,6 +19,11 @@ import com.abc.trading.execution.OrderModified;
 import com.abc.trading.execution.OrderModifyRejected;
 import com.abc.trading.execution.OrderExpired;
 import com.abc.trading.execution.OrderTriggered;
+import com.abc.trading.execution.SignalDirection;
+import com.abc.trading.execution.TimeInForce;
+import com.abc.trading.execution.TriggerType;
+import com.abc.trading.execution.OrderIntent;
+import com.abc.trading.execution.LimitOrderIntent;
 import com.abc.trading.execution.commands.CancelOrder;
 import com.abc.trading.execution.commands.ModifyOrder;
 import com.abc.trading.execution.OrderIntent;
@@ -204,6 +210,26 @@ public final class BacktestEngine implements AutoCloseable {
         kernel.exchange(venue).setMaxFillQuantity(quantity);
     }
 
+    public void submitStopMarketOrder(String strategyId, String symbol, String orderId,
+            SignalDirection side, int quantity, long timestampNs, double triggerPrice,
+            TriggerType triggerType) {
+        kernel.bus().publish(new OrderIntent(strategyId, symbol, kernel.currentInputSequence(), timestampNs,
+                orderId + "-corr", orderId, side, quantity, triggerPrice, kernel.portfolio().position(symbol),
+                0.0, TimeInForce.GTC, 0L, triggerPrice, triggerType));
+    }
+
+    public void submitStopLimitOrder(String strategyId, String symbol, String orderId,
+            SignalDirection side, int quantity, long timestampNs, double limitPrice,
+            double triggerPrice, TriggerType triggerType) {
+        kernel.bus().publish(new LimitOrderIntent(strategyId, symbol, kernel.currentInputSequence(), timestampNs,
+                orderId + "-corr", orderId, side, quantity, limitPrice, kernel.portfolio().position(symbol),
+                0.0, TimeInForce.GTC, 0L, triggerPrice, triggerType));
+    }
+
+    public String orderStatus(String orderId) {
+        return kernel.executionEngine().orderState(orderId).status().name();
+    }
+
     public void emulateOrder(String orderId) {
         kernel.executionEngine().emulateOrder(orderId);
     }
@@ -241,6 +267,11 @@ public final class BacktestEngine implements AutoCloseable {
         if (bars == null) throw new IllegalArgumentException("bars are required");
 
         kernel.runBars(bars);
+    }
+
+    public void runMarketData(MarketDataSnapshot[] snapshots) {
+        if (!started) throw new IllegalStateException("Engine must be started before running");
+        kernel.runMarketData(snapshots);
     }
 
     public void start() {

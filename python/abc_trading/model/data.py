@@ -42,6 +42,39 @@ class Bar:
         return self._sequence
 
 
+class MarketDataSnapshot:
+    def __init__(
+        self,
+        symbol: str,
+        timestamp: int,
+        bid: float,
+        ask: float,
+        last: float,
+        mark: float,
+        index: float,
+        sequence: int = 0,
+    ) -> None:
+        self._java = java_class("com.abc.trading.data.MarketDataSnapshot")(
+            symbol, timestamp, bid, ask, last, mark, index, sequence
+        )
+
+    @property
+    def java(self) -> object:
+        return self._java
+
+    @property
+    def symbol(self) -> str:
+        return str(self._java.symbol())
+
+    @property
+    def ts_init(self) -> int:
+        return int(self._java.tsInit())
+
+    @property
+    def sequence(self) -> int:
+        return int(self._java.sequence())
+
+
 @dataclass(frozen=True)
 class BarType:
     value: str

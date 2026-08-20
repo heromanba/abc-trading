@@ -109,6 +109,49 @@ class OrderLifecycleTest {
         }
     }
 
+    @Test
+    void evaluatesAllRustTriggerTypesFromSharedMarketData() {
+        try (NautilusKernel kernel = configuredKernel()) {
+            kernel.start();
+            kernel.runMarketData(new com.abc.trading.data.MarketDataSnapshot[] {
+                    snapshot(100, 99.0, 101.0, 100.0, 100.0, 100.0, 1)
+            });
+            publishStop(kernel, "bid-ask", TriggerType.BID_ASK, 105.0);
+            publishStop(kernel, "last", TriggerType.LAST_PRICE, 105.0);
+            publishStop(kernel, "mark", TriggerType.MARK_PRICE, 105.0);
+            publishStop(kernel, "index", TriggerType.INDEX_PRICE, 105.0);
+            publishStop(kernel, "last-or-bid-ask", TriggerType.LAST_OR_BID_ASK, 105.0);
+            publishStop(kernel, "midpoint", TriggerType.MID_POINT, 105.0);
+            publishStop(kernel, "double-last", TriggerType.DOUBLE_LAST, 105.0);
+            publishStop(kernel, "double-bid-ask", TriggerType.DOUBLE_BID_ASK, 105.0);
+
+            kernel.runMarketData(new com.abc.trading.data.MarketDataSnapshot[] {
+                    snapshot(101, 104.0, 106.0, 105.0, 105.0, 105.0, 2)
+            });
+            assertEquals(OrderStatus.ACCEPTED, kernel.executionEngine().orderState("double-last").status());
+            assertEquals(OrderStatus.ACCEPTED, kernel.executionEngine().orderState("double-bid-ask").status());
+
+            kernel.runMarketData(new com.abc.trading.data.MarketDataSnapshot[] {
+                    snapshot(102, 105.0, 107.0, 106.0, 106.0, 106.0, 3)
+            });
+            assertEquals(OrderStatus.FILLED, kernel.executionEngine().orderState("double-last").status());
+            assertEquals(OrderStatus.FILLED, kernel.executionEngine().orderState("double-bid-ask").status());
+        }
+    }
+
+    private static void publishStop(NautilusKernel kernel, String orderId,
+            TriggerType triggerType, double triggerPrice) {
+        kernel.bus().publish(new OrderIntent("strategy", "AAPL", 1, 100, "corr", orderId,
+                SignalDirection.BUY, 1, triggerPrice, 0, 0.0, TimeInForce.GTC, 0L,
+                triggerPrice, triggerType));
+    }
+
+    private static com.abc.trading.data.MarketDataSnapshot snapshot(long timestamp, double bid,
+            double ask, double last, double mark, double index, long sequence) {
+        return new com.abc.trading.data.MarketDataSnapshot(
+                "AAPL", timestamp, bid, ask, last, mark, index, sequence);
+    }
+
     private static NautilusKernel configuredKernel() {
         NautilusKernel kernel = new NautilusKernel();
         kernel.addVenue("XNAS");

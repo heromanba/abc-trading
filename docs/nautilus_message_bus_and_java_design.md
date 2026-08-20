@@ -669,6 +669,39 @@ A useful initial CSV schema is:
 
 The comparison tool should compare rows in order, not just aggregate totals. Aggregate counts can match while event ordering is wrong.
 
+### 11.1 Trigger market-data parity
+
+Stop-order trigger evaluation uses one immutable snapshot file in both
+backends:
+
+```text
+trigger_market_data.csv
+                |
+                +--> Java MarketDataSnapshot -> SimulatedExchange
+                |
+                +--> Nautilus QuoteTick/TradeTick/MarkPriceUpdate/IndexPriceUpdate
+```
+
+The focused replay validates these semantic transitions:
+
+```text
+STOP_MARKET: ACCEPTED -> FILLED
+STOP_LIMIT:  ACCEPTED -> TRIGGERED -> FILLED
+```
+
+Run it from the repository root:
+
+```bash
+PYTHONPATH=python python recon/java_trigger_state_logger.py
+PYTHONPATH=python python recon/nautilus_trigger_state_logger.py
+python recon/compare_trigger_states.py \
+    recon/output/java_trigger_states.csv \
+    recon/output/nautilus_trigger_states.csv
+```
+
+The focused comparator ignores backend-specific sequence encodings and
+compares ordered status transitions for each client order.
+
 ## 12. Practical Summary
 
 The Nautilus-style design for this Java rewrite is:

@@ -6,7 +6,7 @@ import jpype
 from pathlib import Path
 
 from abc_trading._java import ensure_jvm, java_class
-from abc_trading.model.data import Bar
+from abc_trading.model.data import Bar, MarketDataSnapshot
 
 
 class StrategyContext:
@@ -115,6 +115,45 @@ class BacktestEngine:
     def set_max_fill_quantity(self, venue: str, quantity: int) -> None:
         self._java.setMaxFillQuantity(venue, quantity)
 
+    def submit_stop_market_order(
+        self,
+        strategy_id: str,
+        symbol: str,
+        order_id: str,
+        side: str,
+        quantity: int,
+        timestamp_ns: int,
+        trigger_price: float,
+        trigger_type: str = "LAST_PRICE",
+    ) -> None:
+        direction = java_class("com.abc.trading.execution.SignalDirection").valueOf(side)
+        trigger = java_class("com.abc.trading.execution.TriggerType").valueOf(trigger_type)
+        self._java.submitStopMarketOrder(
+            strategy_id, symbol, order_id, direction, quantity, timestamp_ns, trigger_price, trigger
+        )
+
+    def submit_stop_limit_order(
+        self,
+        strategy_id: str,
+        symbol: str,
+        order_id: str,
+        side: str,
+        quantity: int,
+        timestamp_ns: int,
+        limit_price: float,
+        trigger_price: float,
+        trigger_type: str = "LAST_PRICE",
+    ) -> None:
+        direction = java_class("com.abc.trading.execution.SignalDirection").valueOf(side)
+        trigger = java_class("com.abc.trading.execution.TriggerType").valueOf(trigger_type)
+        self._java.submitStopLimitOrder(
+            strategy_id, symbol, order_id, direction, quantity, timestamp_ns,
+            limit_price, trigger_price, trigger
+        )
+
+    def order_status(self, order_id: str) -> str:
+        return str(self._java.orderStatus(order_id))
+
     def emulate_order(self, client_order_id: str) -> None:
         self._java.emulateOrder(client_order_id)
 
@@ -165,6 +204,11 @@ class BacktestEngine:
         java_bar_type = java_class("com.abc.trading.data.Bar")
         java_bars = jpype.JArray(java_bar_type)([bar._java for bar in bars])
         self._java.runBars(java_bars)
+
+    def run_market_data(self, snapshots: list[MarketDataSnapshot]) -> None:
+        java_type = java_class("com.abc.trading.data.MarketDataSnapshot")
+        java_snapshots = jpype.JArray(java_type)([snapshot.java for snapshot in snapshots])
+        self._java.runMarketData(java_snapshots)
 
     @property
     def started(self) -> bool:

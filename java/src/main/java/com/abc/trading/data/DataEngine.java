@@ -13,4 +13,8 @@ public final class DataEngine {
     public void publishBar(Bar bar) {
         bus.publish("data.bar." + bar.symbol(), bar);
     }
+
+    public void publishMarketData(MarketDataSnapshot snapshot) {
+        bus.publish("data.market." + snapshot.symbol(), snapshot);
+    }
 }

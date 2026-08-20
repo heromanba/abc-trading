@@ -1,6 +1,7 @@
 package com.abc.trading.execution;
 
 import com.abc.trading.data.Bar;
+import com.abc.trading.data.MarketDataSnapshot;
 import com.abc.trading.execution.commands.CancelOrder;
 import com.abc.trading.execution.commands.ModifyOrder;
 
@@ -18,6 +19,7 @@ import java.util.function.Consumer;
 public final class SimulatedExchange {
     private final VenueId venue;
     private final Map<String, Double> lastPrices = new LinkedHashMap<>();
+    private final Map<String, MarketDataSnapshot> marketData = new LinkedHashMap<>();
     private final Map<String, WorkingOrder> workingOrders = new LinkedHashMap<>();
     private final Consumer<OrderFill> fillHandler;
     private final Consumer<Object> lifecycleHandler;
@@ -53,13 +55,18 @@ public final class SimulatedExchange {
     public VenueId venue() { return venue; }
 
     public void processBar(Bar bar) {
-        currentTimestamp = bar.tsInit();
-        lastPrices.put(bar.symbol(), bar.close());
+        processMarketData(MarketDataSnapshot.fromBar(bar));
+    }
+
+    public void processMarketData(MarketDataSnapshot snapshot) {
+        currentTimestamp = snapshot.tsInit();
+        lastPrices.put(snapshot.symbol(), snapshot.last());
+        marketData.put(snapshot.symbol(), snapshot);
         expireDueOrders();
         drainDueCommands();
-        processTriggers(bar.symbol());
-        tryMatchMarket(bar.symbol());
-        tryMatchLimit(bar.symbol());
+        processTriggers(snapshot.symbol());
+        tryMatchMarket(snapshot.symbol());
+        tryMatchLimit(snapshot.symbol());
     }
 
     public void submitLimitOrder(LimitOrderIntent order) {
@@ -150,7 +157,7 @@ public final class SimulatedExchange {
         }
         workingOrders.put(workingOrder.orderId, workingOrder);
         if (workingOrder.stop) {
-            if (isStopMatched(workingOrder)) trigger(workingOrder);
+            if (shouldTrigger(workingOrder)) trigger(workingOrder);
             return;
         }
         boolean crossed = !workingOrder.limit || (workingOrder.side == SignalDirection.BUY
@@ -187,7 +194,9 @@ public final class SimulatedExchange {
     private void tryMatchMarket(String symbol) {
         List<WorkingOrder> candidates = new ArrayList<>();
         for (WorkingOrder order : workingOrders.values()) {
-            if (!order.limit && order.symbol.equals(symbol)) candidates.add(order);
+            if (!order.limit && (!order.stop || order.triggered) && order.symbol.equals(symbol)) {
+                candidates.add(order);
+            }
         }
         for (WorkingOrder order : candidates) {
             if (!workingOrders.containsKey(order.orderId)) continue;
@@ -204,7 +213,7 @@ public final class SimulatedExchange {
             if (order.stop && !order.triggered && order.symbol.equals(symbol)) candidates.add(order);
         }
         for (WorkingOrder order : candidates) {
-            if (workingOrders.containsKey(order.orderId) && isStopMatched(order)) trigger(order);
+            if (workingOrders.containsKey(order.orderId) && shouldTrigger(order)) trigger(order);
         }
     }
 
@@ -223,10 +232,31 @@ public final class SimulatedExchange {
     }
 
     private boolean isStopMatched(WorkingOrder order) {
-        double marketPrice = currentPrice(order.symbol);
+        MarketDataSnapshot snapshot = marketData.get(order.symbol);
+        if (snapshot == null) throw new IllegalStateException("No market data for " + order.symbol);
+        double marketPrice = switch (order.triggerType) {
+            case LAST_PRICE, DOUBLE_LAST -> snapshot.last();
+            case MARK_PRICE -> snapshot.mark();
+            case INDEX_PRICE -> snapshot.index();
+            case BID_ASK, DOUBLE_BID_ASK, DEFAULT -> order.side == SignalDirection.BUY
+                    ? snapshot.ask() : snapshot.bid();
+            case LAST_OR_BID_ASK -> snapshot.last();
+            case MID_POINT -> (snapshot.bid() + snapshot.ask()) / 2.0;
+            case NO_TRIGGER -> throw new IllegalArgumentException("Stop order trigger type is required");
+        };
         return order.side == SignalDirection.BUY
                 ? marketPrice >= order.triggerPrice
                 : marketPrice <= order.triggerPrice;
+    }
+
+    private boolean shouldTrigger(WorkingOrder order) {
+        boolean matched = isStopMatched(order);
+        boolean result = switch (order.triggerType) {
+            case DOUBLE_LAST, DOUBLE_BID_ASK -> order.previousTriggerMatch && matched;
+            default -> matched;
+        };
+        order.previousTriggerMatch = matched;
+        return result;
     }
 
     private void fill(WorkingOrder order, double price, LiquiditySide liquiditySide) {
@@ -293,8 +323,8 @@ public final class SimulatedExchange {
     }
 
     private static void validateTriggerType(TriggerType triggerType) {
-        if (triggerType != TriggerType.LAST_PRICE) {
-            throw new IllegalArgumentException("Bar simulation supports only LAST_PRICE stop triggers");
+        if (triggerType == null || triggerType == TriggerType.NO_TRIGGER) {
+            throw new IllegalArgumentException("Stop order trigger type is required");
         }
     }
 
@@ -331,6 +361,7 @@ public final class SimulatedExchange {
         private int filledQuantity;
         private double price;
         private boolean triggered;
+        private boolean previousTriggerMatch;
 
         private WorkingOrder(String strategyId, String symbol, long inputSequence, long marketTimestamp,
                 String correlationId, String orderId, SignalDirection side, int quantity, double price,
