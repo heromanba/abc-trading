@@ -4,6 +4,7 @@ import com.abc.trading.execution.LimitOrderIntent;
 import com.abc.trading.execution.OrderIntent;
 import com.abc.trading.model.orders.Order;
 import com.abc.trading.execution.SignalDirection;
+import com.abc.trading.execution.TimeInForce;
 
 /** Trading command analogous to Nautilus SubmitOrder. */
 public record SubmitOrder(
@@ -21,8 +22,18 @@ public record SubmitOrder(
         double price,
         int currentPosition,
         double realizedPnl,
-        Order order
+        Order order,
+        TimeInForce timeInForce,
+        long expireTimeNs
 ) {
+        public SubmitOrder(String traderId, String strategyId, String symbol, long inputSequence,
+            long timestampNs, String clientOrderId, String commandId, String correlationId,
+            SignalDirection side, OrderType orderType, int quantity, double price,
+            int currentPosition, double realizedPnl, Order order) {
+        this(traderId, strategyId, symbol, inputSequence, timestampNs, clientOrderId, commandId,
+            correlationId, side, orderType, quantity, price, currentPosition, realizedPnl,
+            order, TimeInForce.GTC, 0L);
+        }
     public SubmitOrder {
         if (traderId == null || traderId.isBlank()) throw new IllegalArgumentException("traderId is required");
         if (strategyId == null || strategyId.isBlank()) throw new IllegalArgumentException("strategyId is required");
@@ -34,6 +45,10 @@ public record SubmitOrder(
         if (quantity <= 0) throw new IllegalArgumentException("quantity must be positive");
         if (!Double.isFinite(price) || price <= 0.0) throw new IllegalArgumentException("price must be finite and positive");
         if (order == null) throw new IllegalArgumentException("order is required");
+        if (timeInForce == null) throw new IllegalArgumentException("timeInForce is required");
+        if (timeInForce == TimeInForce.GTD && expireTimeNs <= timestampNs) {
+            throw new IllegalArgumentException("GTD expireTimeNs must be after timestampNs");
+        }
         if (!order.clientOrderId().equals(clientOrderId)) throw new IllegalArgumentException("order/clientOrderId mismatch");
         if (!order.strategyId().equals(strategyId)) throw new IllegalArgumentException("order/strategyId mismatch");
     }
@@ -41,12 +56,12 @@ public record SubmitOrder(
     public LimitOrderIntent toLimitIntent() {
         if (orderType != OrderType.LIMIT) throw new IllegalStateException("order is not limit type");
         return new LimitOrderIntent(strategyId, symbol, inputSequence, timestampNs, correlationId,
-                clientOrderId, side, quantity, price, currentPosition, realizedPnl);
+            clientOrderId, side, quantity, price, currentPosition, realizedPnl, timeInForce, expireTimeNs);
     }
 
     public OrderIntent toMarketIntent() {
         if (orderType != OrderType.MARKET) throw new IllegalStateException("order is not market type");
         return new OrderIntent(strategyId, symbol, inputSequence, timestampNs, correlationId,
-                clientOrderId, side, quantity, price, currentPosition, realizedPnl);
+            clientOrderId, side, quantity, price, currentPosition, realizedPnl, timeInForce, expireTimeNs);
     }
 }

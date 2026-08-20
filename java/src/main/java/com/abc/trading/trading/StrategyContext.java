@@ -3,6 +3,7 @@ package com.abc.trading.trading;
 import com.abc.trading.data.Bar;
 import com.abc.trading.msgbus.MessageBus;
 import com.abc.trading.execution.SignalDirection;
+import com.abc.trading.execution.TimeInForce;
 import com.abc.trading.cache.Cache;
 
 import java.util.function.LongSupplier;
@@ -27,12 +28,28 @@ public final class StrategyContext {
         return inputSequenceSupplier.getAsLong();
     }
 
-    public void limit(String symbol, SignalDirection side, int quantity, double limitPrice) {
-        orders.limit(symbol, side, quantity, limitPrice);
+    public String limit(String symbol, SignalDirection side, int quantity, double limitPrice) {
+        return orders.limit(symbol, side, quantity, limitPrice);
     }
 
-    public void market(String symbol, SignalDirection side, int quantity, double price) {
-        orders.market(symbol, side, quantity, price);
+    public String limit(String symbol, SignalDirection side, int quantity, double limitPrice,
+            TimeInForce timeInForce, long expireTimeNs) {
+        return orders.limit(symbol, side, quantity, limitPrice, timeInForce, expireTimeNs);
+    }
+
+    public String market(String symbol, SignalDirection side, int quantity, double price) {
+        return orders.market(symbol, side, quantity, price);
+    }
+
+    public String market(String symbol, SignalDirection side, int quantity, double price,
+            TimeInForce timeInForce, long expireTimeNs) {
+        return orders.market(symbol, side, quantity, price, timeInForce, expireTimeNs);
+    }
+
+    public void cancel(String clientOrderId) { orders.cancel(clientOrderId); }
+
+    public void modify(String clientOrderId, Integer quantity, Double price) {
+        orders.modify(clientOrderId, quantity, price);
     }
 
     public long marketTimestamp() {

@@ -10,6 +10,15 @@ import com.abc.trading.execution.LimitOrderAccepted;
 import com.abc.trading.execution.LimitOrderDenied;
 import com.abc.trading.execution.LimitOrderIntent;
 import com.abc.trading.execution.OrderDenied;
+import com.abc.trading.execution.OrderRejected;
+import com.abc.trading.execution.LimitOrderRejected;
+import com.abc.trading.execution.OrderCanceled;
+import com.abc.trading.execution.OrderCancelRejected;
+import com.abc.trading.execution.OrderModified;
+import com.abc.trading.execution.OrderModifyRejected;
+import com.abc.trading.execution.OrderExpired;
+import com.abc.trading.execution.commands.CancelOrder;
+import com.abc.trading.execution.commands.ModifyOrder;
 import com.abc.trading.execution.OrderIntent;
 import com.abc.trading.execution.SignalDirection;
 import com.abc.trading.execution.OrderFill;
@@ -39,11 +48,18 @@ public final class BacktestEngine implements AutoCloseable {
         kernel.bus().subscribe(StrategySignal.class, this::logStrategySignal, 100);
         kernel.bus().subscribe(OrderAccepted.class, accepted -> logOrderAccepted(accepted.order()));
         kernel.bus().subscribe(OrderDenied.class, denied -> logOrderDenied(denied.order()));
+        kernel.bus().subscribe(OrderRejected.class, rejected -> logOrderRejected(rejected.order()));
+        kernel.bus().subscribe(LimitOrderRejected.class, rejected -> logLimitOrderRejected(rejected.order()));
         kernel.bus().subscribe(LimitOrderAccepted.class, accepted -> logLimitOrderAccepted(accepted.order()));
         kernel.bus().subscribe(LimitOrderDenied.class, denied -> logLimitOrderDenied(denied.order()));
         kernel.bus().subscribe(OrderFill.class, this::logOrderFill, 100);
         kernel.bus().subscribe(SettledOrderFill.class, this::logSettledOrderFill, 100);
         kernel.bus().subscribe(PositionUpdate.class, this::logPositionUpdate);
+        kernel.bus().subscribe(OrderCanceled.class, event -> logCancel(event.command(), EventType.ORDER_CANCEL));
+        kernel.bus().subscribe(OrderCancelRejected.class, event -> logCancel(event.command(), EventType.ORDER_CANCEL_REJECT));
+        kernel.bus().subscribe(OrderModified.class, event -> logModify(event.command(), EventType.ORDER_MODIFY));
+        kernel.bus().subscribe(OrderModifyRejected.class, event -> logModify(event.command(), EventType.ORDER_MODIFY_REJECT));
+        kernel.bus().subscribe(OrderExpired.class, event -> logExpired(event));
     }
 
     private void logOrderSubmit(OrderIntent intent) {
@@ -76,6 +92,39 @@ public final class BacktestEngine implements AutoCloseable {
                 intent.symbol(), OrderDenied.class.getSimpleName(), EventType.ORDER_DENY,
                 intent.strategyId(), intent.side(), intent.correlationId(), intent.orderId(),
                 intent.price(), intent.quantity(), intent.currentPosition(), intent.realizedPnl()));
+    }
+
+    private void logOrderRejected(OrderIntent intent) {
+        log(new Event(intent.inputSequence(), nextLifecycleSequence(), intent.marketTimestamp(), intent.symbol(),
+                OrderRejected.class.getSimpleName(), EventType.ORDER_REJECT, intent.strategyId(), intent.side(),
+                intent.correlationId(), intent.orderId(), intent.price(), intent.quantity(),
+                intent.currentPosition(), intent.realizedPnl()));
+    }
+
+    private void logLimitOrderRejected(LimitOrderIntent intent) {
+        log(new Event(intent.inputSequence(), nextLifecycleSequence(), intent.marketTimestamp(), intent.symbol(),
+                LimitOrderRejected.class.getSimpleName(), EventType.ORDER_REJECT, intent.strategyId(), intent.side(),
+                intent.correlationId(), intent.orderId(), intent.limitPrice(), intent.quantity(),
+                intent.currentPosition(), intent.realizedPnl()));
+    }
+
+    private void logCancel(CancelOrder command, EventType eventType) {
+        log(new Event(0, nextLifecycleSequence(), command.timestampNs(), command.symbol(),
+                eventType.name(), eventType, command.strategyId(), SignalDirection.HOLD,
+                command.commandId(), command.clientOrderId(), 0.0, 0, 0, 0.0));
+    }
+
+    private void logModify(ModifyOrder command, EventType eventType) {
+        log(new Event(0, nextLifecycleSequence(), command.timestampNs(), command.symbol(),
+                eventType.name(), eventType, command.strategyId(), SignalDirection.HOLD,
+                command.commandId(), command.clientOrderId(), command.price() == null ? 0.0 : command.price(),
+                command.quantity() == null ? 0 : command.quantity(), 0, 0.0));
+    }
+
+    private void logExpired(OrderExpired event) {
+        log(new Event(0, nextLifecycleSequence(), event.marketTimestamp(), event.symbol(),
+                OrderExpired.class.getSimpleName(), EventType.ORDER_EXPIRE, event.strategyId(), event.side(),
+                "", event.orderId(), event.price(), event.remainingQuantity(), 0, 0.0));
     }
 
     private void logLimitOrderAccepted(LimitOrderIntent intent) {
@@ -141,6 +190,10 @@ public final class BacktestEngine implements AutoCloseable {
     public void addVenue(String venue) {
         if (venue == null || venue.isBlank()) throw new IllegalArgumentException("venue is required");
         kernel.addVenue(venue);
+    }
+
+    public void setMaxFillQuantity(String venue, int quantity) {
+        kernel.exchange(venue).setMaxFillQuantity(quantity);
     }
 
     public void addVenue(SimulatedVenueConfig config) {

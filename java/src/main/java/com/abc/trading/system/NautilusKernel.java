@@ -73,7 +73,7 @@ public final class NautilusKernel implements AutoCloseable {
         if (exchanges.containsKey(venueId)) {
             throw new IllegalArgumentException("Venue already registered: " + venueId.value());
         }
-        SimulatedExchange exchange = new SimulatedExchange(venueId, bus::publish, latencyModel, feeModel);
+        SimulatedExchange exchange = new SimulatedExchange(venueId, bus::publish, bus::publish, latencyModel, feeModel);
         exchanges.put(venueId, exchange);
         executionEngine.registerClient(new BacktestExecutionClient(exchange));
         bus.subscribe("data.bar.*", Bar.class, exchange::processBar, 100);

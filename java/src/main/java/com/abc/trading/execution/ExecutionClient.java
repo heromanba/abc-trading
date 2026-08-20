@@ -1,5 +1,8 @@
 package com.abc.trading.execution;
 
+import com.abc.trading.execution.commands.CancelOrder;
+import com.abc.trading.execution.commands.ModifyOrder;
+
 /** Shared execution contract for simulated and future live clients. */
 public interface ExecutionClient {
     VenueId venue();
@@ -7,4 +10,8 @@ public interface ExecutionClient {
     void submitMarketOrder(OrderIntent order);
 
     void submitLimitOrder(LimitOrderIntent order);
+
+    boolean cancelOrder(CancelOrder command);
+
+    boolean modifyOrder(ModifyOrder command);
 }

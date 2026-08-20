@@ -1,103 +1,128 @@
 package com.abc.trading.execution;
 
 import com.abc.trading.data.Bar;
+import com.abc.trading.execution.commands.CancelOrder;
+import com.abc.trading.execution.commands.ModifyOrder;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.function.Consumer;
 
-/** Minimal simulated venue using the latest bar close as the market price. */
+/** Deterministic simulated venue with working-order lifecycle and matching. */
 public final class SimulatedExchange {
     private final VenueId venue;
     private final Map<String, Double> lastPrices = new LinkedHashMap<>();
-    private final List<LimitOrderIntent> pendingLimitOrders = new ArrayList<>();
-    private final OrderMatchingEngine matchingEngine = new OrderMatchingEngine();
+    private final Map<String, WorkingOrder> workingOrders = new LinkedHashMap<>();
     private final Consumer<OrderFill> fillHandler;
+    private final Consumer<Object> lifecycleHandler;
     private final LatencyModel latencyModel;
     private final FeeModel feeModel;
     private final PriorityQueue<ScheduledCommand> inflightCommands = new PriorityQueue<>();
     private long commandSequence;
     private long currentTimestamp;
+    private int maxFillQuantity = Integer.MAX_VALUE;
 
     public SimulatedExchange(VenueId venue) {
-        this(venue, fill -> { }, StaticLatencyModel.zero(), MakerTakerFeeModel.zero());
+        this(venue, fill -> { }, event -> { }, StaticLatencyModel.zero(), MakerTakerFeeModel.zero());
     }
 
     public SimulatedExchange(VenueId venue, Consumer<OrderFill> fillHandler) {
-        this(venue, fillHandler, StaticLatencyModel.zero(), MakerTakerFeeModel.zero());
+        this(venue, fillHandler, event -> { }, StaticLatencyModel.zero(), MakerTakerFeeModel.zero());
     }
 
-    public SimulatedExchange(
-            VenueId venue,
-            Consumer<OrderFill> fillHandler,
-            LatencyModel latencyModel,
-            FeeModel feeModel) {
+    public SimulatedExchange(VenueId venue, Consumer<OrderFill> fillHandler,
+            LatencyModel latencyModel, FeeModel feeModel) {
+        this(venue, fillHandler, event -> { }, latencyModel, feeModel);
+    }
+
+    public SimulatedExchange(VenueId venue, Consumer<OrderFill> fillHandler,
+            Consumer<Object> lifecycleHandler, LatencyModel latencyModel, FeeModel feeModel) {
         this.venue = venue;
         this.fillHandler = fillHandler;
+        this.lifecycleHandler = lifecycleHandler;
         this.latencyModel = latencyModel;
         this.feeModel = feeModel;
     }
 
-    public VenueId venue() {
-        return venue;
-    }
+    public VenueId venue() { return venue; }
 
     public void processBar(Bar bar) {
         currentTimestamp = bar.tsInit();
         lastPrices.put(bar.symbol(), bar.close());
+        expireDueOrders();
         drainDueCommands();
+        tryMatchMarket(bar.symbol());
         tryMatchLimit(bar.symbol());
     }
 
     public void submitLimitOrder(LimitOrderIntent order) {
-        if (order.quantity() <= 0) throw new IllegalArgumentException("quantity must be positive");
-        if (!Double.isFinite(order.limitPrice()) || order.limitPrice() <= 0.0) {
-            throw new IllegalArgumentException("limitPrice must be finite and positive");
-        }
+        validateQuantity(order.quantity());
+        validatePrice(order.limitPrice());
         schedule(order, latencyModel.getInsertLatencyNs());
     }
 
     public void submitMarketOrder(OrderIntent order) {
+        validateQuantity(order.quantity());
+        validatePrice(order.price());
         schedule(order, latencyModel.getInsertLatencyNs());
     }
 
+    public boolean cancelOrder(CancelOrder command) {
+        WorkingOrder order = workingOrders.remove(command.clientOrderId());
+        if (order != null) return true;
+        return inflightCommands.removeIf(item -> item.orderId().equals(command.clientOrderId()));
+    }
+
+    public boolean modifyOrder(ModifyOrder command) {
+        WorkingOrder order = workingOrders.get(command.clientOrderId());
+        if (order == null || !order.limit) return false;
+        int nextQuantity = command.quantity() == null ? order.quantity : command.quantity();
+        if (nextQuantity < order.filledQuantity || nextQuantity <= 0) return false;
+        double nextPrice = command.price() == null ? order.price : command.price();
+        validatePrice(nextPrice);
+        order.quantity = nextQuantity;
+        order.price = nextPrice;
+        return true;
+    }
+
+    public void setMaxFillQuantity(int maxFillQuantity) {
+        if (maxFillQuantity <= 0) throw new IllegalArgumentException("maxFillQuantity must be positive");
+        this.maxFillQuantity = maxFillQuantity;
+    }
+
     public int pendingLimitOrderCount() {
-        return pendingLimitOrders.size() + inflightCommands.size();
+        int count = 0;
+        for (WorkingOrder order : workingOrders.values()) if (order.limit) count++;
+        for (ScheduledCommand command : inflightCommands) {
+            if (command.order instanceof LimitOrderIntent) count++;
+        }
+        return count;
     }
 
-    public long currentTimestamp() {
-        return currentTimestamp;
-    }
+    public long currentTimestamp() { return currentTimestamp; }
 
-    public LatencyModel latencyModel() {
-        return latencyModel;
-    }
+    public LatencyModel latencyModel() { return latencyModel; }
 
-    public FeeModel feeModel() {
-        return feeModel;
-    }
+    public FeeModel feeModel() { return feeModel; }
 
     public double currentPrice(String symbol) {
         Double price = lastPrices.get(symbol);
-        if (price == null) {
-            throw new IllegalStateException("No current market price for " + symbol + " on " + venue.value());
-        }
+        if (price == null) throw new IllegalStateException("No current market price for " + symbol + " on " + venue.value());
         return price;
     }
 
     private void schedule(Object order, long latencyNs) {
         long submittedAt = order instanceof OrderIntent market
-                ? market.marketTimestamp()
-                : ((LimitOrderIntent) order).marketTimestamp();
+                ? market.marketTimestamp() : ((LimitOrderIntent) order).marketTimestamp();
         long deliveryTimestamp = Math.addExact(submittedAt, latencyNs);
-        if (deliveryTimestamp <= currentTimestamp) {
-            processCommand(order);
-        } else {
-            inflightCommands.add(new ScheduledCommand(deliveryTimestamp, commandSequence++, order));
-        }
+        if (deliveryTimestamp <= currentTimestamp) processCommand(order);
+        else inflightCommands.add(new ScheduledCommand(deliveryTimestamp, commandSequence++, order));
     }
 
     private void drainDueCommands() {
@@ -107,39 +132,181 @@ public final class SimulatedExchange {
     }
 
     private void processCommand(Object order) {
-        if (order instanceof OrderIntent market) {
-            double fillPrice = currentPrice(market.symbol());
-            OrderFill fill = matchingEngine.matchMarketOrder(market, fillPrice)
-                    .withCommission(feeModel.calculate(market.quantity(), fillPrice, LiquiditySide.TAKER));
-            fillHandler.accept(fill);
+        WorkingOrder workingOrder = WorkingOrder.from(order);
+        if (isExpired(workingOrder, currentTimestamp)) {
+            expireWorkingOrder(workingOrder, currentTimestamp);
             return;
         }
-        LimitOrderIntent limit = (LimitOrderIntent) order;
-        pendingLimitOrders.add(limit);
-        tryMatchLimit(limit.symbol());
+        boolean crossed = !workingOrder.limit || (workingOrder.side == SignalDirection.BUY
+            ? currentPrice(workingOrder.symbol) <= workingOrder.price
+            : currentPrice(workingOrder.symbol) >= workingOrder.price);
+        if (workingOrder.timeInForce == TimeInForce.FOK
+            && (maxFillQuantity < workingOrder.quantity || !crossed)) {
+            emitCanceled(workingOrder, currentTimestamp);
+            return;
+        }
+        workingOrders.put(workingOrder.orderId, workingOrder);
+        if (workingOrder.limit) tryMatchLimit(workingOrder.symbol);
+        else fill(workingOrder, currentPrice(workingOrder.symbol), LiquiditySide.TAKER);
+        if (workingOrder.timeInForce == TimeInForce.IOC && workingOrders.containsKey(workingOrder.orderId)) {
+            cancelWorkingOrder(workingOrder, currentTimestamp);
+        }
     }
 
     private void tryMatchLimit(String symbol) {
-        double marketPrice = currentPrice(symbol);
-        List<LimitOrderIntent> filledOrders = new ArrayList<>();
-        for (LimitOrderIntent order : pendingLimitOrders) {
-            if (!order.symbol().equals(symbol)) continue;
-            OrderFill fill = matchingEngine.matchLimitOrder(order, marketPrice);
-            if (fill != null) {
-                fillHandler.accept(fill.withCommission(
-                    feeModel.calculate(order.quantity(), order.limitPrice(), LiquiditySide.MAKER)));
-                filledOrders.add(order);
+        List<WorkingOrder> candidates = new ArrayList<>();
+        for (WorkingOrder order : workingOrders.values()) {
+            if (order.limit && order.symbol.equals(symbol)) candidates.add(order);
+        }
+        for (WorkingOrder order : candidates) {
+            if (!workingOrders.containsKey(order.orderId)) continue;
+            boolean crossed = order.side == SignalDirection.BUY
+                    ? currentPrice(symbol) <= order.price : currentPrice(symbol) >= order.price;
+            if (crossed) fill(order, order.price, LiquiditySide.MAKER);
+            if (order.timeInForce == TimeInForce.IOC && workingOrders.containsKey(order.orderId)) {
+                cancelWorkingOrder(order, currentTimestamp);
             }
         }
-        pendingLimitOrders.removeAll(filledOrders);
+    }
+
+    private void tryMatchMarket(String symbol) {
+        List<WorkingOrder> candidates = new ArrayList<>();
+        for (WorkingOrder order : workingOrders.values()) {
+            if (!order.limit && order.symbol.equals(symbol)) candidates.add(order);
+        }
+        for (WorkingOrder order : candidates) {
+            if (!workingOrders.containsKey(order.orderId)) continue;
+            fill(order, currentPrice(symbol), LiquiditySide.TAKER);
+            if (order.timeInForce == TimeInForce.IOC && workingOrders.containsKey(order.orderId)) {
+                cancelWorkingOrder(order, currentTimestamp);
+            }
+        }
+    }
+
+    private void fill(WorkingOrder order, double price, LiquiditySide liquiditySide) {
+        int remaining = order.quantity - order.filledQuantity;
+        int fillQuantity = Math.min(remaining, maxFillQuantity);
+        if (fillQuantity <= 0) return;
+        OrderFill fill = new OrderFill(order.strategyId, order.symbol, order.inputSequence,
+                currentTimestamp, order.correlationId, order.orderId, order.side, fillQuantity,
+                price, order.currentPosition, order.realizedPnl)
+                .withCommission(feeModel.calculate(fillQuantity, price, liquiditySide));
+        order.filledQuantity += fillQuantity;
+        fillHandler.accept(fill);
+        if (order.filledQuantity == order.quantity) workingOrders.remove(order.orderId);
+    }
+
+    private void expireDueOrders() {
+        List<WorkingOrder> expired = new ArrayList<>();
+        LocalDate currentDate = date(currentTimestamp);
+        for (WorkingOrder order : workingOrders.values()) {
+            if (isExpired(order, currentTimestamp, currentDate)) expired.add(order);
+        }
+        for (WorkingOrder order : expired) expireWorkingOrder(order, currentTimestamp);
+    }
+
+    private void cancelWorkingOrder(WorkingOrder order, long timestamp) {
+        if (workingOrders.remove(order.orderId) != null) emitCanceled(order, timestamp);
+    }
+
+    private void expireWorkingOrder(WorkingOrder order, long timestamp) {
+        if (workingOrders.remove(order.orderId) != null) {
+            lifecycleHandler.accept(new OrderExpired(order.strategyId, order.symbol, order.orderId,
+                    order.side, order.quantity - order.filledQuantity, order.price, timestamp));
+        }
+    }
+
+    private void emitCanceled(WorkingOrder order, long timestamp) {
+        lifecycleHandler.accept(new OrderCanceled(new CancelOrder(
+                order.strategyId, order.symbol, order.orderId,
+                "venue-cancel-" + order.orderId + "-" + timestamp, timestamp)));
+    }
+
+    private static boolean isExpired(WorkingOrder order, long timestamp) {
+        return isExpired(order, timestamp, date(timestamp));
+    }
+
+    private static boolean isExpired(WorkingOrder order, long timestamp, LocalDate currentDate) {
+        boolean gtdExpired = order.timeInForce == TimeInForce.GTD && timestamp >= order.expireTimeNs;
+        boolean dayExpired = order.timeInForce == TimeInForce.DAY
+                && currentDate.isAfter(date(order.submittedAt));
+        return gtdExpired || dayExpired;
+    }
+
+    private static LocalDate date(long timestampNs) {
+        return Instant.ofEpochSecond(timestampNs / 1_000_000_000L,
+                timestampNs % 1_000_000_000L).atZone(ZoneOffset.UTC).toLocalDate();
+    }
+
+    private static void validateQuantity(int quantity) {
+        if (quantity <= 0) throw new IllegalArgumentException("quantity must be positive");
+    }
+
+    private static void validatePrice(double price) {
+        if (!Double.isFinite(price) || price <= 0.0) throw new IllegalArgumentException("price must be finite and positive");
     }
 
     private record ScheduledCommand(long deliveryTimestamp, long sequence, Object order)
             implements Comparable<ScheduledCommand> {
+        private String orderId() {
+            return order instanceof OrderIntent market ? market.orderId() : ((LimitOrderIntent) order).orderId();
+        }
+
         @Override
         public int compareTo(ScheduledCommand other) {
             int timestampOrder = Long.compare(deliveryTimestamp, other.deliveryTimestamp);
             return timestampOrder != 0 ? timestampOrder : Long.compare(sequence, other.sequence);
+        }
+    }
+
+    private static final class WorkingOrder {
+        private final String strategyId;
+        private final String symbol;
+        private final long inputSequence;
+        private final String correlationId;
+        private final String orderId;
+        private final SignalDirection side;
+        private final int currentPosition;
+        private final double realizedPnl;
+        private final TimeInForce timeInForce;
+        private final long expireTimeNs;
+        private final long submittedAt;
+        private final boolean limit;
+        private int quantity;
+        private int filledQuantity;
+        private double price;
+
+        private WorkingOrder(String strategyId, String symbol, long inputSequence, long marketTimestamp,
+                String correlationId, String orderId, SignalDirection side, int quantity, double price,
+                int currentPosition, double realizedPnl, TimeInForce timeInForce, long expireTimeNs, boolean limit) {
+            this.strategyId = strategyId;
+            this.symbol = symbol;
+            this.inputSequence = inputSequence;
+            this.correlationId = correlationId;
+            this.orderId = orderId;
+            this.side = side;
+            this.quantity = quantity;
+            this.price = price;
+            this.currentPosition = currentPosition;
+            this.realizedPnl = realizedPnl;
+            this.timeInForce = timeInForce;
+            this.expireTimeNs = expireTimeNs;
+            this.submittedAt = marketTimestamp;
+            this.limit = limit;
+        }
+
+        private static WorkingOrder from(Object order) {
+            if (order instanceof OrderIntent market) {
+                return new WorkingOrder(market.strategyId(), market.symbol(), market.inputSequence(),
+                        market.marketTimestamp(), market.correlationId(), market.orderId(), market.side(),
+                        market.quantity(), market.price(), market.currentPosition(), market.realizedPnl(),
+                        market.timeInForce(), market.expireTimeNs(), false);
+            }
+            LimitOrderIntent limit = (LimitOrderIntent) order;
+            return new WorkingOrder(limit.strategyId(), limit.symbol(), limit.inputSequence(),
+                    limit.marketTimestamp(), limit.correlationId(), limit.orderId(), limit.side(),
+                    limit.quantity(), limit.limitPrice(), limit.currentPosition(), limit.realizedPnl(),
+                    limit.timeInForce(), limit.expireTimeNs(), true);
         }
     }
 }

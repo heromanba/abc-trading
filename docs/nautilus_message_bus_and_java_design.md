@@ -596,7 +596,44 @@ BAR_INPUT
   -> PORTFOLIO_UPDATE
 ```
 
-The first implementation can stop at `ORDER_SUBMIT`.
+The order lifecycle follows the Rust `OrderStatus` model and keeps terminal
+states explicit:
+
+```mermaid
+stateDiagram-v2
+        [*] --> INITIALIZED: create order
+        INITIALIZED --> SUBMITTED: submit
+        INITIALIZED --> DENIED: risk denial
+        SUBMITTED --> ACCEPTED: venue accepts
+        SUBMITTED --> REJECTED: venue rejects
+        ACCEPTED --> PENDING_UPDATE: modify request
+        PARTIALLY_FILLED --> PENDING_UPDATE: modify request
+        PENDING_UPDATE --> ACCEPTED: modify accepted
+        PENDING_UPDATE --> PARTIALLY_FILLED: modify rejected
+        ACCEPTED --> PENDING_CANCEL: cancel request
+        PARTIALLY_FILLED --> PENDING_CANCEL: cancel request
+        PENDING_CANCEL --> CANCELED: cancel accepted
+        PENDING_CANCEL --> ACCEPTED: cancel rejected
+        ACCEPTED --> PARTIALLY_FILLED: partial fill
+        PARTIALLY_FILLED --> PARTIALLY_FILLED: additional fill
+        ACCEPTED --> FILLED: complete fill
+        PARTIALLY_FILLED --> FILLED: final fill
+        ACCEPTED --> EXPIRED: GTD/DAY expiry
+        PARTIALLY_FILLED --> EXPIRED: GTD/DAY expiry
+        ACCEPTED --> CANCELED: IOC/FOK remainder
+        PARTIALLY_FILLED --> CANCELED: IOC remainder
+        DENIED --> [*]
+        REJECTED --> [*]
+        CANCELED --> [*]
+        EXPIRED --> [*]
+        FILLED --> [*]
+```
+
+`GTC` orders remain working until canceled, `IOC` orders cancel any unfilled
+remainder, `FOK` orders cancel unless the full quantity can execute
+immediately, and `GTD`/`DAY` orders expire at their configured deadline.
+Partial fills update the filled and remaining quantities while retaining the
+same client order identifier.
 
 A useful initial CSV schema is:
 

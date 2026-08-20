@@ -18,13 +18,43 @@ class StrategyContext:
     def position(self, symbol: str) -> int:
         return int(self._java.position(symbol))
 
-    def market(self, symbol: str, side: str, quantity: int, price: float) -> None:
+    def market(
+        self,
+        symbol: str,
+        side: str,
+        quantity: int,
+        price: float,
+        time_in_force: str = "GTC",
+        expire_time_ns: int = 0,
+    ) -> str:
         signal_direction = java_class("com.abc.trading.execution.SignalDirection")
-        self._java.market(symbol, signal_direction.valueOf(side), quantity, price)
+        tif = java_class("com.abc.trading.execution.TimeInForce").valueOf(time_in_force)
+        return str(self._java.market(
+            symbol, signal_direction.valueOf(side), quantity, price, tif, expire_time_ns
+        ))
 
-    def limit(self, symbol: str, side: str, quantity: int, limit_price: float) -> None:
+    def limit(
+        self,
+        symbol: str,
+        side: str,
+        quantity: int,
+        limit_price: float,
+        time_in_force: str = "GTC",
+        expire_time_ns: int = 0,
+    ) -> str:
         signal_direction = java_class("com.abc.trading.execution.SignalDirection")
-        self._java.limit(symbol, signal_direction.valueOf(side), quantity, limit_price)
+        tif = java_class("com.abc.trading.execution.TimeInForce").valueOf(time_in_force)
+        return str(self._java.limit(
+            symbol, signal_direction.valueOf(side), quantity, limit_price, tif, expire_time_ns
+        ))
+
+    def cancel(self, client_order_id: str) -> None:
+        self._java.cancel(client_order_id)
+
+    def modify(self, client_order_id: str, quantity: int | None = None, price: float | None = None) -> None:
+        java_quantity = jpype.JObject(quantity, jpype.JClass("java.lang.Integer")) if quantity is not None else None
+        java_price = jpype.JObject(price, jpype.JClass("java.lang.Double")) if price is not None else None
+        self._java.modify(client_order_id, java_quantity, java_price)
 
 
 class BacktestEngine:
@@ -42,6 +72,9 @@ class BacktestEngine:
 
     def add_instrument(self, symbol: str, venue: str) -> None:
         self._java.addInstrument(symbol, venue)
+
+    def set_max_fill_quantity(self, venue: str, quantity: int) -> None:
+        self._java.setMaxFillQuantity(venue, quantity)
 
     def start(self) -> None:
         self._java.start()

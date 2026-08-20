@@ -61,4 +61,10 @@ public record OrderFill(
                                 realizedPnl,
                                 nextCommission);
         }
+
+        public OrderFill withQuantity(int nextQuantity) {
+                return new OrderFill(
+                                strategyId, symbol, inputSequence, marketTimestamp, correlationId, orderId,
+                                side, nextQuantity, price, position, realizedPnl, commission);
+        }
 }
