@@ -604,8 +604,13 @@ stateDiagram-v2
         [*] --> INITIALIZED: create order
         INITIALIZED --> SUBMITTED: submit
         INITIALIZED --> DENIED: risk denial
+        INITIALIZED --> EMULATED: emulator takes ownership
+        EMULATED --> RELEASED: emulator releases order
+        RELEASED --> SUBMITTED: submit to venue
         SUBMITTED --> ACCEPTED: venue accepts
         SUBMITTED --> REJECTED: venue rejects
+        ACCEPTED --> TRIGGERED: stop condition reached
+        TRIGGERED --> ACCEPTED: triggered order working
         ACCEPTED --> PENDING_UPDATE: modify request
         PARTIALLY_FILLED --> PENDING_UPDATE: modify request
         PENDING_UPDATE --> ACCEPTED: modify accepted
@@ -622,11 +627,16 @@ stateDiagram-v2
         PARTIALLY_FILLED --> EXPIRED: GTD/DAY expiry
         ACCEPTED --> CANCELED: IOC/FOK remainder
         PARTIALLY_FILLED --> CANCELED: IOC remainder
+        INITIALIZED --> VOIDED: authoritative correction
+        SUBMITTED --> VOIDED: authoritative correction
+        ACCEPTED --> VOIDED: authoritative correction
+        PARTIALLY_FILLED --> VOIDED: authoritative correction
         DENIED --> [*]
         REJECTED --> [*]
         CANCELED --> [*]
         EXPIRED --> [*]
         FILLED --> [*]
+        VOIDED --> [*]
 ```
 
 `GTC` orders remain working until canceled, `IOC` orders cancel any unfilled
