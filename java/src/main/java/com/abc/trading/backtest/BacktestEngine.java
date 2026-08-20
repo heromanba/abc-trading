@@ -196,6 +196,30 @@ public final class BacktestEngine implements AutoCloseable {
         kernel.exchange(venue).setMaxFillQuantity(quantity);
     }
 
+    public void emulateOrder(String orderId) {
+        kernel.executionEngine().emulateOrder(orderId);
+    }
+
+    public void releaseOrder(String orderId) {
+        kernel.executionEngine().releaseOrder(orderId);
+    }
+
+    public void submitReleasedOrder(String orderId) {
+        kernel.executionEngine().submitReleasedOrder(orderId);
+    }
+
+    public void triggerOrder(String orderId) {
+        kernel.executionEngine().triggerOrder(orderId);
+    }
+
+    public void acceptTriggeredOrder(String orderId) {
+        kernel.executionEngine().acceptTriggeredOrder(orderId);
+    }
+
+    public void voidOrder(String orderId) {
+        kernel.executionEngine().voidOrder(orderId);
+    }
+
     public void addVenue(SimulatedVenueConfig config) {
         kernel.addVenue(config);
     }

@@ -19,7 +19,7 @@ public enum OrderStatus {
 
     public boolean isOpen() {
         return this == SUBMITTED || this == ACCEPTED || this == PENDING_UPDATE
-                || this == PENDING_CANCEL || this == PARTIALLY_FILLED;
+                || this == PENDING_CANCEL || this == PARTIALLY_FILLED || this == TRIGGERED;
     }
 
     public boolean isTerminal() {

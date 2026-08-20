@@ -15,11 +15,23 @@ public final class OrderStateMachine {
     }
 
     public OrderState submit(String orderId) {
-        return transition(orderId, OrderStatus.SUBMITTED, OrderStatus.INITIALIZED);
+        return transition(orderId, OrderStatus.SUBMITTED, OrderStatus.INITIALIZED, OrderStatus.RELEASED);
+    }
+
+    public OrderState emulate(String orderId) {
+        return transition(orderId, OrderStatus.EMULATED, OrderStatus.INITIALIZED);
+    }
+
+    public OrderState release(String orderId) {
+        return transition(orderId, OrderStatus.RELEASED, OrderStatus.EMULATED);
     }
 
     public OrderState accept(String orderId) {
-        return transition(orderId, OrderStatus.ACCEPTED, OrderStatus.SUBMITTED);
+        return transition(orderId, OrderStatus.ACCEPTED, OrderStatus.SUBMITTED, OrderStatus.TRIGGERED);
+    }
+
+    public OrderState trigger(String orderId) {
+        return transition(orderId, OrderStatus.TRIGGERED, OrderStatus.ACCEPTED);
     }
 
     public OrderState deny(String orderId) {
@@ -98,6 +110,15 @@ public final class OrderStateMachine {
     public OrderState expire(String orderId) {
         return transition(orderId, OrderStatus.EXPIRED, OrderStatus.ACCEPTED,
                 OrderStatus.PARTIALLY_FILLED, OrderStatus.PENDING_CANCEL);
+    }
+
+    public OrderState voidOrder(String orderId) {
+        return transition(orderId, OrderStatus.VOIDED,
+                OrderStatus.INITIALIZED, OrderStatus.EMULATED, OrderStatus.RELEASED,
+                OrderStatus.SUBMITTED, OrderStatus.ACCEPTED, OrderStatus.TRIGGERED,
+                OrderStatus.PENDING_UPDATE, OrderStatus.PENDING_CANCEL,
+                OrderStatus.PARTIALLY_FILLED, OrderStatus.FILLED,
+                OrderStatus.CANCELED, OrderStatus.EXPIRED, OrderStatus.REJECTED);
     }
 
     public OrderState state(String orderId) {

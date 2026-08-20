@@ -36,4 +36,22 @@ class OrderStateMachineTest {
         assertThrows(IllegalStateException.class, () -> machine.cancel("order-1"));
         assertThrows(IllegalArgumentException.class, () -> machine.fill("order-1", 1, 100.0));
     }
+
+    @Test
+    void supportsEmulationReleaseTriggerAndVoidCorrection() {
+        OrderStateMachine machine = new OrderStateMachine();
+        machine.initialize("order-2", 10, TimeInForce.GTC, 0L);
+
+        assertEquals(OrderStatus.EMULATED, machine.emulate("order-2").status());
+        assertEquals(OrderStatus.RELEASED, machine.release("order-2").status());
+        assertEquals(OrderStatus.SUBMITTED, machine.submit("order-2").status());
+        assertEquals(OrderStatus.ACCEPTED, machine.accept("order-2").status());
+        assertEquals(OrderStatus.TRIGGERED, machine.trigger("order-2").status());
+        assertEquals(OrderStatus.ACCEPTED, machine.accept("order-2").status());
+        assertEquals(OrderStatus.PARTIALLY_FILLED, machine.fill("order-2", 4, 100.0).status());
+        assertEquals(OrderStatus.VOIDED, machine.voidOrder("order-2").status());
+
+        assertThrows(IllegalStateException.class, () -> machine.trigger("order-2"));
+        assertThrows(IllegalStateException.class, () -> machine.voidOrder("order-2"));
+    }
 }

@@ -190,6 +190,38 @@ public final class ExecutionEngine {
         return stateMachine.states();
     }
 
+    public OrderState emulateOrder(String orderId) {
+        OrderState state = stateMachine.emulate(orderId);
+        bus.publish(new OrderEmulated(orderId));
+        return state;
+    }
+
+    public OrderState releaseOrder(String orderId) {
+        OrderState state = stateMachine.release(orderId);
+        bus.publish(new OrderReleased(orderId));
+        return state;
+    }
+
+    public OrderState submitReleasedOrder(String orderId) {
+        return stateMachine.submit(orderId);
+    }
+
+    public OrderState triggerOrder(String orderId) {
+        OrderState state = stateMachine.trigger(orderId);
+        bus.publish(new OrderTriggered(orderId));
+        return state;
+    }
+
+    public OrderState acceptTriggeredOrder(String orderId) {
+        return stateMachine.accept(orderId);
+    }
+
+    public OrderState voidOrder(String orderId) {
+        OrderState state = stateMachine.voidOrder(orderId);
+        bus.publish(new OrderVoided(orderId));
+        return state;
+    }
+
     private ExecutionClient clientFor(String symbol) {
         String venue = cache.venue(symbol);
         ExecutionClient client = clients.get(new VenueId(venue));

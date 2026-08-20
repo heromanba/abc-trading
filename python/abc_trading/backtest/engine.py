@@ -76,6 +76,24 @@ class BacktestEngine:
     def set_max_fill_quantity(self, venue: str, quantity: int) -> None:
         self._java.setMaxFillQuantity(venue, quantity)
 
+    def emulate_order(self, client_order_id: str) -> None:
+        self._java.emulateOrder(client_order_id)
+
+    def release_order(self, client_order_id: str) -> None:
+        self._java.releaseOrder(client_order_id)
+
+    def submit_released_order(self, client_order_id: str) -> None:
+        self._java.submitReleasedOrder(client_order_id)
+
+    def trigger_order(self, client_order_id: str) -> None:
+        self._java.triggerOrder(client_order_id)
+
+    def accept_triggered_order(self, client_order_id: str) -> None:
+        self._java.acceptTriggeredOrder(client_order_id)
+
+    def void_order(self, client_order_id: str) -> None:
+        self._java.voidOrder(client_order_id)
+
     def start(self) -> None:
         self._java.start()
         self._started = True
