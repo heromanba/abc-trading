@@ -77,6 +77,38 @@ class OrderLifecycleTest {
         }
     }
 
+    @Test
+    void triggersStopMarketWithoutIntermediateTriggeredState() {
+        try (NautilusKernel kernel = configuredKernel()) {
+            kernel.start();
+            kernel.runBars(new com.abc.trading.data.Bar[] {bar(100, 100.0)});
+            kernel.bus().publish(new OrderIntent("strategy", "AAPL", 1, 100, "corr", "stop-market-1",
+                    SignalDirection.BUY, 2, 105.0, 0, 0.0, TimeInForce.GTC, 0L,
+                    105.0, TriggerType.LAST_PRICE));
+            assertEquals(OrderStatus.ACCEPTED, kernel.executionEngine().orderState("stop-market-1").status());
+
+            kernel.runBars(new com.abc.trading.data.Bar[] {bar(101, 105.0)});
+            assertEquals(OrderStatus.FILLED, kernel.executionEngine().orderState("stop-market-1").status());
+        }
+    }
+
+    @Test
+    void triggersStopLimitThenWaitsForLimitMatch() {
+        try (NautilusKernel kernel = configuredKernel()) {
+            kernel.start();
+            kernel.runBars(new com.abc.trading.data.Bar[] {bar(100, 100.0)});
+            kernel.bus().publish(new LimitOrderIntent("strategy", "AAPL", 1, 100, "corr", "stop-limit-1",
+                    SignalDirection.BUY, 2, 104.0, 0, 0.0, TimeInForce.GTC, 0L,
+                    105.0, TriggerType.LAST_PRICE));
+
+            kernel.runBars(new com.abc.trading.data.Bar[] {bar(101, 105.0)});
+            assertEquals(OrderStatus.TRIGGERED, kernel.executionEngine().orderState("stop-limit-1").status());
+
+            kernel.runBars(new com.abc.trading.data.Bar[] {bar(102, 103.0)});
+            assertEquals(OrderStatus.FILLED, kernel.executionEngine().orderState("stop-limit-1").status());
+        }
+    }
+
     private static NautilusKernel configuredKernel() {
         NautilusKernel kernel = new NautilusKernel();
         kernel.addVenue("XNAS");

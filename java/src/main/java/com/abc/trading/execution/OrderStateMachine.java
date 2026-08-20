@@ -5,6 +5,7 @@ import java.util.Map;
 
 public final class OrderStateMachine {
     private final Map<String, OrderState> states = new LinkedHashMap<>();
+    private final Map<String, OrderStatus> pendingPreviousStatuses = new LinkedHashMap<>();
 
     public OrderState initialize(String orderId, int quantity, TimeInForce timeInForce, long expireTimeNs) {
         if (states.containsKey(orderId)) throw new IllegalStateException("Duplicate order: " + orderId);
@@ -27,7 +28,7 @@ public final class OrderStateMachine {
     }
 
     public OrderState accept(String orderId) {
-        return transition(orderId, OrderStatus.ACCEPTED, OrderStatus.SUBMITTED, OrderStatus.TRIGGERED);
+        return transition(orderId, OrderStatus.ACCEPTED, OrderStatus.SUBMITTED);
     }
 
     public OrderState trigger(String orderId) {
@@ -35,20 +36,29 @@ public final class OrderStateMachine {
     }
 
     public OrderState deny(String orderId) {
-        return transition(orderId, OrderStatus.DENIED, OrderStatus.INITIALIZED);
+        return transition(orderId, OrderStatus.DENIED, OrderStatus.INITIALIZED, OrderStatus.RELEASED);
     }
 
     public OrderState reject(String orderId) {
-        return transition(orderId, OrderStatus.REJECTED, OrderStatus.SUBMITTED, OrderStatus.ACCEPTED);
+        return transition(orderId, OrderStatus.REJECTED, OrderStatus.SUBMITTED, OrderStatus.ACCEPTED,
+            OrderStatus.TRIGGERED, OrderStatus.PENDING_UPDATE);
     }
 
     public OrderState pendingCancel(String orderId) {
-        return transition(orderId, OrderStatus.PENDING_CANCEL, OrderStatus.ACCEPTED, OrderStatus.PARTIALLY_FILLED);
+        OrderState current = state(orderId);
+        if (!isCancellable(current.status())) {
+            throw new IllegalStateException("Cannot cancel order from " + current.status());
+        }
+        pendingPreviousStatuses.put(orderId, current.status());
+        return transition(orderId, OrderStatus.PENDING_CANCEL, current.status());
     }
 
     public OrderState cancel(String orderId) {
-        return transition(orderId, OrderStatus.CANCELED, OrderStatus.PENDING_CANCEL,
-                OrderStatus.ACCEPTED, OrderStatus.PARTIALLY_FILLED);
+        OrderState updated = transition(orderId, OrderStatus.CANCELED, OrderStatus.PENDING_CANCEL,
+            OrderStatus.EMULATED, OrderStatus.RELEASED, OrderStatus.SUBMITTED,
+            OrderStatus.ACCEPTED, OrderStatus.TRIGGERED, OrderStatus.PARTIALLY_FILLED);
+        pendingPreviousStatuses.remove(orderId);
+        return updated;
     }
 
     public OrderState cancelReject(String orderId) {
@@ -60,7 +70,12 @@ public final class OrderStateMachine {
     }
 
     public OrderState pendingUpdate(String orderId) {
-        return transition(orderId, OrderStatus.PENDING_UPDATE, OrderStatus.ACCEPTED, OrderStatus.PARTIALLY_FILLED);
+        OrderState current = state(orderId);
+        if (!isModifiable(current.status())) {
+            throw new IllegalStateException("Cannot modify order from " + current.status());
+        }
+        pendingPreviousStatuses.put(orderId, current.status());
+        return transition(orderId, OrderStatus.PENDING_UPDATE, current.status());
     }
 
     public OrderState update(String orderId, int quantity) {
@@ -71,8 +86,10 @@ public final class OrderStateMachine {
         if (quantity < current.filledQuantity() || quantity <= 0) {
             throw new IllegalArgumentException("updated quantity must cover existing fills");
         }
-        OrderStatus updatedStatus = current.filledQuantity() == 0
-            ? OrderStatus.ACCEPTED : OrderStatus.PARTIALLY_FILLED;
+        OrderStatus previousStatus = pendingPreviousStatuses.remove(orderId);
+        OrderStatus updatedStatus = previousStatus == OrderStatus.TRIGGERED
+            ? OrderStatus.TRIGGERED
+            : current.filledQuantity() == 0 ? OrderStatus.ACCEPTED : OrderStatus.PARTIALLY_FILLED;
         OrderState updated = new OrderState(orderId, updatedStatus, quantity,
                 current.filledQuantity(), quantity - current.filledQuantity(), current.averageFillPrice(),
                 current.timeInForce(), current.expireTimeNs());
@@ -90,6 +107,9 @@ public final class OrderStateMachine {
 
     public OrderState fill(String orderId, int quantity, double price) {
         OrderState current = state(orderId);
+        if (current.status() == OrderStatus.TRIGGERED && quantity != current.remainingQuantity()) {
+            throw new IllegalArgumentException("triggered order must fill completely");
+        }
         if (quantity <= 0 || quantity > current.remainingQuantity()) {
             throw new IllegalArgumentException("fill quantity exceeds remaining quantity");
         }
@@ -109,16 +129,12 @@ public final class OrderStateMachine {
 
     public OrderState expire(String orderId) {
         return transition(orderId, OrderStatus.EXPIRED, OrderStatus.ACCEPTED,
-                OrderStatus.PARTIALLY_FILLED, OrderStatus.PENDING_CANCEL);
+                OrderStatus.PARTIALLY_FILLED, OrderStatus.PENDING_CANCEL, OrderStatus.TRIGGERED,
+                OrderStatus.EMULATED);
     }
 
     public OrderState voidOrder(String orderId) {
-        return transition(orderId, OrderStatus.VOIDED,
-                OrderStatus.INITIALIZED, OrderStatus.EMULATED, OrderStatus.RELEASED,
-                OrderStatus.SUBMITTED, OrderStatus.ACCEPTED, OrderStatus.TRIGGERED,
-                OrderStatus.PENDING_UPDATE, OrderStatus.PENDING_CANCEL,
-                OrderStatus.PARTIALLY_FILLED, OrderStatus.FILLED,
-                OrderStatus.CANCELED, OrderStatus.EXPIRED, OrderStatus.REJECTED);
+        return transition(orderId, OrderStatus.VOIDED, OrderStatus.FILLED);
     }
 
     public OrderState state(String orderId) {
@@ -146,12 +162,25 @@ public final class OrderStateMachine {
     }
 
     private OrderState restoreOpenState(OrderState current) {
-        OrderStatus restoredStatus = current.filledQuantity() == 0
-                ? OrderStatus.ACCEPTED : OrderStatus.PARTIALLY_FILLED;
+        OrderStatus previousStatus = pendingPreviousStatuses.remove(current.orderId());
+        OrderStatus restoredStatus = previousStatus == OrderStatus.TRIGGERED
+            ? OrderStatus.TRIGGERED
+            : current.filledQuantity() == 0 ? OrderStatus.ACCEPTED : OrderStatus.PARTIALLY_FILLED;
         OrderState restored = new OrderState(current.orderId(), restoredStatus, current.submittedQuantity(),
                 current.filledQuantity(), current.remainingQuantity(), current.averageFillPrice(),
                 current.timeInForce(), current.expireTimeNs());
         states.put(current.orderId(), restored);
         return restored;
+    }
+
+    private static boolean isCancellable(OrderStatus status) {
+        return status == OrderStatus.ACCEPTED || status == OrderStatus.TRIGGERED
+            || status == OrderStatus.PENDING_UPDATE || status == OrderStatus.PARTIALLY_FILLED;
+    }
+
+    private static boolean isModifiable(OrderStatus status) {
+        return status == OrderStatus.SUBMITTED || status == OrderStatus.ACCEPTED
+            || status == OrderStatus.TRIGGERED || status == OrderStatus.PENDING_UPDATE
+                || status == OrderStatus.PARTIALLY_FILLED;
     }
 }

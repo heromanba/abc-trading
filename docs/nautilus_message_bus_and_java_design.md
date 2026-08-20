@@ -609,8 +609,12 @@ stateDiagram-v2
         RELEASED --> SUBMITTED: submit to venue
         SUBMITTED --> ACCEPTED: venue accepts
         SUBMITTED --> REJECTED: venue rejects
-        ACCEPTED --> TRIGGERED: stop condition reached
-        TRIGGERED --> ACCEPTED: triggered order working
+        ACCEPTED --> TRIGGERED: stop-limit condition reached
+        TRIGGERED --> PENDING_UPDATE: modify request
+        TRIGGERED --> PENDING_CANCEL: cancel request
+        TRIGGERED --> FILLED: complete triggered fill
+        TRIGGERED --> EXPIRED: GTD/DAY expiry
+        TRIGGERED --> CANCELED: IOC remainder
         ACCEPTED --> PENDING_UPDATE: modify request
         PARTIALLY_FILLED --> PENDING_UPDATE: modify request
         PENDING_UPDATE --> ACCEPTED: modify accepted

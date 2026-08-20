@@ -12,6 +12,7 @@ public enum EventType {
     ORDER_MODIFY,
     ORDER_MODIFY_REJECT,
     ORDER_EXPIRE,
+    ORDER_TRIGGER,
     ORDER_FILL,
     POSITION_UPDATE
 }

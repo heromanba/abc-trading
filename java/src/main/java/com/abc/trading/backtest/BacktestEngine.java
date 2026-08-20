@@ -17,6 +17,7 @@ import com.abc.trading.execution.OrderCancelRejected;
 import com.abc.trading.execution.OrderModified;
 import com.abc.trading.execution.OrderModifyRejected;
 import com.abc.trading.execution.OrderExpired;
+import com.abc.trading.execution.OrderTriggered;
 import com.abc.trading.execution.commands.CancelOrder;
 import com.abc.trading.execution.commands.ModifyOrder;
 import com.abc.trading.execution.OrderIntent;
@@ -60,6 +61,7 @@ public final class BacktestEngine implements AutoCloseable {
         kernel.bus().subscribe(OrderModified.class, event -> logModify(event.command(), EventType.ORDER_MODIFY));
         kernel.bus().subscribe(OrderModifyRejected.class, event -> logModify(event.command(), EventType.ORDER_MODIFY_REJECT));
         kernel.bus().subscribe(OrderExpired.class, event -> logExpired(event));
+        kernel.bus().subscribe(OrderTriggered.class, this::logTriggered);
     }
 
     private void logOrderSubmit(OrderIntent intent) {
@@ -125,6 +127,12 @@ public final class BacktestEngine implements AutoCloseable {
         log(new Event(0, nextLifecycleSequence(), event.marketTimestamp(), event.symbol(),
                 OrderExpired.class.getSimpleName(), EventType.ORDER_EXPIRE, event.strategyId(), event.side(),
                 "", event.orderId(), event.price(), event.remainingQuantity(), 0, 0.0));
+    }
+
+    private void logTriggered(OrderTriggered event) {
+        log(new Event(event.inputSequence(), nextLifecycleSequence(), event.marketTimestamp(), event.symbol(),
+                OrderTriggered.class.getSimpleName(), EventType.ORDER_TRIGGER, event.strategyId(),
+                SignalDirection.HOLD, "", event.orderId(), event.triggerPrice(), 0, 0, 0.0));
     }
 
     private void logLimitOrderAccepted(LimitOrderIntent intent) {
@@ -210,10 +218,6 @@ public final class BacktestEngine implements AutoCloseable {
 
     public void triggerOrder(String orderId) {
         kernel.executionEngine().triggerOrder(orderId);
-    }
-
-    public void acceptTriggeredOrder(String orderId) {
-        kernel.executionEngine().acceptTriggeredOrder(orderId);
     }
 
     public void voidOrder(String orderId) {

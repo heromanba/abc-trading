@@ -57,6 +57,7 @@ public final class SimulatedExchange {
         lastPrices.put(bar.symbol(), bar.close());
         expireDueOrders();
         drainDueCommands();
+        processTriggers(bar.symbol());
         tryMatchMarket(bar.symbol());
         tryMatchLimit(bar.symbol());
     }
@@ -86,6 +87,10 @@ public final class SimulatedExchange {
         if (nextQuantity < order.filledQuantity || nextQuantity <= 0) return false;
         double nextPrice = command.price() == null ? order.price : command.price();
         validatePrice(nextPrice);
+        if (command.triggerPrice() != null) {
+            validatePrice(command.triggerPrice());
+            order.triggerPrice = command.triggerPrice();
+        }
         order.quantity = nextQuantity;
         order.price = nextPrice;
         return true;
@@ -137,6 +142,17 @@ public final class SimulatedExchange {
             expireWorkingOrder(workingOrder, currentTimestamp);
             return;
         }
+        if (workingOrder.stop) validateTriggerType(workingOrder.triggerType);
+        if (workingOrder.stop && workingOrder.timeInForce == TimeInForce.FOK
+                && maxFillQuantity < workingOrder.quantity) {
+            emitCanceled(workingOrder, currentTimestamp);
+            return;
+        }
+        workingOrders.put(workingOrder.orderId, workingOrder);
+        if (workingOrder.stop) {
+            if (isStopMatched(workingOrder)) trigger(workingOrder);
+            return;
+        }
         boolean crossed = !workingOrder.limit || (workingOrder.side == SignalDirection.BUY
             ? currentPrice(workingOrder.symbol) <= workingOrder.price
             : currentPrice(workingOrder.symbol) >= workingOrder.price);
@@ -145,7 +161,6 @@ public final class SimulatedExchange {
             emitCanceled(workingOrder, currentTimestamp);
             return;
         }
-        workingOrders.put(workingOrder.orderId, workingOrder);
         if (workingOrder.limit) tryMatchLimit(workingOrder.symbol);
         else fill(workingOrder, currentPrice(workingOrder.symbol), LiquiditySide.TAKER);
         if (workingOrder.timeInForce == TimeInForce.IOC && workingOrders.containsKey(workingOrder.orderId)) {
@@ -156,7 +171,7 @@ public final class SimulatedExchange {
     private void tryMatchLimit(String symbol) {
         List<WorkingOrder> candidates = new ArrayList<>();
         for (WorkingOrder order : workingOrders.values()) {
-            if (order.limit && order.symbol.equals(symbol)) candidates.add(order);
+            if (order.limit && (!order.stop || order.triggered) && order.symbol.equals(symbol)) candidates.add(order);
         }
         for (WorkingOrder order : candidates) {
             if (!workingOrders.containsKey(order.orderId)) continue;
@@ -181,6 +196,37 @@ public final class SimulatedExchange {
                 cancelWorkingOrder(order, currentTimestamp);
             }
         }
+    }
+
+    private void processTriggers(String symbol) {
+        List<WorkingOrder> candidates = new ArrayList<>();
+        for (WorkingOrder order : workingOrders.values()) {
+            if (order.stop && !order.triggered && order.symbol.equals(symbol)) candidates.add(order);
+        }
+        for (WorkingOrder order : candidates) {
+            if (workingOrders.containsKey(order.orderId) && isStopMatched(order)) trigger(order);
+        }
+    }
+
+    private void trigger(WorkingOrder order) {
+        order.triggered = true;
+        if (order.limit) {
+                lifecycleHandler.accept(new OrderTriggered(order.orderId, order.strategyId, order.symbol,
+                    order.inputSequence, currentTimestamp, order.triggerPrice));
+            tryMatchLimit(order.symbol);
+        } else {
+            fill(order, currentPrice(order.symbol), LiquiditySide.TAKER);
+        }
+        if (order.timeInForce == TimeInForce.IOC && workingOrders.containsKey(order.orderId)) {
+            cancelWorkingOrder(order, currentTimestamp);
+        }
+    }
+
+    private boolean isStopMatched(WorkingOrder order) {
+        double marketPrice = currentPrice(order.symbol);
+        return order.side == SignalDirection.BUY
+                ? marketPrice >= order.triggerPrice
+                : marketPrice <= order.triggerPrice;
     }
 
     private void fill(WorkingOrder order, double price, LiquiditySide liquiditySide) {
@@ -246,6 +292,12 @@ public final class SimulatedExchange {
         if (!Double.isFinite(price) || price <= 0.0) throw new IllegalArgumentException("price must be finite and positive");
     }
 
+    private static void validateTriggerType(TriggerType triggerType) {
+        if (triggerType != TriggerType.LAST_PRICE) {
+            throw new IllegalArgumentException("Bar simulation supports only LAST_PRICE stop triggers");
+        }
+    }
+
     private record ScheduledCommand(long deliveryTimestamp, long sequence, Object order)
             implements Comparable<ScheduledCommand> {
         private String orderId() {
@@ -272,13 +324,18 @@ public final class SimulatedExchange {
         private final long expireTimeNs;
         private final long submittedAt;
         private final boolean limit;
+        private final boolean stop;
+        private double triggerPrice;
+        private final TriggerType triggerType;
         private int quantity;
         private int filledQuantity;
         private double price;
+        private boolean triggered;
 
         private WorkingOrder(String strategyId, String symbol, long inputSequence, long marketTimestamp,
                 String correlationId, String orderId, SignalDirection side, int quantity, double price,
-                int currentPosition, double realizedPnl, TimeInForce timeInForce, long expireTimeNs, boolean limit) {
+                int currentPosition, double realizedPnl, TimeInForce timeInForce, long expireTimeNs,
+                boolean limit, boolean stop, double triggerPrice, TriggerType triggerType) {
             this.strategyId = strategyId;
             this.symbol = symbol;
             this.inputSequence = inputSequence;
@@ -293,6 +350,9 @@ public final class SimulatedExchange {
             this.expireTimeNs = expireTimeNs;
             this.submittedAt = marketTimestamp;
             this.limit = limit;
+            this.stop = stop;
+            this.triggerPrice = triggerPrice;
+            this.triggerType = triggerType;
         }
 
         private static WorkingOrder from(Object order) {
@@ -300,13 +360,15 @@ public final class SimulatedExchange {
                 return new WorkingOrder(market.strategyId(), market.symbol(), market.inputSequence(),
                         market.marketTimestamp(), market.correlationId(), market.orderId(), market.side(),
                         market.quantity(), market.price(), market.currentPosition(), market.realizedPnl(),
-                        market.timeInForce(), market.expireTimeNs(), false);
+                        market.timeInForce(), market.expireTimeNs(), false, market.triggerPrice() > 0.0,
+                        market.triggerPrice(), market.triggerType());
             }
             LimitOrderIntent limit = (LimitOrderIntent) order;
             return new WorkingOrder(limit.strategyId(), limit.symbol(), limit.inputSequence(),
                     limit.marketTimestamp(), limit.correlationId(), limit.orderId(), limit.side(),
                     limit.quantity(), limit.limitPrice(), limit.currentPosition(), limit.realizedPnl(),
-                    limit.timeInForce(), limit.expireTimeNs(), true);
+                    limit.timeInForce(), limit.expireTimeNs(), true, limit.triggerPrice() > 0.0,
+                    limit.triggerPrice(), limit.triggerType());
         }
     }
 }

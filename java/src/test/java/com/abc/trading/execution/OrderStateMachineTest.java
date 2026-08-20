@@ -47,8 +47,7 @@ class OrderStateMachineTest {
         assertEquals(OrderStatus.SUBMITTED, machine.submit("order-2").status());
         assertEquals(OrderStatus.ACCEPTED, machine.accept("order-2").status());
         assertEquals(OrderStatus.TRIGGERED, machine.trigger("order-2").status());
-        assertEquals(OrderStatus.ACCEPTED, machine.accept("order-2").status());
-        assertEquals(OrderStatus.PARTIALLY_FILLED, machine.fill("order-2", 4, 100.0).status());
+        assertEquals(OrderStatus.FILLED, machine.fill("order-2", 10, 100.0).status());
         assertEquals(OrderStatus.VOIDED, machine.voidOrder("order-2").status());
 
         assertThrows(IllegalStateException.class, () -> machine.trigger("order-2"));

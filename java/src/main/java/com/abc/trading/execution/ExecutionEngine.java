@@ -63,6 +63,7 @@ public final class ExecutionEngine {
         });
         bus.subscribe(OrderExpired.class, this::expire);
         bus.subscribe(OrderCanceled.class, this::venueCanceled);
+        bus.subscribe(OrderTriggered.class, event -> stateMachine.trigger(event.orderId()));
     }
 
     public void registerClient(ExecutionClient client) {
@@ -210,10 +211,6 @@ public final class ExecutionEngine {
         OrderState state = stateMachine.trigger(orderId);
         bus.publish(new OrderTriggered(orderId));
         return state;
-    }
-
-    public OrderState acceptTriggeredOrder(String orderId) {
-        return stateMachine.accept(orderId);
     }
 
     public OrderState voidOrder(String orderId) {

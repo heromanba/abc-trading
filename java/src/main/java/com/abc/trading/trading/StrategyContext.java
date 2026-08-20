@@ -46,10 +46,33 @@ public final class StrategyContext {
         return orders.market(symbol, side, quantity, price, timeInForce, expireTimeNs);
     }
 
+    public String stopMarket(String symbol, SignalDirection side, int quantity, double triggerPrice) {
+        return orders.stopMarket(symbol, side, quantity, triggerPrice);
+    }
+
+    public String stopMarket(String symbol, SignalDirection side, int quantity, double triggerPrice,
+            TimeInForce timeInForce, long expireTimeNs) {
+        return orders.stopMarket(symbol, side, quantity, triggerPrice, timeInForce, expireTimeNs);
+    }
+
+    public String stopLimit(String symbol, SignalDirection side, int quantity, double limitPrice,
+            double triggerPrice) {
+        return orders.stopLimit(symbol, side, quantity, limitPrice, triggerPrice);
+    }
+
+    public String stopLimit(String symbol, SignalDirection side, int quantity, double limitPrice,
+            double triggerPrice, TimeInForce timeInForce, long expireTimeNs) {
+        return orders.stopLimit(symbol, side, quantity, limitPrice, triggerPrice, timeInForce, expireTimeNs);
+    }
+
     public void cancel(String clientOrderId) { orders.cancel(clientOrderId); }
 
     public void modify(String clientOrderId, Integer quantity, Double price) {
         orders.modify(clientOrderId, quantity, price);
+    }
+
+    public void modify(String clientOrderId, Integer quantity, Double price, Double triggerPrice) {
+        orders.modify(clientOrderId, quantity, price, triggerPrice);
     }
 
     public long marketTimestamp() {

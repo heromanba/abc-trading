@@ -9,6 +9,8 @@ import com.abc.trading.execution.commands.SubmitOrder;
 import com.abc.trading.common.factories.OrderFactory;
 import com.abc.trading.model.orders.Order;
 import com.abc.trading.model.orders.MarketOrder;
+import com.abc.trading.model.orders.StopLimitOrder;
+import com.abc.trading.model.orders.StopMarketOrder;
 import com.abc.trading.msgbus.MessageBus;
 
 import java.util.LinkedHashMap;
@@ -61,6 +63,31 @@ public final class OrderApi {
         return order.clientOrderId();
     }
 
+    public String stopMarket(String symbol, SignalDirection side, int quantity, double triggerPrice) {
+        return stopMarket(symbol, side, quantity, triggerPrice, TimeInForce.GTC, 0L);
+    }
+
+    public String stopMarket(String symbol, SignalDirection side, int quantity, double triggerPrice,
+            TimeInForce timeInForce, long expireTimeNs) {
+        SubmitOrder order = createSubmitOrder(orderFactory.stopMarket(
+                symbol, side, quantity, triggerPrice, context.marketTimestamp()), timeInForce, expireTimeNs);
+        bus.publish(order);
+        return order.clientOrderId();
+    }
+
+    public String stopLimit(String symbol, SignalDirection side, int quantity, double limitPrice,
+            double triggerPrice) {
+        return stopLimit(symbol, side, quantity, limitPrice, triggerPrice, TimeInForce.GTC, 0L);
+    }
+
+    public String stopLimit(String symbol, SignalDirection side, int quantity, double limitPrice,
+            double triggerPrice, TimeInForce timeInForce, long expireTimeNs) {
+        SubmitOrder order = createSubmitOrder(orderFactory.stopLimit(
+                symbol, side, quantity, limitPrice, triggerPrice, context.marketTimestamp()), timeInForce, expireTimeNs);
+        bus.publish(order);
+        return order.clientOrderId();
+    }
+
     public void cancel(String clientOrderId) {
         String symbol = orderSymbols.get(clientOrderId);
         if (symbol == null) throw new IllegalArgumentException("Unknown client order: " + clientOrderId);
@@ -69,14 +96,14 @@ public final class OrderApi {
     }
 
     public void modify(String clientOrderId, Integer quantity, Double price) {
+        modify(clientOrderId, quantity, price, null);
+    }
+
+    public void modify(String clientOrderId, Integer quantity, Double price, Double triggerPrice) {
         String symbol = orderSymbols.get(clientOrderId);
         if (symbol == null) throw new IllegalArgumentException("Unknown client order: " + clientOrderId);
         bus.publish(new ModifyOrder(strategyId, symbol, clientOrderId,
-                strategyId + "-modify-" + context.sequence(), context.marketTimestamp(), quantity, price));
-    }
-
-    private SubmitOrder createSubmitOrder(Order order) {
-        return createSubmitOrder(order, TimeInForce.GTC, 0L);
+                strategyId + "-modify-" + context.sequence(), context.marketTimestamp(), quantity, price, triggerPrice));
     }
 
     private SubmitOrder createSubmitOrder(Order order, TimeInForce timeInForce, long expireTimeNs) {
@@ -92,19 +119,28 @@ public final class OrderApi {
                     correlationId,
                 correlationId,
                 order.side(),
-                order instanceof MarketOrder ? OrderType.MARKET : OrderType.LIMIT,
+                orderType(order),
                 order.quantity(),
                 order.price(),
                 targetPosition(position, order.side(), order.quantity()),
                 0.0,
                 order,
                 timeInForce,
-                expireTimeNs);
+                expireTimeNs,
+                order.triggerPrice(),
+                order.triggerType());
             orderSymbols.put(submitOrder.clientOrderId(), submitOrder.symbol());
             return submitOrder;
     }
 
     private static int targetPosition(int position, SignalDirection side, int quantity) {
         return side == SignalDirection.BUY ? position + quantity : position - quantity;
+    }
+
+    private static OrderType orderType(Order order) {
+        if (order instanceof StopMarketOrder) return OrderType.STOP_MARKET;
+        if (order instanceof StopLimitOrder) return OrderType.STOP_LIMIT;
+        if (order instanceof MarketOrder) return OrderType.MARKET;
+        return OrderType.LIMIT;
     }
 }

@@ -48,13 +48,52 @@ class StrategyContext:
             symbol, signal_direction.valueOf(side), quantity, limit_price, tif, expire_time_ns
         ))
 
+    def stop_market(
+        self,
+        symbol: str,
+        side: str,
+        quantity: int,
+        trigger_price: float,
+        time_in_force: str = "GTC",
+        expire_time_ns: int = 0,
+    ) -> str:
+        signal_direction = java_class("com.abc.trading.execution.SignalDirection")
+        tif = java_class("com.abc.trading.execution.TimeInForce").valueOf(time_in_force)
+        return str(self._java.stopMarket(
+            symbol, signal_direction.valueOf(side), quantity, trigger_price, tif, expire_time_ns
+        ))
+
+    def stop_limit(
+        self,
+        symbol: str,
+        side: str,
+        quantity: int,
+        limit_price: float,
+        trigger_price: float,
+        time_in_force: str = "GTC",
+        expire_time_ns: int = 0,
+    ) -> str:
+        signal_direction = java_class("com.abc.trading.execution.SignalDirection")
+        tif = java_class("com.abc.trading.execution.TimeInForce").valueOf(time_in_force)
+        return str(self._java.stopLimit(
+            symbol, signal_direction.valueOf(side), quantity, limit_price, trigger_price,
+            tif, expire_time_ns
+        ))
+
     def cancel(self, client_order_id: str) -> None:
         self._java.cancel(client_order_id)
 
-    def modify(self, client_order_id: str, quantity: int | None = None, price: float | None = None) -> None:
+    def modify(
+        self,
+        client_order_id: str,
+        quantity: int | None = None,
+        price: float | None = None,
+        trigger_price: float | None = None,
+    ) -> None:
         java_quantity = jpype.JObject(quantity, jpype.JClass("java.lang.Integer")) if quantity is not None else None
         java_price = jpype.JObject(price, jpype.JClass("java.lang.Double")) if price is not None else None
-        self._java.modify(client_order_id, java_quantity, java_price)
+        java_trigger_price = jpype.JObject(trigger_price, jpype.JClass("java.lang.Double")) if trigger_price is not None else None
+        self._java.modify(client_order_id, java_quantity, java_price, java_trigger_price)
 
 
 class BacktestEngine:
@@ -87,9 +126,6 @@ class BacktestEngine:
 
     def trigger_order(self, client_order_id: str) -> None:
         self._java.triggerOrder(client_order_id)
-
-    def accept_triggered_order(self, client_order_id: str) -> None:
-        self._java.acceptTriggeredOrder(client_order_id)
 
     def void_order(self, client_order_id: str) -> None:
         self._java.voidOrder(client_order_id)
