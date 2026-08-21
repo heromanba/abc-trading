@@ -2,6 +2,8 @@ package com.abc.trading.backtest;
 
 import com.abc.trading.data.Bar;
 import com.abc.trading.data.MarketDataSnapshot;
+import com.abc.trading.data.TickScheme;
+import com.abc.trading.data.PriceTier;
 import com.abc.trading.events.CsvEventLogger;
 import com.abc.trading.events.Event;
 import com.abc.trading.events.EventLogger;
@@ -9,7 +11,6 @@ import com.abc.trading.events.EventType;
 import com.abc.trading.execution.OrderAccepted;
 import com.abc.trading.execution.LimitOrderAccepted;
 import com.abc.trading.execution.LimitOrderDenied;
-import com.abc.trading.execution.LimitOrderIntent;
 import com.abc.trading.execution.OrderDenied;
 import com.abc.trading.execution.OrderRejected;
 import com.abc.trading.execution.LimitOrderRejected;
@@ -19,15 +20,16 @@ import com.abc.trading.execution.OrderModified;
 import com.abc.trading.execution.OrderModifyRejected;
 import com.abc.trading.execution.OrderExpired;
 import com.abc.trading.execution.OrderTriggered;
+import com.abc.trading.execution.OrderEmulated;
+import com.abc.trading.execution.OrderReleased;
 import com.abc.trading.execution.SignalDirection;
 import com.abc.trading.execution.TimeInForce;
 import com.abc.trading.execution.TriggerType;
+import com.abc.trading.execution.TrailingOffsetType;
 import com.abc.trading.execution.OrderIntent;
 import com.abc.trading.execution.LimitOrderIntent;
 import com.abc.trading.execution.commands.CancelOrder;
 import com.abc.trading.execution.commands.ModifyOrder;
-import com.abc.trading.execution.OrderIntent;
-import com.abc.trading.execution.SignalDirection;
 import com.abc.trading.execution.OrderFill;
 import com.abc.trading.execution.SettledOrderFill;
 import com.abc.trading.portfolio.PositionUpdate;
@@ -68,6 +70,8 @@ public final class BacktestEngine implements AutoCloseable {
         kernel.bus().subscribe(OrderModifyRejected.class, event -> logModify(event.command(), EventType.ORDER_MODIFY_REJECT));
         kernel.bus().subscribe(OrderExpired.class, event -> logExpired(event));
         kernel.bus().subscribe(OrderTriggered.class, this::logTriggered);
+        kernel.bus().subscribe(OrderEmulated.class, event -> logLocalOrder(event.orderId(), EventType.ORDER_EMULATED));
+        kernel.bus().subscribe(OrderReleased.class, event -> logLocalOrder(event.orderId(), EventType.ORDER_RELEASED));
     }
 
     private void logOrderSubmit(OrderIntent intent) {
@@ -141,6 +145,11 @@ public final class BacktestEngine implements AutoCloseable {
                 SignalDirection.HOLD, "", event.orderId(), event.triggerPrice(), 0, 0, 0.0));
     }
 
+    private void logLocalOrder(String orderId, EventType eventType) {
+        log(new Event(0, nextLifecycleSequence(), 0, "", eventType.name(), eventType,
+                "", SignalDirection.HOLD, "", orderId, 0.0, 0, 0, 0.0));
+    }
+
     private void logLimitOrderAccepted(LimitOrderIntent intent) {
         log(new Event(
                 intent.inputSequence(), nextLifecycleSequence(), intent.marketTimestamp(),
@@ -187,9 +196,21 @@ public final class BacktestEngine implements AutoCloseable {
     }
 
     public void addInstrument(String symbol, String venue) {
+        addInstrument(symbol, venue, TickScheme.fixed(0.01));
+    }
+
+    public void addInstrument(String symbol, String venue, double tickSize) {
+        addInstrument(symbol, venue, TickScheme.fixed(tickSize));
+    }
+
+    public void addInstrumentTiered(String symbol, String venue, PriceTier[] tiers) {
+        addInstrument(symbol, venue, TickScheme.tiered(tiers));
+    }
+
+    public void addInstrument(String symbol, String venue, TickScheme tickScheme) {
         if (started) throw new IllegalStateException("Cannot add instruments after start");
         if (symbol == null || symbol.isBlank()) throw new IllegalArgumentException("symbol is required");
-        kernel.addInstrument(symbol, venue);
+        kernel.addInstrument(symbol, venue, tickScheme);
     }
 
     public void addStrategy(String symbol, StrategyHandler strategy) {
@@ -225,6 +246,24 @@ public final class BacktestEngine implements AutoCloseable {
                 orderId + "-corr", orderId, side, quantity, limitPrice, kernel.portfolio().position(symbol),
                 0.0, TimeInForce.GTC, 0L, triggerPrice, triggerType));
     }
+
+            public void submitTrailingStopMarketOrder(String strategyId, String symbol, String orderId,
+                SignalDirection side, int quantity, long timestampNs, double activationPrice,
+                double trailingOffset, TrailingOffsetType offsetType, TriggerType triggerType) {
+            kernel.bus().publish(new OrderIntent(strategyId, symbol, kernel.currentInputSequence(), timestampNs,
+                orderId + "-corr", orderId, side, quantity, 0.0, kernel.portfolio().position(symbol),
+                0.0, TimeInForce.GTC, 0L, 0.0, triggerType, activationPrice, trailingOffset, offsetType));
+            }
+
+            public void submitTrailingStopLimitOrder(String strategyId, String symbol, String orderId,
+                SignalDirection side, int quantity, long timestampNs, double limitPrice,
+                double activationPrice, double limitOffset, double trailingOffset,
+                TrailingOffsetType offsetType, TriggerType triggerType) {
+            kernel.bus().publish(new LimitOrderIntent(strategyId, symbol, kernel.currentInputSequence(), timestampNs,
+                orderId + "-corr", orderId, side, quantity, limitPrice, kernel.portfolio().position(symbol),
+                0.0, TimeInForce.GTC, 0L, 0.0, triggerType, activationPrice, trailingOffset,
+                offsetType, limitOffset));
+            }
 
     public String orderStatus(String orderId) {
         return kernel.executionEngine().orderState(orderId).status().name();

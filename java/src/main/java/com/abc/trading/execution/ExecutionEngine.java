@@ -10,6 +10,7 @@ import com.abc.trading.execution.commands.OrderType;
 import com.abc.trading.execution.commands.SubmitOrder;
 import com.abc.trading.execution.commands.CancelOrder;
 import com.abc.trading.execution.commands.ModifyOrder;
+import com.abc.trading.data.MarketDataSnapshot;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -24,12 +25,15 @@ public final class ExecutionEngine {
     private final Cache cache;
     private final Map<VenueId, ExecutionClient> clients = new LinkedHashMap<>();
     private final OrderStateMachine stateMachine = new OrderStateMachine();
+    private final OrderEmulator orderEmulator;
 
     public ExecutionEngine(MessageBus bus, RiskEngine riskEngine, Portfolio portfolio, Cache cache) {
         this.bus = bus;
         this.riskEngine = riskEngine;
         this.cache = cache;
+        this.orderEmulator = new OrderEmulator(this::releaseEmulated);
         bus.subscribe(SubmitOrder.class, this::submit);
+        bus.subscribe(MarketDataSnapshot.class, orderEmulator::processMarketData);
         bus.subscribe(CancelOrder.class, this::cancel);
         bus.subscribe(ModifyOrder.class, this::modify);
         bus.subscribe(OrderIntent.class, this::submit);
@@ -73,6 +77,13 @@ public final class ExecutionEngine {
     }
 
     public void submit(SubmitOrder command) {
+        if (command.emulationTrigger() != TriggerType.NO_TRIGGER) {
+            stateMachine.initialize(command.clientOrderId(), command.quantity(), command.timeInForce(), command.expireTimeNs());
+            stateMachine.emulate(command.clientOrderId());
+            bus.publish(new OrderEmulated(command.clientOrderId()));
+            orderEmulator.cacheSubmitOrder(command);
+            return;
+        }
         if (command.orderType() == OrderType.MARKET) {
             bus.publish(command.toMarketIntent());
         } else {
@@ -104,9 +115,9 @@ public final class ExecutionEngine {
 
     private void onRiskCommand(OrderIntent order) {
         stateMachine.initialize(order.orderId(), order.quantity(), order.timeInForce(), order.expireTimeNs());
-        stateMachine.submit(order.orderId());
         RiskDecision decision = riskEngine.evaluate(order);
         if (decision.approved()) {
+            stateMachine.submit(order.orderId());
             stateMachine.accept(order.orderId());
             bus.send(EXECUTION_ENDPOINT, OrderIntent.class, order);
         } else {
@@ -117,9 +128,9 @@ public final class ExecutionEngine {
 
     private void onLimitRiskCommand(LimitOrderIntent order) {
         stateMachine.initialize(order.orderId(), order.quantity(), order.timeInForce(), order.expireTimeNs());
-        stateMachine.submit(order.orderId());
         RiskDecision decision = riskEngine.evaluate(order);
         if (decision.approved()) {
+            stateMachine.submit(order.orderId());
             stateMachine.accept(order.orderId());
             bus.send("ExecEngine.execute_limit", LimitOrderIntent.class, order);
         } else {
@@ -131,6 +142,14 @@ public final class ExecutionEngine {
     public void cancel(CancelOrder command) {
         try {
             OrderState current = stateMachine.state(command.clientOrderId());
+            if (current.status() == OrderStatus.EMULATED || current.status() == OrderStatus.RELEASED) {
+                if (orderEmulator.cancel(command.clientOrderId())) {
+                    stateMachine.cancel(command.clientOrderId());
+                    bus.publish(new OrderCanceled(command));
+                    return;
+                }
+                throw new IllegalStateException("order is not emulated");
+            }
             if (!current.status().isOpen()) throw new IllegalStateException("order is not open");
             stateMachine.pendingCancel(command.clientOrderId());
             if (clientFor(command.symbol()).cancelOrder(command)) {
@@ -189,6 +208,38 @@ public final class ExecutionEngine {
 
     public Map<String, OrderState> orderStates() {
         return stateMachine.states();
+    }
+
+    public OrderEmulator orderEmulator() {
+        return orderEmulator;
+    }
+
+    private void releaseEmulated(SubmitOrder command) {
+        stateMachine.release(command.clientOrderId());
+        bus.publish(new OrderReleased(command.clientOrderId()));
+        stateMachine.submit(command.clientOrderId());
+        RiskDecision decision = command.orderType() == OrderType.LIMIT
+                || command.orderType() == OrderType.STOP_LIMIT
+                || command.orderType() == OrderType.TRAILING_STOP_LIMIT
+                ? riskEngine.evaluate(command.toLimitIntent())
+                : riskEngine.evaluate(command.toMarketIntent());
+        if (!decision.approved()) {
+            stateMachine.deny(command.clientOrderId());
+            if (command.orderType() == OrderType.LIMIT || command.orderType() == OrderType.STOP_LIMIT
+                    || command.orderType() == OrderType.TRAILING_STOP_LIMIT) {
+                bus.publish(new LimitOrderDenied(command.toLimitIntent(), decision.reason()));
+            } else {
+                bus.publish(new OrderDenied(command.toMarketIntent(), decision.reason()));
+            }
+            return;
+        }
+        stateMachine.accept(command.clientOrderId());
+        if (command.orderType() == OrderType.LIMIT || command.orderType() == OrderType.STOP_LIMIT
+                || command.orderType() == OrderType.TRAILING_STOP_LIMIT) {
+            bus.send("ExecEngine.execute_limit", LimitOrderIntent.class, command.toLimitIntent());
+        } else {
+            bus.send(EXECUTION_ENDPOINT, OrderIntent.class, command.toMarketIntent());
+        }
     }
 
     public OrderState emulateOrder(String orderId) {

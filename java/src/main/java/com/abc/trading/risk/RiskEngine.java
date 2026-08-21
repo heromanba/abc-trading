@@ -38,7 +38,7 @@ public final class RiskEngine {
         if (order.quantity() > maxQuantity) {
             return RiskDecision.rejected("quantity exceeds maxQuantity");
         }
-        if (!Double.isFinite(order.price()) || order.price() <= 0.0) {
+        if (order.trailingOffsetType() == null && (!Double.isFinite(order.price()) || order.price() <= 0.0)) {
             return RiskDecision.rejected("price must be finite and positive");
         }
         Double maxNotional = maxNotionalPerOrder.get(order.symbol());
@@ -67,7 +67,7 @@ public final class RiskEngine {
         if (order.quantity() > maxQuantity) {
             return RiskDecision.rejected("quantity exceeds maxQuantity");
         }
-        if (!Double.isFinite(order.limitPrice()) || order.limitPrice() <= 0.0) {
+        if (order.trailingOffsetType() == null && (!Double.isFinite(order.limitPrice()) || order.limitPrice() <= 0.0)) {
             return RiskDecision.rejected("limitPrice must be finite and positive");
         }
         Double maxNotional = maxNotionalPerOrder.get(order.symbol());

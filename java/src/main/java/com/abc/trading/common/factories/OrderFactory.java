@@ -2,6 +2,9 @@ package com.abc.trading.common.factories;
 
 import com.abc.trading.execution.SignalDirection;
 import com.abc.trading.execution.TriggerType;
+import com.abc.trading.execution.TrailingOffsetType;
+import com.abc.trading.model.orders.TrailingStopMarketOrder;
+import com.abc.trading.model.orders.TrailingStopLimitOrder;
 import com.abc.trading.model.orders.LimitOrder;
 import com.abc.trading.model.orders.MarketOrder;
 import com.abc.trading.model.orders.StopLimitOrder;
@@ -53,6 +56,21 @@ public final class OrderFactory {
         return new StopLimitOrder(generateClientOrderId(), strategyId, symbol, side, quantity,
             limitPrice, triggerPrice, triggerType, timestampNs);
     }
+
+        public TrailingStopMarketOrder trailingStopMarket(String symbol, SignalDirection side, int quantity,
+            double activationPrice, double triggerPrice, TriggerType triggerType, double trailingOffset,
+            TrailingOffsetType offsetType, long timestampNs) {
+        return new TrailingStopMarketOrder(generateClientOrderId(), strategyId, symbol, side, quantity,
+            activationPrice, triggerPrice, triggerType, trailingOffset, offsetType, timestampNs);
+        }
+
+        public TrailingStopLimitOrder trailingStopLimit(String symbol, SignalDirection side, int quantity,
+            double limitPrice, double activationPrice, double triggerPrice, TriggerType triggerType,
+            double limitOffset, double trailingOffset, TrailingOffsetType offsetType, long timestampNs) {
+        return new TrailingStopLimitOrder(generateClientOrderId(), strategyId, symbol, side, quantity,
+            limitPrice, activationPrice, triggerPrice, triggerType, limitOffset, trailingOffset,
+            offsetType, timestampNs);
+        }
 
     public String strategyId() {
         return strategyId;

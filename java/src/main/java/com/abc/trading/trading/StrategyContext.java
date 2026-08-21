@@ -4,6 +4,8 @@ import com.abc.trading.data.Bar;
 import com.abc.trading.msgbus.MessageBus;
 import com.abc.trading.execution.SignalDirection;
 import com.abc.trading.execution.TimeInForce;
+import com.abc.trading.execution.TrailingOffsetType;
+import com.abc.trading.execution.TriggerType;
 import com.abc.trading.cache.Cache;
 
 import java.util.function.LongSupplier;
@@ -46,6 +48,16 @@ public final class StrategyContext {
         return orders.market(symbol, side, quantity, price, timeInForce, expireTimeNs);
     }
 
+    public String emulatedMarket(String symbol, SignalDirection side, int quantity, double price,
+            TriggerType emulationTrigger) {
+        return orders.emulatedMarket(symbol, side, quantity, price, emulationTrigger);
+    }
+
+    public String emulatedLimit(String symbol, SignalDirection side, int quantity, double limitPrice,
+            TriggerType emulationTrigger) {
+        return orders.emulatedLimit(symbol, side, quantity, limitPrice, emulationTrigger);
+    }
+
     public String stopMarket(String symbol, SignalDirection side, int quantity, double triggerPrice) {
         return orders.stopMarket(symbol, side, quantity, triggerPrice);
     }
@@ -63,6 +75,21 @@ public final class StrategyContext {
     public String stopLimit(String symbol, SignalDirection side, int quantity, double limitPrice,
             double triggerPrice, TimeInForce timeInForce, long expireTimeNs) {
         return orders.stopLimit(symbol, side, quantity, limitPrice, triggerPrice, timeInForce, expireTimeNs);
+    }
+
+    public String trailingStopMarket(String symbol, SignalDirection side, int quantity,
+            double activationPrice, double trailingOffset, TrailingOffsetType offsetType,
+            TriggerType triggerType, TimeInForce timeInForce, long expireTimeNs) {
+        return orders.trailingStopMarket(symbol, side, quantity, activationPrice, trailingOffset,
+                offsetType, triggerType, timeInForce, expireTimeNs);
+    }
+
+    public String trailingStopLimit(String symbol, SignalDirection side, int quantity,
+            double limitPrice, double activationPrice, double limitOffset, double trailingOffset,
+            TrailingOffsetType offsetType, TriggerType triggerType, TimeInForce timeInForce,
+            long expireTimeNs) {
+        return orders.trailingStopLimit(symbol, side, quantity, limitPrice, activationPrice,
+                limitOffset, trailingOffset, offsetType, triggerType, timeInForce, expireTimeNs);
     }
 
     public void cancel(String clientOrderId) { orders.cancel(clientOrderId); }

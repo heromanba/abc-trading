@@ -139,6 +139,52 @@ class OrderLifecycleTest {
         }
     }
 
+        @Test
+        void ratchetsTrailingStopMarketWithPriceOffsetAndActivation() {
+        try (NautilusKernel kernel = configuredKernel()) {
+            kernel.start();
+            kernel.runMarketData(new com.abc.trading.data.MarketDataSnapshot[] {
+                snapshot(100, 100.0, 101.0, 100.0, 100.0, 100.0, 1)
+            });
+            kernel.bus().publish(new OrderIntent("strategy", "AAPL", 1, 100, "corr", "trailing-market-1",
+                SignalDirection.SELL, 1, 0.0, 0, 0.0, TimeInForce.GTC, 0L,
+                0.0, TriggerType.LAST_PRICE, 100.0, 5.0, TrailingOffsetType.PRICE));
+            assertEquals(OrderStatus.ACCEPTED, kernel.executionEngine().orderState("trailing-market-1").status());
+
+            kernel.runMarketData(new com.abc.trading.data.MarketDataSnapshot[] {
+                snapshot(101, 109.0, 111.0, 110.0, 110.0, 110.0, 2)
+            });
+            assertEquals(OrderStatus.ACCEPTED, kernel.executionEngine().orderState("trailing-market-1").status());
+
+            kernel.runMarketData(new com.abc.trading.data.MarketDataSnapshot[] {
+                snapshot(102, 104.0, 106.0, 105.0, 105.0, 105.0, 3)
+            });
+            assertEquals(OrderStatus.FILLED, kernel.executionEngine().orderState("trailing-market-1").status());
+        }
+        }
+
+        @Test
+        void ratchetsTrailingStopLimitWithBasisPointsAndLimitOffset() {
+        try (NautilusKernel kernel = configuredKernel()) {
+            kernel.start();
+            kernel.runMarketData(new com.abc.trading.data.MarketDataSnapshot[] {
+                snapshot(100, 100.0, 101.0, 100.0, 100.0, 100.0, 1)
+            });
+            kernel.bus().publish(new LimitOrderIntent("strategy", "AAPL", 1, 100, "corr", "trailing-limit-1",
+                SignalDirection.SELL, 1, 0.0, 0, 0.0, TimeInForce.GTC, 0L,
+                0.0, TriggerType.LAST_PRICE, 100.0, 100.0, TrailingOffsetType.BASIS_POINTS, 100.0));
+            kernel.runMarketData(new com.abc.trading.data.MarketDataSnapshot[] {
+                snapshot(101, 109.0, 111.0, 110.0, 110.0, 110.0, 2)
+            });
+            assertEquals(OrderStatus.ACCEPTED, kernel.executionEngine().orderState("trailing-limit-1").status());
+
+            kernel.runMarketData(new com.abc.trading.data.MarketDataSnapshot[] {
+                snapshot(102, 103.0, 105.0, 104.0, 104.0, 104.0, 3)
+            });
+            assertEquals(OrderStatus.TRIGGERED, kernel.executionEngine().orderState("trailing-limit-1").status());
+        }
+        }
+
     private static void publishStop(NautilusKernel kernel, String orderId,
             TriggerType triggerType, double triggerPrice) {
         kernel.bus().publish(new OrderIntent("strategy", "AAPL", 1, 100, "corr", orderId,

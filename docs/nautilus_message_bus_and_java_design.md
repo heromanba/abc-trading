@@ -702,6 +702,50 @@ python recon/compare_trigger_states.py \
 The focused comparator ignores backend-specific sequence encodings and
 compares ordered status transitions for each client order.
 
+### 11.2 Trailing stops and local emulation
+
+Trailing orders mirror Nautilus fields:
+
+```text
+activation_price
+trigger_price
+trailing_offset
+trailing_offset_type
+limit_offset  (trailing stop-limit only)
+```
+
+The Java `SimulatedExchange` ratchets only improving prices using `PRICE`,
+`BASIS_POINTS`, `TICKS`, or an instrument-registered `PRICE_TIER` scheme.
+`TICKS` now uses the instrument's configured increment rather than a hard-coded
+cent tick. The shared
+`trailing_market_data.csv` fixture validates:
+
+```text
+TRAILING_STOP_MARKET: ACCEPTED -> FILLED
+TRAILING_STOP_LIMIT:  ACCEPTED -> TRIGGERED -> FILLED
+```
+
+Orders with an emulation trigger are owned by `OrderEmulator` before venue
+submission:
+
+```text
+SubmitOrder
+    -> EMULATED
+    -> RELEASED
+    -> SUBMITTED
+    -> venue execution
+```
+
+The emulator watches shared market snapshots for `DEFAULT`, `BID_ASK`, or
+`LAST_PRICE`, supports local cancellation, and releases matching orders into
+the normal risk and execution path.
+
+Nautilus's current Rust `trailing_stop_calculate` still rejects
+`TrailingOffsetType::PriceTier`; therefore Java `PRICE_TIER` is available for
+venue-specific Java simulations, while cross-backend parity for that mode
+requires the corresponding Rust calculator extension. `TICKS` is parity-safe
+when both instruments use the same `price_increment`.
+
 ## 12. Practical Summary
 
 The Nautilus-style design for this Java rewrite is:

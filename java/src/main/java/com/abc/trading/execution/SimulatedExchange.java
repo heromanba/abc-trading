@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.function.Consumer;
+import java.util.function.BiFunction;
 
 /** Deterministic simulated venue with working-order lifecycle and matching. */
 public final class SimulatedExchange {
@@ -25,6 +26,7 @@ public final class SimulatedExchange {
     private final Consumer<Object> lifecycleHandler;
     private final LatencyModel latencyModel;
     private final FeeModel feeModel;
+    private final BiFunction<String, Double, Double> tickSizeProvider;
     private final PriorityQueue<ScheduledCommand> inflightCommands = new PriorityQueue<>();
     private long commandSequence;
     private long currentTimestamp;
@@ -45,11 +47,18 @@ public final class SimulatedExchange {
 
     public SimulatedExchange(VenueId venue, Consumer<OrderFill> fillHandler,
             Consumer<Object> lifecycleHandler, LatencyModel latencyModel, FeeModel feeModel) {
+        this(venue, fillHandler, lifecycleHandler, latencyModel, feeModel, (symbol, price) -> 0.01);
+        }
+
+        public SimulatedExchange(VenueId venue, Consumer<OrderFill> fillHandler,
+            Consumer<Object> lifecycleHandler, LatencyModel latencyModel, FeeModel feeModel,
+            BiFunction<String, Double, Double> tickSizeProvider) {
         this.venue = venue;
         this.fillHandler = fillHandler;
         this.lifecycleHandler = lifecycleHandler;
         this.latencyModel = latencyModel;
         this.feeModel = feeModel;
+        this.tickSizeProvider = tickSizeProvider;
     }
 
     public VenueId venue() { return venue; }
@@ -71,13 +80,19 @@ public final class SimulatedExchange {
 
     public void submitLimitOrder(LimitOrderIntent order) {
         validateQuantity(order.quantity());
-        validatePrice(order.limitPrice());
+        if (order.trailingOffsetType() == null) validatePrice(order.limitPrice());
+        else if (!Double.isFinite(order.limitPrice()) || order.limitPrice() < 0.0) {
+            throw new IllegalArgumentException("limitPrice must be finite and non-negative");
+        }
         schedule(order, latencyModel.getInsertLatencyNs());
     }
 
     public void submitMarketOrder(OrderIntent order) {
         validateQuantity(order.quantity());
-        validatePrice(order.price());
+        if (order.trailingOffsetType() == null) validatePrice(order.price());
+        else if (!Double.isFinite(order.price()) || order.price() < 0.0) {
+            throw new IllegalArgumentException("price must be finite and non-negative");
+        }
         schedule(order, latencyModel.getInsertLatencyNs());
     }
 
@@ -89,11 +104,11 @@ public final class SimulatedExchange {
 
     public boolean modifyOrder(ModifyOrder command) {
         WorkingOrder order = workingOrders.get(command.clientOrderId());
-        if (order == null || !order.limit) return false;
+        if (order == null || (!order.limit && !order.trailing)) return false;
         int nextQuantity = command.quantity() == null ? order.quantity : command.quantity();
         if (nextQuantity < order.filledQuantity || nextQuantity <= 0) return false;
         double nextPrice = command.price() == null ? order.price : command.price();
-        validatePrice(nextPrice);
+        if (order.limit) validatePrice(nextPrice);
         if (command.triggerPrice() != null) {
             validatePrice(command.triggerPrice());
             order.triggerPrice = command.triggerPrice();
@@ -149,14 +164,15 @@ public final class SimulatedExchange {
             expireWorkingOrder(workingOrder, currentTimestamp);
             return;
         }
-        if (workingOrder.stop) validateTriggerType(workingOrder.triggerType);
+        if (workingOrder.stop || workingOrder.trailing) validateTriggerType(workingOrder.triggerType);
+        if (workingOrder.trailing) validateTrailingOffsetType(workingOrder.trailingOffsetType);
         if (workingOrder.stop && workingOrder.timeInForce == TimeInForce.FOK
                 && maxFillQuantity < workingOrder.quantity) {
             emitCanceled(workingOrder, currentTimestamp);
             return;
         }
         workingOrders.put(workingOrder.orderId, workingOrder);
-        if (workingOrder.stop) {
+        if (workingOrder.stop || workingOrder.trailing) {
             if (shouldTrigger(workingOrder)) trigger(workingOrder);
             return;
         }
@@ -210,7 +226,7 @@ public final class SimulatedExchange {
     private void processTriggers(String symbol) {
         List<WorkingOrder> candidates = new ArrayList<>();
         for (WorkingOrder order : workingOrders.values()) {
-            if (order.stop && !order.triggered && order.symbol.equals(symbol)) candidates.add(order);
+            if ((order.stop || order.trailing) && !order.triggered && order.symbol.equals(symbol)) candidates.add(order);
         }
         for (WorkingOrder order : candidates) {
             if (workingOrders.containsKey(order.orderId) && shouldTrigger(order)) trigger(order);
@@ -234,6 +250,28 @@ public final class SimulatedExchange {
     private boolean isStopMatched(WorkingOrder order) {
         MarketDataSnapshot snapshot = marketData.get(order.symbol);
         if (snapshot == null) throw new IllegalStateException("No market data for " + order.symbol);
+        if (order.trailing && !order.activated) {
+            double activationMarket = order.side == SignalDirection.BUY ? snapshot.ask() : snapshot.bid();
+            boolean activate = order.activationPrice <= 0.0 || (order.side == SignalDirection.BUY
+                    ? activationMarket <= order.activationPrice : activationMarket >= order.activationPrice);
+            if (!activate) return false;
+            order.activated = true;
+        }
+        if (order.trailing) {
+            double trailMarket = trailingMarketPrice(order, snapshot);
+            double nextTrigger = calculateTrailingTrigger(order, trailMarket);
+            if (order.triggerPrice <= 0.0
+                    || (order.side == SignalDirection.BUY ? nextTrigger < order.triggerPrice : nextTrigger > order.triggerPrice)) {
+                order.triggerPrice = nextTrigger;
+            }
+            if (order.limit && order.limitOffset != 0.0) {
+                double nextLimit = calculateTrailingLimit(order, trailMarket);
+                if (order.price <= 0.0
+                        || (order.side == SignalDirection.BUY ? nextLimit < order.price : nextLimit > order.price)) {
+                    order.price = nextLimit;
+                }
+            }
+        }
         double marketPrice = switch (order.triggerType) {
             case LAST_PRICE, DOUBLE_LAST -> snapshot.last();
             case MARK_PRICE -> snapshot.mark();
@@ -328,6 +366,43 @@ public final class SimulatedExchange {
         }
     }
 
+    private static void validateTrailingOffsetType(TrailingOffsetType offsetType) {
+        if (offsetType == null) {
+            throw new IllegalArgumentException("unsupported trailing offset type");
+        }
+    }
+
+    private static double trailingMarketPrice(WorkingOrder order, MarketDataSnapshot snapshot) {
+        return switch (order.triggerType) {
+            case LAST_PRICE, DOUBLE_LAST -> snapshot.last();
+            case MARK_PRICE -> snapshot.mark();
+            case INDEX_PRICE -> snapshot.index();
+            case BID_ASK, DOUBLE_BID_ASK, DEFAULT -> order.side == SignalDirection.BUY
+                    ? snapshot.ask() : snapshot.bid();
+            case LAST_OR_BID_ASK -> snapshot.last();
+            case MID_POINT -> (snapshot.bid() + snapshot.ask()) / 2.0;
+            case NO_TRIGGER -> throw new IllegalArgumentException("trailing trigger type is required");
+        };
+    }
+
+    private double calculateTrailingTrigger(WorkingOrder order, double marketPrice) {
+        double offset = switch (order.trailingOffsetType) {
+            case PRICE -> order.trailingOffset;
+            case BASIS_POINTS -> marketPrice * order.trailingOffset / 10_000.0;
+            case TICKS, PRICE_TIER -> order.trailingOffset * tickSizeProvider.apply(order.symbol, marketPrice);
+        };
+        return order.side == SignalDirection.BUY ? marketPrice + offset : marketPrice - offset;
+    }
+
+    private double calculateTrailingLimit(WorkingOrder order, double marketPrice) {
+        double offset = switch (order.trailingOffsetType) {
+            case PRICE -> order.limitOffset;
+            case BASIS_POINTS -> marketPrice * order.limitOffset / 10_000.0;
+            case TICKS, PRICE_TIER -> order.limitOffset * tickSizeProvider.apply(order.symbol, marketPrice);
+        };
+        return order.side == SignalDirection.BUY ? marketPrice + offset : marketPrice - offset;
+    }
+
     private record ScheduledCommand(long deliveryTimestamp, long sequence, Object order)
             implements Comparable<ScheduledCommand> {
         private String orderId() {
@@ -355,18 +430,26 @@ public final class SimulatedExchange {
         private final long submittedAt;
         private final boolean limit;
         private final boolean stop;
+        private final boolean trailing;
         private double triggerPrice;
         private final TriggerType triggerType;
+        private final double activationPrice;
+        private final double trailingOffset;
+        private final TrailingOffsetType trailingOffsetType;
+        private final double limitOffset;
         private int quantity;
         private int filledQuantity;
         private double price;
         private boolean triggered;
+        private boolean activated;
         private boolean previousTriggerMatch;
 
         private WorkingOrder(String strategyId, String symbol, long inputSequence, long marketTimestamp,
                 String correlationId, String orderId, SignalDirection side, int quantity, double price,
                 int currentPosition, double realizedPnl, TimeInForce timeInForce, long expireTimeNs,
-                boolean limit, boolean stop, double triggerPrice, TriggerType triggerType) {
+                boolean limit, boolean stop, double triggerPrice, TriggerType triggerType,
+                double activationPrice, double trailingOffset, TrailingOffsetType trailingOffsetType,
+                double limitOffset) {
             this.strategyId = strategyId;
             this.symbol = symbol;
             this.inputSequence = inputSequence;
@@ -382,8 +465,13 @@ public final class SimulatedExchange {
             this.submittedAt = marketTimestamp;
             this.limit = limit;
             this.stop = stop;
+            this.trailing = trailingOffsetType != null;
             this.triggerPrice = triggerPrice;
             this.triggerType = triggerType;
+            this.activationPrice = activationPrice;
+            this.trailingOffset = trailingOffset;
+            this.trailingOffsetType = trailingOffsetType;
+            this.limitOffset = limitOffset;
         }
 
         private static WorkingOrder from(Object order) {
@@ -391,15 +479,19 @@ public final class SimulatedExchange {
                 return new WorkingOrder(market.strategyId(), market.symbol(), market.inputSequence(),
                         market.marketTimestamp(), market.correlationId(), market.orderId(), market.side(),
                         market.quantity(), market.price(), market.currentPosition(), market.realizedPnl(),
-                        market.timeInForce(), market.expireTimeNs(), false, market.triggerPrice() > 0.0,
-                        market.triggerPrice(), market.triggerType());
+                        market.timeInForce(), market.expireTimeNs(), false,
+                        market.triggerPrice() > 0.0 || market.trailingOffsetType() != null,
+                        market.triggerPrice(), market.triggerType(), market.activationPrice(),
+                        market.trailingOffset(), market.trailingOffsetType(), 0.0);
             }
             LimitOrderIntent limit = (LimitOrderIntent) order;
             return new WorkingOrder(limit.strategyId(), limit.symbol(), limit.inputSequence(),
                     limit.marketTimestamp(), limit.correlationId(), limit.orderId(), limit.side(),
                     limit.quantity(), limit.limitPrice(), limit.currentPosition(), limit.realizedPnl(),
-                    limit.timeInForce(), limit.expireTimeNs(), true, limit.triggerPrice() > 0.0,
-                    limit.triggerPrice(), limit.triggerType());
+                    limit.timeInForce(), limit.expireTimeNs(), true,
+                    limit.triggerPrice() > 0.0 || limit.trailingOffsetType() != null,
+                    limit.triggerPrice(), limit.triggerType(), limit.activationPrice(), limit.trailingOffset(),
+                    limit.trailingOffsetType(), limit.limitOffset());
         }
     }
 }

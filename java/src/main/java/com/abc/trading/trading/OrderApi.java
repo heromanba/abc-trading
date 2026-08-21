@@ -11,6 +11,10 @@ import com.abc.trading.model.orders.Order;
 import com.abc.trading.model.orders.MarketOrder;
 import com.abc.trading.model.orders.StopLimitOrder;
 import com.abc.trading.model.orders.StopMarketOrder;
+import com.abc.trading.model.orders.TrailingStopMarketOrder;
+import com.abc.trading.model.orders.TrailingStopLimitOrder;
+import com.abc.trading.execution.TrailingOffsetType;
+import com.abc.trading.execution.TriggerType;
 import com.abc.trading.msgbus.MessageBus;
 
 import java.util.LinkedHashMap;
@@ -45,6 +49,24 @@ public final class OrderApi {
     public String market(String symbol, SignalDirection side, int quantity, double price) {
         return market(symbol, side, quantity, price, TimeInForce.GTC, 0L);
     }
+
+        public String emulatedMarket(String symbol, SignalDirection side, int quantity, double price,
+            TriggerType emulationTrigger) {
+        SubmitOrder order = createSubmitOrder(orderFactory.market(
+            symbol, side, quantity, price, context.marketTimestamp()), TimeInForce.GTC, 0L,
+            emulationTrigger);
+        bus.publish(order);
+        return order.clientOrderId();
+        }
+
+        public String emulatedLimit(String symbol, SignalDirection side, int quantity, double limitPrice,
+            TriggerType emulationTrigger) {
+        SubmitOrder order = createSubmitOrder(orderFactory.limit(
+            symbol, side, quantity, limitPrice, context.marketTimestamp()), TimeInForce.GTC, 0L,
+            emulationTrigger);
+        bus.publish(order);
+        return order.clientOrderId();
+        }
 
     public String market(String symbol, SignalDirection side, int quantity, double price,
             TimeInForce timeInForce, long expireTimeNs) {
@@ -88,6 +110,27 @@ public final class OrderApi {
         return order.clientOrderId();
     }
 
+    public String trailingStopMarket(String symbol, SignalDirection side, int quantity,
+            double activationPrice, double trailingOffset, TrailingOffsetType offsetType,
+            TriggerType triggerType, TimeInForce timeInForce, long expireTimeNs) {
+        SubmitOrder order = createSubmitOrder(orderFactory.trailingStopMarket(symbol, side, quantity,
+                activationPrice, 0.0, triggerType, trailingOffset, offsetType, context.marketTimestamp()),
+                timeInForce, expireTimeNs);
+        bus.publish(order);
+        return order.clientOrderId();
+    }
+
+    public String trailingStopLimit(String symbol, SignalDirection side, int quantity,
+            double limitPrice, double activationPrice, double limitOffset, double trailingOffset,
+            TrailingOffsetType offsetType, TriggerType triggerType, TimeInForce timeInForce,
+            long expireTimeNs) {
+        SubmitOrder order = createSubmitOrder(orderFactory.trailingStopLimit(symbol, side, quantity,
+                limitPrice, activationPrice, 0.0, triggerType, limitOffset, trailingOffset,
+                offsetType, context.marketTimestamp()), timeInForce, expireTimeNs);
+        bus.publish(order);
+        return order.clientOrderId();
+    }
+
     public void cancel(String clientOrderId) {
         String symbol = orderSymbols.get(clientOrderId);
         if (symbol == null) throw new IllegalArgumentException("Unknown client order: " + clientOrderId);
@@ -107,6 +150,11 @@ public final class OrderApi {
     }
 
     private SubmitOrder createSubmitOrder(Order order, TimeInForce timeInForce, long expireTimeNs) {
+        return createSubmitOrder(order, timeInForce, expireTimeNs, TriggerType.NO_TRIGGER);
+        }
+
+        private SubmitOrder createSubmitOrder(Order order, TimeInForce timeInForce, long expireTimeNs,
+            TriggerType emulationTrigger) {
         int position = context.position(order.symbol());
         String correlationId = order.symbol() + "-" + context.marketTimestamp() + "-" + context.sequence();
         SubmitOrder submitOrder = new SubmitOrder(
@@ -128,7 +176,12 @@ public final class OrderApi {
                 timeInForce,
                 expireTimeNs,
                 order.triggerPrice(),
-                order.triggerType());
+                order.triggerType(),
+                order.activationPrice(),
+                order.trailingOffset(),
+                order.trailingOffsetType(),
+                order.limitOffset(),
+                emulationTrigger);
             orderSymbols.put(submitOrder.clientOrderId(), submitOrder.symbol());
             return submitOrder;
     }
@@ -140,6 +193,8 @@ public final class OrderApi {
     private static OrderType orderType(Order order) {
         if (order instanceof StopMarketOrder) return OrderType.STOP_MARKET;
         if (order instanceof StopLimitOrder) return OrderType.STOP_LIMIT;
+        if (order instanceof TrailingStopMarketOrder) return OrderType.TRAILING_STOP_MARKET;
+        if (order instanceof TrailingStopLimitOrder) return OrderType.TRAILING_STOP_LIMIT;
         if (order instanceof MarketOrder) return OrderType.MARKET;
         return OrderType.LIMIT;
     }

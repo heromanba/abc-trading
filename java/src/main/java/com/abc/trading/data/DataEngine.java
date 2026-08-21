@@ -16,5 +16,6 @@ public final class DataEngine {
 
     public void publishMarketData(MarketDataSnapshot snapshot) {
         bus.publish("data.market." + snapshot.symbol(), snapshot);
+        bus.publish(snapshot);
     }
 }

@@ -3,6 +3,7 @@ package com.abc.trading.system;
 import com.abc.trading.cache.Cache;
 import com.abc.trading.data.Bar;
 import com.abc.trading.data.MarketDataSnapshot;
+import com.abc.trading.data.TickScheme;
 import com.abc.trading.data.DataEngine;
 import com.abc.trading.msgbus.MessageBus;
 import com.abc.trading.portfolio.Portfolio;
@@ -55,10 +56,18 @@ public final class NautilusKernel implements AutoCloseable {
     }
 
     public void addInstrument(String symbol, String venue) {
+        addInstrument(symbol, venue, TickScheme.fixed(0.01));
+    }
+
+    public void addInstrument(String symbol, String venue, double tickSize) {
+        addInstrument(symbol, venue, TickScheme.fixed(tickSize));
+    }
+
+    public void addInstrument(String symbol, String venue, TickScheme tickScheme) {
         if (lifecycle.state() != ComponentState.PRE_INITIALIZED && lifecycle.state() != ComponentState.READY) {
             throw new IllegalStateException("Cannot add instruments after initialization");
         }
-        cache.addInstrument(symbol, venue);
+        cache.addInstrument(symbol, venue, tickScheme);
     }
 
     public void addVenue(String venue) {
@@ -74,7 +83,8 @@ public final class NautilusKernel implements AutoCloseable {
         if (exchanges.containsKey(venueId)) {
             throw new IllegalArgumentException("Venue already registered: " + venueId.value());
         }
-        SimulatedExchange exchange = new SimulatedExchange(venueId, bus::publish, bus::publish, latencyModel, feeModel);
+        SimulatedExchange exchange = new SimulatedExchange(venueId, bus::publish, bus::publish,
+            latencyModel, feeModel, cache::tickSize);
         exchanges.put(venueId, exchange);
         executionEngine.registerClient(new BacktestExecutionClient(exchange));
         bus.subscribe("data.bar.*", Bar.class, exchange::processBar, 100);
