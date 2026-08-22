@@ -4,6 +4,8 @@ import com.abc.trading.data.Bar;
 import com.abc.trading.data.MarketDataSnapshot;
 import com.abc.trading.data.BookLevel;
 import com.abc.trading.data.OrderBookSnapshot;
+import com.abc.trading.data.OrderBookDelta;
+import com.abc.trading.data.BookAction;
 import com.abc.trading.execution.commands.CancelOrder;
 import com.abc.trading.execution.commands.ModifyOrder;
 
@@ -32,6 +34,7 @@ public final class SimulatedExchange {
     private final BiFunction<String, Double, Double> tickSizeProvider;
     private final PriorityQueue<ScheduledCommand> inflightCommands = new PriorityQueue<>();
     private long commandSequence;
+    private long workingOrderSequence;
     private long currentTimestamp;
     private int maxFillQuantity = Integer.MAX_VALUE;
 
@@ -88,6 +91,23 @@ public final class SimulatedExchange {
         drainDueCommands();
         processTriggers(snapshot.symbol());
         tryMatchOrders(snapshot.symbol());
+    }
+
+    public void processOrderBookDelta(OrderBookDelta delta) {
+        BookState book = books.get(delta.symbol());
+        if (book == null) throw new IllegalStateException("No order-book snapshot for " + delta.symbol());
+        book.apply(delta);
+        currentTimestamp = delta.tsInit();
+        double bid = book.bestBid();
+        double ask = book.bestAsk();
+        double midpoint = (bid + ask) / 2.0;
+        marketData.put(delta.symbol(), new MarketDataSnapshot(
+                delta.symbol(), delta.tsInit(), bid, ask, midpoint, midpoint, midpoint, delta.sequence()));
+        lastPrices.put(delta.symbol(), midpoint);
+        expireDueOrders();
+        drainDueCommands();
+        processTriggers(delta.symbol());
+        tryMatchOrders(delta.symbol());
     }
 
     public void submitLimitOrder(LimitOrderIntent order) {
@@ -184,6 +204,7 @@ public final class SimulatedExchange {
             return;
         }
         workingOrders.put(workingOrder.orderId, workingOrder);
+        workingOrder.insertionSequence = workingOrderSequence++;
         if (workingOrder.stop || workingOrder.trailing) {
             if (shouldTrigger(workingOrder)) trigger(workingOrder);
             return;
@@ -213,6 +234,15 @@ public final class SimulatedExchange {
                 candidates.add(order);
             }
         }
+        candidates.sort((left, right) -> {
+            if (left.limit && right.limit && left.price != right.price) {
+                int priceOrder = left.side == SignalDirection.BUY
+                        ? Double.compare(right.price, left.price)
+                        : Double.compare(left.price, right.price);
+                if (priceOrder != 0) return priceOrder;
+            }
+            return Long.compare(left.insertionSequence, right.insertionSequence);
+        });
         for (WorkingOrder order : candidates) {
             if (!workingOrders.containsKey(order.orderId)) continue;
             tryMatchOrder(order);
@@ -478,6 +508,7 @@ public final class SimulatedExchange {
         private boolean activated;
         private boolean previousTriggerMatch;
         private boolean resting;
+        private long insertionSequence;
 
         private WorkingOrder(String strategyId, String symbol, long inputSequence, long marketTimestamp,
                 String correlationId, String orderId, SignalDirection side, int quantity, double price,
@@ -545,6 +576,42 @@ public final class SimulatedExchange {
             List<MutableLevel> asks = new ArrayList<>();
             for (BookLevel level : snapshot.asks()) asks.add(new MutableLevel(level));
             return new BookState(bids, asks);
+        }
+
+        private void apply(OrderBookDelta delta) {
+            if (delta.action() == BookAction.CLEAR) {
+                levels(delta.side()).clear();
+                return;
+            }
+            List<MutableLevel> levels = levels(delta.side());
+            MutableLevel existing = null;
+            for (MutableLevel level : levels) {
+                if (Double.compare(level.price, delta.price()) == 0) {
+                    existing = level;
+                    break;
+                }
+            }
+            switch (delta.action()) {
+                case ADD -> {
+                    if (existing == null) levels.add(new MutableLevel(new BookLevel(delta.price(), delta.quantity())));
+                    else existing.quantity += delta.quantity();
+                }
+                case UPDATE -> {
+                    if (existing == null) levels.add(new MutableLevel(new BookLevel(delta.price(), delta.quantity())));
+                    else existing.quantity = delta.quantity();
+                }
+                case DELETE -> {
+                    if (existing != null) levels.remove(existing);
+                }
+                case CLEAR -> { }
+            }
+            levels.sort(delta.side() == SignalDirection.BUY
+                    ? (left, right) -> Double.compare(right.price, left.price)
+                    : (left, right) -> Double.compare(left.price, right.price));
+        }
+
+        private List<MutableLevel> levels(SignalDirection side) {
+            return side == SignalDirection.BUY ? bids : asks;
         }
 
         private BookLevel bestLevel(boolean buying) {

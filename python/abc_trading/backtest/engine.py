@@ -6,7 +6,7 @@ import jpype
 from pathlib import Path
 
 from abc_trading._java import ensure_jvm, java_class
-from abc_trading.model.data import Bar, MarketDataSnapshot, OrderBookSnapshot
+from abc_trading.model.data import Bar, MarketDataSnapshot, OrderBookSnapshot, OrderBookDelta
 
 
 class StrategyContext:
@@ -297,6 +297,11 @@ class BacktestEngine:
         java_snapshots = jpype.JArray(java_type)([snapshot.java for snapshot in snapshots])
         self._java.runOrderBooks(java_snapshots)
 
+    def run_order_book_deltas(self, deltas: list[OrderBookDelta]) -> None:
+        java_type = java_class("com.abc.trading.data.OrderBookDelta")
+        java_deltas = jpype.JArray(java_type)([delta.java for delta in deltas])
+        self._java.runOrderBookDeltas(java_deltas)
+
     @property
     def started(self) -> bool:
         return self._started
@@ -308,19 +313,21 @@ class BacktestEngine:
         self,
         strategy_id: str,
         symbol: str,
+        order_id: str,
         market_timestamp: int,
         sequence: int,
         side: str,
         quantity: int,
         price: float,
     ) -> None:
+        direction = java_class("com.abc.trading.execution.SignalDirection").valueOf(side)
         self._java.submitMarketOrder(
             strategy_id,
             symbol,
-            market_timestamp,
-            sequence,
-            side,
+            order_id,
+            direction,
             quantity,
+            market_timestamp,
             price,
         )
 
@@ -328,19 +335,21 @@ class BacktestEngine:
         self,
         strategy_id: str,
         symbol: str,
+        order_id: str,
         market_timestamp: int,
         sequence: int,
         side: str,
         quantity: int,
         limit_price: float,
     ) -> None:
+        direction = java_class("com.abc.trading.execution.SignalDirection").valueOf(side)
         self._java.submitLimitOrder(
             strategy_id,
             symbol,
-            market_timestamp,
-            sequence,
-            side,
+            order_id,
+            direction,
             quantity,
+            market_timestamp,
             limit_price,
         )
 

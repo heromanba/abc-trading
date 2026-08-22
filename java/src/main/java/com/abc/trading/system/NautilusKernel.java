@@ -5,6 +5,7 @@ import com.abc.trading.data.Bar;
 import com.abc.trading.data.MarketDataSnapshot;
 import com.abc.trading.data.TickScheme;
 import com.abc.trading.data.OrderBookSnapshot;
+import com.abc.trading.data.OrderBookDelta;
 import com.abc.trading.data.DataEngine;
 import com.abc.trading.msgbus.MessageBus;
 import com.abc.trading.portfolio.Portfolio;
@@ -91,6 +92,7 @@ public final class NautilusKernel implements AutoCloseable {
         bus.subscribe("data.bar.*", Bar.class, exchange::processBar, 100);
         bus.subscribe("data.market.*", MarketDataSnapshot.class, exchange::processMarketData, 100);
         bus.subscribe("data.book.*", OrderBookSnapshot.class, exchange::processOrderBook, 100);
+        bus.subscribe("data.book.delta.*", OrderBookDelta.class, exchange::processOrderBookDelta, 100);
     }
 
     public void addStrategy(String symbol, StrategyHandler strategy) {
@@ -162,6 +164,20 @@ public final class NautilusKernel implements AutoCloseable {
             inputSequence++;
             clock.setTimestampNs(snapshot.tsInit());
             dataEngine.publishOrderBook(snapshot);
+        }
+    }
+
+    public void runOrderBookDeltas(OrderBookDelta[] deltas) {
+        if (lifecycle.state() != ComponentState.RUNNING) {
+            throw new IllegalStateException("Kernel must be running before processing order-book deltas");
+        }
+        if (deltas == null) throw new IllegalArgumentException("deltas are required");
+        Arrays.sort(deltas, Comparator.comparingLong(OrderBookDelta::tsInit)
+                .thenComparing(OrderBookDelta::symbol));
+        for (OrderBookDelta delta : deltas) {
+            inputSequence++;
+            clock.setTimestampNs(delta.tsInit());
+            dataEngine.publishOrderBookDelta(delta);
         }
     }
 

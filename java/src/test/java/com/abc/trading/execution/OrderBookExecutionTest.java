@@ -1,6 +1,8 @@
 package com.abc.trading.execution;
 
 import com.abc.trading.data.BookLevel;
+import com.abc.trading.data.BookAction;
+import com.abc.trading.data.OrderBookDelta;
 import com.abc.trading.data.OrderBookSnapshot;
 import org.junit.jupiter.api.Test;
 
@@ -64,6 +66,33 @@ class OrderBookExecutionTest {
 
         assertEquals(List.of("first", "second"), fills.stream().map(OrderFill::orderId).toList());
         assertEquals(List.of(2, 1), fills.stream().map(OrderFill::quantity).toList());
+    }
+
+    @Test
+    void higherPriorityBuyPriceMatchesBeforeEarlierLowerPrice() {
+        List<OrderFill> fills = new ArrayList<>();
+        SimulatedExchange exchange = new SimulatedExchange(new VenueId("XNAS"), fills::add);
+        exchange.processOrderBook(book(100, List.of(level(98, 10)), List.of(level(101, 10))));
+        exchange.submitLimitOrder(limit("lower", SignalDirection.BUY, 2, 99.0));
+        exchange.submitLimitOrder(limit("higher", SignalDirection.BUY, 2, 100.0));
+        exchange.processOrderBook(book(101, List.of(level(98, 10)), List.of(level(99, 3), level(101, 10))));
+
+        assertEquals(List.of("higher", "lower"), fills.stream().map(OrderFill::orderId).toList());
+    }
+
+    @Test
+    void deltaUpdatesReplaceAndAddLiquidityBeforeMatching() {
+        List<OrderFill> fills = new ArrayList<>();
+        SimulatedExchange exchange = new SimulatedExchange(new VenueId("XNAS"), fills::add);
+        exchange.processOrderBook(book(100, List.of(level(99, 10)), List.of(level(101, 1))));
+        exchange.processOrderBookDelta(
+            new OrderBookDelta("AAPL", 101, SignalDirection.SELL, BookAction.ADD, 102.0, 4, 2));
+        exchange.processOrderBookDelta(
+            new OrderBookDelta("AAPL", 102, SignalDirection.SELL, BookAction.UPDATE, 102.0, 5, 3));
+        exchange.submitMarketOrder(order("delta-buy", SignalDirection.BUY, 6));
+
+        assertEquals(List.of(101.0, 102.0), fills.stream().map(OrderFill::price).toList());
+        assertEquals(List.of(1, 5), fills.stream().map(OrderFill::quantity).toList());
     }
 
     private static OrderBookSnapshot book(long timestamp, List<BookLevel> bids, List<BookLevel> asks) {

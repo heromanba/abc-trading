@@ -106,6 +106,28 @@ class OrderBookSnapshot:
         return self._java
 
 
+class OrderBookDelta:
+    def __init__(
+        self,
+        symbol: str,
+        timestamp: int,
+        side: str,
+        action: str,
+        price: float,
+        quantity: int,
+        sequence: int = 0,
+    ) -> None:
+        direction = java_class("com.abc.trading.execution.SignalDirection").valueOf(side)
+        book_action = java_class("com.abc.trading.data.BookAction").valueOf(action)
+        self._java = java_class("com.abc.trading.data.OrderBookDelta")(
+            symbol, timestamp, direction, book_action, price, quantity, sequence
+        )
+
+    @property
+    def java(self) -> object:
+        return self._java
+
+
 @dataclass(frozen=True)
 class BarType:
     value: str

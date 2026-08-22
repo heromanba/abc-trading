@@ -7,7 +7,6 @@ import argparse
 import csv
 from pathlib import Path
 
-from abc_trading._java import java_class
 from abc_trading.backtest.engine import BacktestEngine, shutdown_jvm
 from abc_trading.model.data import OrderBookSnapshot
 
@@ -35,9 +34,11 @@ def run(input_path: Path, output_path: Path) -> None:
     engine.start()
     snapshots = load(input_path)
     try:
-        engine.run_order_books(snapshots)
-        signal_direction = java_class("com.abc.trading.execution.SignalDirection")
-        engine._java.submitMarketOrder("book", "AAPL", "market-buy-1", signal_direction.BUY, 6, 100, 100.0)
+        engine.run_order_books(snapshots[:1])
+        engine.submit_market_order("book", "AAPL", "market-buy-1", 100, 1, "BUY", 6, 100.0)
+        engine.submit_market_order("book", "AAPL", "market-sell-1", 100, 1, "SELL", 7, 100.0)
+        engine.submit_limit_order("book", "AAPL", "limit-buy-1", 100, 1, "BUY", 2, 100.0)
+        engine.run_order_books(snapshots[1:])
     finally:
         engine.close()
         shutdown_jvm()

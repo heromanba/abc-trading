@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -45,8 +46,8 @@ def build_depth(values: list[dict[str, float | int | str]], instrument_id: Instr
     for value in values:
         timestamp = int(value["timestamp_ns"])
         bids = [
-            BookOrder(OrderSide.BUY, Price(value["bid_1_price"], 2), Quantity.from_int(value["bid_1_quantity"]), 1),
             BookOrder(OrderSide.BUY, Price(value["bid_2_price"], 2), Quantity.from_int(value["bid_2_quantity"]), 2),
+            BookOrder(OrderSide.BUY, Price(value["bid_1_price"], 2), Quantity.from_int(value["bid_1_quantity"]), 1),
         ]
         asks = [
             BookOrder(OrderSide.SELL, Price(value["ask_2_price"], 2), Quantity.from_int(value["ask_2_quantity"]), 2),
@@ -70,20 +71,38 @@ class BookStrategy(Strategy):
     def __init__(self, instrument: Any) -> None:
         super().__init__()
         self.instrument = instrument
+        self.order_names: dict[str, str] = {}
         self.fills: list[dict[str, object]] = []
 
     def on_start(self) -> None:
-        order = self.order_factory.market(
+        orders = [
+            ("market-buy-1", self.order_factory.market(
             instrument_id=self.instrument.id,
             order_side=OrderSide.BUY,
             quantity=Quantity.from_int(6),
             time_in_force=TimeInForce.GTC,
-        )
-        self.submit_order(order)
+            )),
+            ("market-sell-1", self.order_factory.market(
+                instrument_id=self.instrument.id,
+                order_side=OrderSide.SELL,
+                quantity=Quantity.from_int(7),
+                time_in_force=TimeInForce.GTC,
+            )),
+            ("limit-buy-1", self.order_factory.limit(
+                instrument_id=self.instrument.id,
+                order_side=OrderSide.BUY,
+                quantity=Quantity.from_int(2),
+                price=Price(100.0, 2),
+                time_in_force=TimeInForce.GTC,
+            )),
+        ]
+        for name, order in orders:
+            self.order_names[str(order.client_order_id)] = name
+            self.submit_order(order)
 
     def on_order_filled(self, event: Any) -> None:
         self.fills.append({
-            "order_id": "market-buy-1",
+            "order_id": self.order_names[str(event.client_order_id)],
             "price": f"{float(event.last_px):.8f}",
             "quantity": int(event.last_qty),
             "liquidity_side": {"1": "MAKER", "2": "TAKER"}.get(str(event.liquidity_side), str(event.liquidity_side)),
@@ -99,8 +118,8 @@ def run(input_path: Path, output_path: Path) -> None:
     strategy = BookStrategy(instrument)
     engine = BacktestEngine(config=BacktestEngineConfig(trader_id=TraderId("BOOK-RECON-001")))
     engine.add_venue(
-        venue=Venue("XNAS"), oms_type=OmsType.NETTING, account_type=AccountType.CASH,
-        starting_balances=[Money(1_000_000, USD)], base_currency=USD, default_leverage=1,
+        venue=Venue("XNAS"), oms_type=OmsType.NETTING, account_type=AccountType.MARGIN,
+        starting_balances=[Money(1_000_000, USD)], base_currency=USD, default_leverage=Decimal(1),
     )
     engine.add_instrument(instrument)
     engine.add_data(build_depth(values, instrument.id))
