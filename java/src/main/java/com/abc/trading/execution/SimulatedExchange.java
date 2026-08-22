@@ -6,6 +6,9 @@ import com.abc.trading.data.BookLevel;
 import com.abc.trading.data.OrderBookSnapshot;
 import com.abc.trading.data.OrderBookDelta;
 import com.abc.trading.data.BookAction;
+import com.abc.trading.data.OrderBookL3Snapshot;
+import com.abc.trading.data.OrderBookL3Delta;
+import com.abc.trading.data.VenueOrder;
 import com.abc.trading.execution.commands.CancelOrder;
 import com.abc.trading.execution.commands.ModifyOrder;
 
@@ -26,6 +29,7 @@ public final class SimulatedExchange {
     private final Map<String, Double> lastPrices = new LinkedHashMap<>();
     private final Map<String, MarketDataSnapshot> marketData = new LinkedHashMap<>();
     private final Map<String, BookState> books = new LinkedHashMap<>();
+    private final Map<String, L3BookState> l3Books = new LinkedHashMap<>();
     private final Map<String, WorkingOrder> workingOrders = new LinkedHashMap<>();
     private final Consumer<OrderFill> fillHandler;
     private final Consumer<Object> lifecycleHandler;
@@ -110,6 +114,50 @@ public final class SimulatedExchange {
         tryMatchOrders(delta.symbol());
     }
 
+    public void processOrderBookL3(OrderBookL3Snapshot snapshot) {
+        currentTimestamp = snapshot.tsInit();
+        L3BookState book = L3BookState.from(snapshot);
+        l3Books.put(snapshot.symbol(), book);
+        for (WorkingOrder order : workingOrders.values()) {
+            if (order.symbol.equals(snapshot.symbol()) && order.limit && order.resting) {
+                order.queueInitialized = true;
+                order.queueAhead = 0;
+                order.queueAheadOrders.clear();
+                book.registerQueueOrder(order);
+            }
+        }
+        updateMarketDataFromL3(snapshot.symbol(), snapshot.tsInit(), snapshot.sequence());
+        expireDueOrders();
+        drainDueCommands();
+        processTriggers(snapshot.symbol());
+        tryMatchOrders(snapshot.symbol());
+    }
+
+    public void processOrderBookL3Delta(OrderBookL3Delta delta) {
+        L3BookState book = l3Books.get(delta.symbol());
+        if (book == null) throw new IllegalStateException("No L3 order-book snapshot for " + delta.symbol());
+        book.adjustQueues(delta);
+        book.apply(delta);
+        currentTimestamp = delta.tsInit();
+        updateMarketDataFromL3(delta.symbol(), delta.tsInit(), delta.sequence());
+        expireDueOrders();
+        drainDueCommands();
+        processTriggers(delta.symbol());
+        tryMatchOrders(delta.symbol());
+    }
+
+    private void updateMarketDataFromL3(String symbol, long timestamp, long sequence) {
+        L3BookState book = l3Books.get(symbol);
+        double bid = book.bestBid();
+        double ask = book.bestAsk();
+        if (bid <= 0.0) bid = ask;
+        if (!Double.isFinite(ask)) ask = bid;
+        double midpoint = (bid + ask) / 2.0;
+        marketData.put(symbol, new MarketDataSnapshot(symbol, timestamp, bid, ask,
+                midpoint, midpoint, midpoint, sequence));
+        lastPrices.put(symbol, midpoint);
+    }
+
     public void submitLimitOrder(LimitOrderIntent order) {
         validateQuantity(order.quantity());
         if (order.trailingOffsetType() == null) validatePrice(order.limitPrice());
@@ -130,7 +178,10 @@ public final class SimulatedExchange {
 
     public boolean cancelOrder(CancelOrder command) {
         WorkingOrder order = workingOrders.remove(command.clientOrderId());
-        if (order != null) return true;
+        if (order != null) {
+            unregisterQueueOrder(order);
+            return true;
+        }
         return inflightCommands.removeIf(item -> item.orderId().equals(command.clientOrderId()));
     }
 
@@ -147,6 +198,11 @@ public final class SimulatedExchange {
         }
         order.quantity = nextQuantity;
         order.price = nextPrice;
+        if (order.resting) {
+            order.queueInitialized = false;
+            order.queueAhead = 0;
+            order.queueAheadOrders.clear();
+        }
         return true;
     }
 
@@ -327,19 +383,33 @@ public final class SimulatedExchange {
     }
 
     private void fill(WorkingOrder order, double price, int fillQuantity, LiquiditySide liquiditySide) {
+        fill(order, price, fillQuantity, liquiditySide, "");
+        }
+
+        private void fill(WorkingOrder order, double price, int fillQuantity,
+            LiquiditySide liquiditySide, String venueOrderId) {
         if (fillQuantity <= 0) return;
         OrderFill fill = new OrderFill(order.strategyId, order.symbol, order.inputSequence,
                 currentTimestamp, order.correlationId, order.orderId, order.side, fillQuantity,
                 price, order.currentPosition, order.realizedPnl)
                 .withLiquiditySide(liquiditySide)
+                .withVenueOrderId(venueOrderId)
                 .withCommission(feeModel.calculate(fillQuantity, price, liquiditySide));
         order.filledQuantity += fillQuantity;
         fillHandler.accept(fill);
-        if (order.filledQuantity == order.quantity) workingOrders.remove(order.orderId);
+        if (order.filledQuantity == order.quantity) {
+            workingOrders.remove(order.orderId);
+            unregisterQueueOrder(order);
+        }
     }
 
     private void tryMatchOrder(WorkingOrder order) {
         if (order.stop && !order.triggered) return;
+        L3BookState l3Book = l3Books.get(order.symbol);
+        if (l3Book != null) {
+            tryMatchL3Order(order, l3Book);
+            return;
+        }
         BookState book = books.get(order.symbol);
         if (book == null) return;
         boolean crossed;
@@ -372,6 +442,38 @@ public final class SimulatedExchange {
         }
     }
 
+    private void tryMatchL3Order(WorkingOrder order, L3BookState book) {
+        if (order.limit) {
+            double best = order.side == SignalDirection.BUY ? book.bestAsk() : book.bestBid();
+            boolean crossed = order.side == SignalDirection.BUY ? best <= order.price : best >= order.price;
+            if (!crossed) {
+                order.resting = true;
+                if (!order.queueInitialized) book.snapshotQueue(order);
+                book.registerQueueOrder(order);
+                return;
+            }
+            if (order.resting && order.queueInitialized && order.queueAhead > 0) return;
+        }
+        LiquiditySide liquiditySide = order.resting ? LiquiditySide.MAKER : LiquiditySide.TAKER;
+        int budget = maxFillQuantity;
+        while (budget > 0 && order.quantity > order.filledQuantity) {
+            VenueOrder venueOrder = book.bestOrder(order.side == SignalDirection.BUY);
+            if (venueOrder == null) break;
+            boolean eligible = !order.limit || (order.side == SignalDirection.BUY
+                    ? venueOrder.price() <= order.price : venueOrder.price() >= order.price);
+            if (!eligible) break;
+            int fillQuantity = Math.min(Math.min(venueOrder.quantity(), order.quantity - order.filledQuantity), budget);
+            fill(order, venueOrder.price(), fillQuantity, liquiditySide, venueOrder.orderId());
+            book.consume(order.side == SignalDirection.BUY, fillQuantity);
+            budget -= fillQuantity;
+        }
+        if (order.quantity > order.filledQuantity) {
+            order.resting = order.limit;
+            if (order.resting && !order.queueInitialized) book.snapshotQueue(order);
+            if (order.resting) book.registerQueueOrder(order);
+        }
+    }
+
     private void expireDueOrders() {
         List<WorkingOrder> expired = new ArrayList<>();
         LocalDate currentDate = date(currentTimestamp);
@@ -382,11 +484,15 @@ public final class SimulatedExchange {
     }
 
     private void cancelWorkingOrder(WorkingOrder order, long timestamp) {
-        if (workingOrders.remove(order.orderId) != null) emitCanceled(order, timestamp);
+        if (workingOrders.remove(order.orderId) != null) {
+            unregisterQueueOrder(order);
+            emitCanceled(order, timestamp);
+        }
     }
 
     private void expireWorkingOrder(WorkingOrder order, long timestamp) {
         if (workingOrders.remove(order.orderId) != null) {
+            unregisterQueueOrder(order);
             lifecycleHandler.accept(new OrderExpired(order.strategyId, order.symbol, order.orderId,
                     order.side, order.quantity - order.filledQuantity, order.price, timestamp));
         }
@@ -432,6 +538,11 @@ public final class SimulatedExchange {
         if (offsetType == null || offsetType == TrailingOffsetType.PRICE_TIER) {
             throw new IllegalArgumentException("unsupported trailing offset type");
         }
+    }
+
+    private void unregisterQueueOrder(WorkingOrder order) {
+        L3BookState book = l3Books.get(order.symbol);
+        if (book != null) book.unregisterQueueOrder(order);
     }
 
     private static double trailingMarketPrice(WorkingOrder order, MarketDataSnapshot snapshot) {
@@ -508,6 +619,9 @@ public final class SimulatedExchange {
         private boolean activated;
         private boolean previousTriggerMatch;
         private boolean resting;
+        private boolean queueInitialized;
+        private int queueAhead;
+        private final LinkedHashMap<String, Integer> queueAheadOrders = new LinkedHashMap<>();
         private long insertionSequence;
 
         private WorkingOrder(String strategyId, String symbol, long inputSequence, long marketTimestamp,
@@ -558,6 +672,172 @@ public final class SimulatedExchange {
                     limit.triggerPrice() > 0.0 || limit.trailingOffsetType() != null,
                     limit.triggerPrice(), limit.triggerType(), limit.activationPrice(), limit.trailingOffset(),
                     limit.trailingOffsetType(), limit.limitOffset());
+        }
+    }
+
+    private static final class L3BookState {
+        private final List<MutableVenueOrder> bids;
+        private final List<MutableVenueOrder> asks;
+
+        private L3BookState(List<MutableVenueOrder> bids, List<MutableVenueOrder> asks) {
+            this.bids = bids;
+            this.asks = asks;
+        }
+
+        private static L3BookState from(OrderBookL3Snapshot snapshot) {
+            List<MutableVenueOrder> bids = new ArrayList<>();
+            for (VenueOrder order : snapshot.bids()) bids.add(new MutableVenueOrder(order));
+            List<MutableVenueOrder> asks = new ArrayList<>();
+            for (VenueOrder order : snapshot.asks()) asks.add(new MutableVenueOrder(order));
+            return new L3BookState(bids, asks);
+        }
+
+        private void apply(OrderBookL3Delta delta) {
+            if (delta.action() == BookAction.CLEAR) {
+                bids.clear();
+                asks.clear();
+                return;
+            }
+            List<MutableVenueOrder> levels = levels(delta.side());
+            MutableVenueOrder existing = find(levels, delta.orderId());
+            switch (delta.action()) {
+                case ADD -> {
+                    if (existing != null) throw new IllegalStateException("venue order already exists: " + delta.orderId());
+                    levels.add(new MutableVenueOrder(new VenueOrder(delta.orderId(), delta.side(),
+                            delta.price(), delta.quantity(), delta.sequence())));
+                }
+                case UPDATE -> {
+                    if (existing == null) throw new IllegalStateException("unknown venue order: " + delta.orderId());
+                    existing.price = delta.price();
+                    existing.quantity = delta.quantity();
+                    if (existing.quantity == 0) levels.remove(existing);
+                }
+                case DELETE -> {
+                    if (existing != null) levels.remove(existing);
+                }
+                case CLEAR -> { }
+            }
+            sort(levels, delta.side());
+        }
+
+        private void snapshotQueue(WorkingOrder clientOrder) {
+            List<MutableVenueOrder> levels = levels(clientOrder.side);
+            clientOrder.queueAhead = 0;
+            clientOrder.queueAheadOrders.clear();
+            for (MutableVenueOrder venueOrder : levels) {
+                if (Double.compare(venueOrder.price, clientOrder.price) != 0) continue;
+                clientOrder.queueAhead += venueOrder.quantity;
+                clientOrder.queueAheadOrders.put(venueOrder.orderId, venueOrder.quantity);
+            }
+            clientOrder.queueInitialized = true;
+        }
+
+        private void adjustQueues(OrderBookL3Delta delta) {
+            if (delta.action() == BookAction.CLEAR) {
+                clearQueues();
+                return;
+            }
+            for (WorkingOrder clientOrder : currentQueueOrders) {
+                if (!clientOrder.queueInitialized || clientOrder.side != delta.side()
+                        || Double.compare(clientOrder.price, delta.price()) != 0
+                        && !clientOrder.queueAheadOrders.containsKey(delta.orderId())) continue;
+                Integer previous = clientOrder.queueAheadOrders.get(delta.orderId());
+                switch (delta.action()) {
+                    case DELETE -> {
+                        if (previous != null) {
+                            clientOrder.queueAhead -= previous;
+                            clientOrder.queueAheadOrders.remove(delta.orderId());
+                        }
+                    }
+                    case UPDATE -> {
+                        if (previous != null) {
+                            if (Double.compare(clientOrder.price, delta.price()) != 0) {
+                                clientOrder.queueAhead -= previous;
+                                clientOrder.queueAheadOrders.remove(delta.orderId());
+                            } else {
+                                clientOrder.queueAhead += delta.quantity() - previous;
+                                clientOrder.queueAheadOrders.put(delta.orderId(), delta.quantity());
+                            }
+                        }
+                    }
+                    case ADD, CLEAR -> { }
+                }
+                if (clientOrder.queueAhead < 0) clientOrder.queueAhead = 0;
+            }
+        }
+
+        private final List<WorkingOrder> currentQueueOrders = new ArrayList<>();
+
+        private void registerQueueOrder(WorkingOrder order) {
+            if (!currentQueueOrders.contains(order)) currentQueueOrders.add(order);
+        }
+
+        private void unregisterQueueOrder(WorkingOrder order) {
+            currentQueueOrders.remove(order);
+        }
+
+        private void clearQueues() {
+            for (WorkingOrder order : currentQueueOrders) {
+                order.queueAhead = 0;
+                order.queueAheadOrders.clear();
+            }
+        }
+
+        private List<MutableVenueOrder> levels(SignalDirection side) {
+            return side == SignalDirection.BUY ? bids : asks;
+        }
+
+        private static MutableVenueOrder find(List<MutableVenueOrder> levels, String orderId) {
+            for (MutableVenueOrder order : levels) if (order.orderId.equals(orderId)) return order;
+            return null;
+        }
+
+        private static void sort(List<MutableVenueOrder> levels, SignalDirection side) {
+            levels.sort(side == SignalDirection.BUY
+                    ? (left, right) -> compare(left, right, true)
+                    : (left, right) -> compare(left, right, false));
+        }
+
+        private static int compare(MutableVenueOrder left, MutableVenueOrder right, boolean bids) {
+            int priceOrder = bids ? Double.compare(right.price, left.price) : Double.compare(left.price, right.price);
+            return priceOrder != 0 ? priceOrder
+                    : Long.compare(left.sequence, right.sequence) != 0
+                    ? Long.compare(left.sequence, right.sequence) : left.orderId.compareTo(right.orderId);
+        }
+
+        private VenueOrder bestOrder(boolean buying) {
+            List<MutableVenueOrder> levels = buying ? asks : bids;
+            return levels.isEmpty() ? null : levels.get(0).value();
+        }
+
+        private double bestBid() { return bids.isEmpty() ? 0.0 : bids.get(0).price; }
+        private double bestAsk() { return asks.isEmpty() ? Double.POSITIVE_INFINITY : asks.get(0).price; }
+
+        private void consume(boolean buying, int quantity) {
+            List<MutableVenueOrder> levels = buying ? asks : bids;
+            MutableVenueOrder order = levels.get(0);
+            order.quantity -= quantity;
+            if (order.quantity == 0) levels.remove(0);
+        }
+    }
+
+    private static final class MutableVenueOrder {
+        private final String orderId;
+        private final SignalDirection side;
+        private final long sequence;
+        private double price;
+        private int quantity;
+
+        private MutableVenueOrder(VenueOrder order) {
+            this.orderId = order.orderId();
+            this.side = order.side();
+            this.price = order.price();
+            this.quantity = order.quantity();
+            this.sequence = order.sequence();
+        }
+
+        private VenueOrder value() {
+            return new VenueOrder(orderId, side, price, quantity, sequence);
         }
     }
 

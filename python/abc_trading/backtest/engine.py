@@ -6,7 +6,7 @@ import jpype
 from pathlib import Path
 
 from abc_trading._java import ensure_jvm, java_class
-from abc_trading.model.data import Bar, MarketDataSnapshot, OrderBookSnapshot, OrderBookDelta
+from abc_trading.model.data import Bar, MarketDataSnapshot, OrderBookSnapshot, OrderBookDelta, OrderBookL3Snapshot, OrderBookL3Delta
 
 
 class StrategyContext:
@@ -301,6 +301,16 @@ class BacktestEngine:
         java_type = java_class("com.abc.trading.data.OrderBookDelta")
         java_deltas = jpype.JArray(java_type)([delta.java for delta in deltas])
         self._java.runOrderBookDeltas(java_deltas)
+
+    def run_order_books_l3(self, snapshots: list[OrderBookL3Snapshot]) -> None:
+        java_type = java_class("com.abc.trading.data.OrderBookL3Snapshot")
+        java_snapshots = jpype.JArray(java_type)([snapshot.java for snapshot in snapshots])
+        self._java.runOrderBooksL3(java_snapshots)
+
+    def run_order_book_l3_deltas(self, deltas: list[OrderBookL3Delta]) -> None:
+        java_type = java_class("com.abc.trading.data.OrderBookL3Delta")
+        java_deltas = jpype.JArray(java_type)([delta.java for delta in deltas])
+        self._java.runOrderBookL3Deltas(java_deltas)
 
     @property
     def started(self) -> bool:

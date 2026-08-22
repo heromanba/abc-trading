@@ -6,6 +6,8 @@ import com.abc.trading.data.MarketDataSnapshot;
 import com.abc.trading.data.TickScheme;
 import com.abc.trading.data.OrderBookSnapshot;
 import com.abc.trading.data.OrderBookDelta;
+import com.abc.trading.data.OrderBookL3Snapshot;
+import com.abc.trading.data.OrderBookL3Delta;
 import com.abc.trading.data.DataEngine;
 import com.abc.trading.msgbus.MessageBus;
 import com.abc.trading.portfolio.Portfolio;
@@ -93,6 +95,8 @@ public final class NautilusKernel implements AutoCloseable {
         bus.subscribe("data.market.*", MarketDataSnapshot.class, exchange::processMarketData, 100);
         bus.subscribe("data.book.*", OrderBookSnapshot.class, exchange::processOrderBook, 100);
         bus.subscribe("data.book.delta.*", OrderBookDelta.class, exchange::processOrderBookDelta, 100);
+        bus.subscribe("data.book.l3.*", OrderBookL3Snapshot.class, exchange::processOrderBookL3, 100);
+        bus.subscribe("data.book.l3.delta.*", OrderBookL3Delta.class, exchange::processOrderBookL3Delta, 100);
     }
 
     public void addStrategy(String symbol, StrategyHandler strategy) {
@@ -178,6 +182,28 @@ public final class NautilusKernel implements AutoCloseable {
             inputSequence++;
             clock.setTimestampNs(delta.tsInit());
             dataEngine.publishOrderBookDelta(delta);
+        }
+    }
+
+    public void runOrderBooksL3(OrderBookL3Snapshot[] snapshots) {
+        if (lifecycle.state() != ComponentState.RUNNING) throw new IllegalStateException("Kernel must be running before processing L3 books");
+        if (snapshots == null) throw new IllegalArgumentException("snapshots are required");
+        Arrays.sort(snapshots, Comparator.comparingLong(OrderBookL3Snapshot::tsInit).thenComparing(OrderBookL3Snapshot::symbol));
+        for (OrderBookL3Snapshot snapshot : snapshots) {
+            inputSequence++;
+            clock.setTimestampNs(snapshot.tsInit());
+            dataEngine.publishOrderBookL3(snapshot);
+        }
+    }
+
+    public void runOrderBookL3Deltas(OrderBookL3Delta[] deltas) {
+        if (lifecycle.state() != ComponentState.RUNNING) throw new IllegalStateException("Kernel must be running before processing L3 deltas");
+        if (deltas == null) throw new IllegalArgumentException("deltas are required");
+        Arrays.sort(deltas, Comparator.comparingLong(OrderBookL3Delta::tsInit).thenComparing(OrderBookL3Delta::symbol));
+        for (OrderBookL3Delta delta : deltas) {
+            inputSequence++;
+            clock.setTimestampNs(delta.tsInit());
+            dataEngine.publishOrderBookL3Delta(delta);
         }
     }
 

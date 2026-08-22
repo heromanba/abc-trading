@@ -28,4 +28,14 @@ public final class DataEngine {
         bus.publish("data.book.delta." + delta.symbol(), delta);
         bus.publish(delta);
     }
+
+    public void publishOrderBookL3(OrderBookL3Snapshot snapshot) {
+        bus.publish("data.book.l3." + snapshot.symbol(), snapshot);
+        bus.publish(snapshot);
+    }
+
+    public void publishOrderBookL3Delta(OrderBookL3Delta delta) {
+        bus.publish("data.book.l3.delta." + delta.symbol(), delta);
+        bus.publish(delta);
+    }
 }

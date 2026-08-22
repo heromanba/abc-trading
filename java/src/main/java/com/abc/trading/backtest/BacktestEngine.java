@@ -5,6 +5,8 @@ import com.abc.trading.data.MarketDataSnapshot;
 import com.abc.trading.data.TickScheme;
 import com.abc.trading.data.OrderBookSnapshot;
 import com.abc.trading.data.OrderBookDelta;
+import com.abc.trading.data.OrderBookL3Snapshot;
+import com.abc.trading.data.OrderBookL3Delta;
 import com.abc.trading.events.CsvEventLogger;
 import com.abc.trading.events.Event;
 import com.abc.trading.events.EventLogger;
@@ -178,7 +180,8 @@ public final class BacktestEngine implements AutoCloseable {
                 SettledOrderFill.class.getSimpleName(), EventType.ORDER_FILL, fill.strategyId(), fill.side(),
                 fill.correlationId(), fill.orderId(), fill.price(), fill.quantity(),
                 settledFill.position(), fill.realizedPnl(),
-                fill.commission().amount(), fill.commission().currency(), fill.liquiditySide()));
+                fill.commission().amount(), fill.commission().currency(), fill.liquiditySide(),
+                fill.venueOrderId()));
     }
 
     private void logPositionUpdate(PositionUpdate update) {
@@ -318,6 +321,16 @@ public final class BacktestEngine implements AutoCloseable {
     public void runOrderBookDeltas(OrderBookDelta[] deltas) {
         if (!started) throw new IllegalStateException("Engine must be started before running");
         kernel.runOrderBookDeltas(deltas);
+    }
+
+    public void runOrderBooksL3(OrderBookL3Snapshot[] snapshots) {
+        if (!started) throw new IllegalStateException("Engine must be started before running");
+        kernel.runOrderBooksL3(snapshots);
+    }
+
+    public void runOrderBookL3Deltas(OrderBookL3Delta[] deltas) {
+        if (!started) throw new IllegalStateException("Engine must be started before running");
+        kernel.runOrderBookL3Deltas(deltas);
     }
 
     public void submitMarketOrder(String strategyId, String symbol, String orderId,

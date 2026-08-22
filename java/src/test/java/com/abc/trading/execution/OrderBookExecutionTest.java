@@ -4,6 +4,9 @@ import com.abc.trading.data.BookLevel;
 import com.abc.trading.data.BookAction;
 import com.abc.trading.data.OrderBookDelta;
 import com.abc.trading.data.OrderBookSnapshot;
+import com.abc.trading.data.OrderBookL3Snapshot;
+import com.abc.trading.data.OrderBookL3Delta;
+import com.abc.trading.data.VenueOrder;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -94,6 +97,97 @@ class OrderBookExecutionTest {
         assertEquals(List.of(101.0, 102.0), fills.stream().map(OrderFill::price).toList());
         assertEquals(List.of(1, 5), fills.stream().map(OrderFill::quantity).toList());
     }
+
+    @Test
+    void l3ConsumesIndividualVenueOrdersInPriceTimeOrder() {
+        List<OrderFill> fills = new ArrayList<>();
+        SimulatedExchange exchange = new SimulatedExchange(new VenueId("XNAS"), fills::add);
+        exchange.processOrderBookL3(new OrderBookL3Snapshot("AAPL", 100,
+                List.of(new VenueOrder("bid-1", SignalDirection.BUY, 99.0, 10, 1)),
+                List.of(new VenueOrder("ask-1", SignalDirection.SELL, 101.0, 2, 1),
+                        new VenueOrder("ask-2", SignalDirection.SELL, 101.0, 3, 2),
+                        new VenueOrder("ask-3", SignalDirection.SELL, 102.0, 10, 3)), 1));
+
+        exchange.submitMarketOrder(order("l3-buy", SignalDirection.BUY, 4));
+
+        assertEquals(List.of("ask-1", "ask-2"), fills.stream().map(OrderFill::venueOrderId).toList());
+        assertEquals(List.of(2, 2), fills.stream().map(OrderFill::quantity).toList());
+        assertEquals(List.of(101.0, 101.0), fills.stream().map(OrderFill::price).toList());
+    }
+
+    @Test
+    void l3DeleteDeltaAdvancesToNextVenueOrder() {
+        List<OrderFill> fills = new ArrayList<>();
+        SimulatedExchange exchange = new SimulatedExchange(new VenueId("XNAS"), fills::add);
+        exchange.processOrderBookL3(new OrderBookL3Snapshot("AAPL", 100,
+                List.of(new VenueOrder("bid-1", SignalDirection.BUY, 99.0, 10, 1)),
+                List.of(new VenueOrder("ask-1", SignalDirection.SELL, 101.0, 2, 1),
+                        new VenueOrder("ask-2", SignalDirection.SELL, 101.0, 3, 2)), 1));
+        exchange.processOrderBookL3Delta(new OrderBookL3Delta("AAPL", 101, SignalDirection.SELL,
+                BookAction.DELETE, "ask-1", 101.0, 0, 2));
+        exchange.submitMarketOrder(order("l3-buy-delete", SignalDirection.BUY, 2));
+
+        assertEquals(List.of("ask-2"), fills.stream().map(OrderFill::venueOrderId).toList());
+    }
+
+        @Test
+        void l3QueueAheadBlocksCrossingOrderUntilVenueOrderIsDeleted() {
+        List<OrderFill> fills = new ArrayList<>();
+        SimulatedExchange exchange = new SimulatedExchange(new VenueId("XNAS"), fills::add);
+        exchange.processOrderBookL3(new OrderBookL3Snapshot("AAPL", 100,
+            List.of(new VenueOrder("bid-ahead", SignalDirection.BUY, 100.0, 5, 1)),
+            List.of(new VenueOrder("ask-cross", SignalDirection.SELL, 102.0, 5, 1)), 1));
+        exchange.submitLimitOrder(limit("queued-buy", SignalDirection.BUY, 2, 100.0));
+        exchange.processOrderBookL3Delta(new OrderBookL3Delta("AAPL", 101, SignalDirection.SELL,
+            BookAction.UPDATE, "ask-cross", 100.0, 5, 2));
+
+        assertEquals(List.of(), fills);
+
+        exchange.processOrderBookL3Delta(new OrderBookL3Delta("AAPL", 102, SignalDirection.BUY,
+            BookAction.DELETE, "bid-ahead", 100.0, 0, 3));
+
+        assertEquals(List.of("ask-cross"), fills.stream().map(OrderFill::venueOrderId).toList());
+        }
+
+        @Test
+        void l3QueueSizeDecreaseAdvancesByTheReleasedQuantity() {
+        List<OrderFill> fills = new ArrayList<>();
+        SimulatedExchange exchange = new SimulatedExchange(new VenueId("XNAS"), fills::add);
+        exchange.processOrderBookL3(new OrderBookL3Snapshot("AAPL", 100,
+            List.of(new VenueOrder("bid-ahead", SignalDirection.BUY, 100.0, 5, 1)),
+            List.of(new VenueOrder("ask-cross", SignalDirection.SELL, 102.0, 5, 1)), 1));
+        exchange.submitLimitOrder(limit("queued-buy", SignalDirection.BUY, 2, 100.0));
+        exchange.processOrderBookL3Delta(new OrderBookL3Delta("AAPL", 101, SignalDirection.SELL,
+            BookAction.UPDATE, "ask-cross", 100.0, 5, 2));
+        exchange.processOrderBookL3Delta(new OrderBookL3Delta("AAPL", 102, SignalDirection.BUY,
+            BookAction.UPDATE, "bid-ahead", 100.0, 3, 3));
+
+        assertEquals(List.of(), fills);
+        exchange.processOrderBookL3Delta(new OrderBookL3Delta("AAPL", 103, SignalDirection.BUY,
+            BookAction.UPDATE, "bid-ahead", 100.0, 0, 4));
+        assertEquals(List.of("ask-cross"), fills.stream().map(OrderFill::venueOrderId).toList());
+        }
+
+        @Test
+        void l3QueueSizeIncreaseKeepsVenueOrderAhead() {
+        List<OrderFill> fills = new ArrayList<>();
+        SimulatedExchange exchange = new SimulatedExchange(new VenueId("XNAS"), fills::add);
+        exchange.processOrderBookL3(new OrderBookL3Snapshot("AAPL", 100,
+            List.of(new VenueOrder("bid-ahead", SignalDirection.BUY, 100.0, 2, 1)),
+            List.of(new VenueOrder("ask-cross", SignalDirection.SELL, 102.0, 5, 1)), 1));
+        exchange.submitLimitOrder(limit("queued-buy", SignalDirection.BUY, 2, 100.0));
+        exchange.processOrderBookL3Delta(new OrderBookL3Delta("AAPL", 101, SignalDirection.SELL,
+            BookAction.UPDATE, "ask-cross", 100.0, 5, 2));
+        exchange.processOrderBookL3Delta(new OrderBookL3Delta("AAPL", 102, SignalDirection.BUY,
+            BookAction.UPDATE, "bid-ahead", 100.0, 4, 3));
+        exchange.processOrderBookL3Delta(new OrderBookL3Delta("AAPL", 103, SignalDirection.BUY,
+            BookAction.UPDATE, "bid-ahead", 100.0, 2, 4));
+
+        assertEquals(List.of(), fills);
+        exchange.processOrderBookL3Delta(new OrderBookL3Delta("AAPL", 104, SignalDirection.BUY,
+            BookAction.DELETE, "bid-ahead", 100.0, 0, 5));
+        assertEquals(List.of("ask-cross"), fills.stream().map(OrderFill::venueOrderId).toList());
+        }
 
     private static OrderBookSnapshot book(long timestamp, List<BookLevel> bids, List<BookLevel> asks) {
         return new OrderBookSnapshot("AAPL", timestamp, bids, asks, timestamp);

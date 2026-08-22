@@ -128,6 +128,54 @@ class OrderBookDelta:
         return self._java
 
 
+class VenueOrder:
+    def __init__(self, order_id: str, side: str, price: float, quantity: int, sequence: int) -> None:
+        direction = java_class("com.abc.trading.execution.SignalDirection").valueOf(side)
+        self._java = java_class("com.abc.trading.data.VenueOrder")(order_id, direction, price, quantity, sequence)
+
+    @property
+    def java(self) -> object:
+        return self._java
+
+
+class OrderBookL3Snapshot:
+    def __init__(self, symbol: str, timestamp: int,
+                 bids: list[VenueOrder | tuple[str, str, float, int, int]],
+                 asks: list[VenueOrder | tuple[str, str, float, int, int]], sequence: int = 0) -> None:
+        order_type = java_class("com.abc.trading.data.VenueOrder")
+        array_list = java_class("java.util.ArrayList")
+        java_bids = array_list()
+        java_asks = array_list()
+        for order in bids:
+            java_bids.add(order.java if isinstance(order, VenueOrder) else order_type(
+                order[0], java_class("com.abc.trading.execution.SignalDirection").valueOf(order[1]),
+                order[2], order[3], order[4]))
+        for order in asks:
+            java_asks.add(order.java if isinstance(order, VenueOrder) else order_type(
+                order[0], java_class("com.abc.trading.execution.SignalDirection").valueOf(order[1]),
+                order[2], order[3], order[4]))
+        self._java = java_class("com.abc.trading.data.OrderBookL3Snapshot")(symbol, timestamp, java_bids, java_asks, sequence)
+
+    @property
+    def java(self) -> object:
+        return self._java
+
+
+class OrderBookL3Delta:
+    def __init__(self, symbol: str, timestamp: int, side: str, action: str, order_id: str,
+                 price: float, quantity: int, sequence: int = 0) -> None:
+        self._java = java_class("com.abc.trading.data.OrderBookL3Delta")(
+            symbol, timestamp,
+            java_class("com.abc.trading.execution.SignalDirection").valueOf(side),
+            java_class("com.abc.trading.data.BookAction").valueOf(action),
+            order_id, price, quantity, sequence
+        )
+
+    @property
+    def java(self) -> object:
+        return self._java
+
+
 @dataclass(frozen=True)
 class BarType:
     value: str
