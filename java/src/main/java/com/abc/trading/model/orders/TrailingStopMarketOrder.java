@@ -30,6 +30,8 @@ public record TrailingStopMarketOrder(
         if (quantity <= 0) throw new IllegalArgumentException("quantity must be positive");
         if (triggerType == null || triggerType == TriggerType.NO_TRIGGER) throw new IllegalArgumentException("triggerType is required");
         if (!Double.isFinite(trailingOffset) || trailingOffset <= 0.0) throw new IllegalArgumentException("trailingOffset must be positive");
-        if (offsetType == null) throw new IllegalArgumentException("trailingOffsetType is required");
+            if (offsetType == null || offsetType == TrailingOffsetType.PRICE_TIER) {
+                throw new IllegalArgumentException("unsupported trailing offset type");
+            }
     }
 }

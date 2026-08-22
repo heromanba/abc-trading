@@ -69,7 +69,7 @@ public record SubmitOrder(
             throw new IllegalArgumentException("stop order triggerPrice must be positive");
         }
         if (trailingOrder && (!Double.isFinite(trailingOffset) || trailingOffset <= 0.0
-                || trailingOffsetType == null)) {
+                || trailingOffsetType == null || trailingOffsetType == TrailingOffsetType.PRICE_TIER)) {
             throw new IllegalArgumentException("supported trailing offset is required");
         }
         if (!stopOrder && triggerType != TriggerType.NO_TRIGGER) {

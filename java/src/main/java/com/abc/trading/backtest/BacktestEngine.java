@@ -3,7 +3,6 @@ package com.abc.trading.backtest;
 import com.abc.trading.data.Bar;
 import com.abc.trading.data.MarketDataSnapshot;
 import com.abc.trading.data.TickScheme;
-import com.abc.trading.data.PriceTier;
 import com.abc.trading.events.CsvEventLogger;
 import com.abc.trading.events.Event;
 import com.abc.trading.events.EventLogger;
@@ -201,10 +200,6 @@ public final class BacktestEngine implements AutoCloseable {
 
     public void addInstrument(String symbol, String venue, double tickSize) {
         addInstrument(symbol, venue, TickScheme.fixed(tickSize));
-    }
-
-    public void addInstrumentTiered(String symbol, String venue, PriceTier[] tiers) {
-        addInstrument(symbol, venue, TickScheme.tiered(tiers));
     }
 
     public void addInstrument(String symbol, String venue, TickScheme tickScheme) {

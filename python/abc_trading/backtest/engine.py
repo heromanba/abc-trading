@@ -168,15 +168,6 @@ class BacktestEngine:
     def add_instrument(self, symbol: str, venue: str, tick_size: float = 0.01) -> None:
         self._java.addInstrument(symbol, venue, tick_size)
 
-    def add_instrument_tiered(
-        self, symbol: str, venue: str, tiers: list[tuple[float, float, float]]
-    ) -> None:
-        price_tier = java_class("com.abc.trading.data.PriceTier")
-        java_tiers = jpype.JArray(price_tier)([
-            price_tier(lower, upper, tick) for lower, upper, tick in tiers
-        ])
-        self._java.addInstrumentTiered(symbol, venue, java_tiers)
-
     def set_max_fill_quantity(self, venue: str, quantity: int) -> None:
         self._java.setMaxFillQuantity(venue, quantity)
 

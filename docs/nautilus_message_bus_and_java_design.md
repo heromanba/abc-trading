@@ -715,7 +715,7 @@ limit_offset  (trailing stop-limit only)
 ```
 
 The Java `SimulatedExchange` ratchets only improving prices using `PRICE`,
-`BASIS_POINTS`, `TICKS`, or an instrument-registered `PRICE_TIER` scheme.
+`BASIS_POINTS`, or `TICKS`.
 `TICKS` now uses the instrument's configured increment rather than a hard-coded
 cent tick. The shared
 `trailing_market_data.csv` fixture validates:
@@ -740,11 +740,9 @@ The emulator watches shared market snapshots for `DEFAULT`, `BID_ASK`, or
 `LAST_PRICE`, supports local cancellation, and releases matching orders into
 the normal risk and execution path.
 
-Nautilus's current Rust `trailing_stop_calculate` still rejects
-`TrailingOffsetType::PriceTier`; therefore Java `PRICE_TIER` is available for
-venue-specific Java simulations, while cross-backend parity for that mode
-requires the corresponding Rust calculator extension. `TICKS` is parity-safe
-when both instruments use the same `price_increment`.
+Nautilus's current Rust `trailing_stop_calculate` rejects
+`TrailingOffsetType::PriceTier`, so Java rejects that mode as well. `TICKS` is
+parity-safe when both instruments use the same `price_increment`.
 
 ## 12. Practical Summary
 

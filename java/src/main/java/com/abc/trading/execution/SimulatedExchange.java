@@ -367,7 +367,7 @@ public final class SimulatedExchange {
     }
 
     private static void validateTrailingOffsetType(TrailingOffsetType offsetType) {
-        if (offsetType == null) {
+        if (offsetType == null || offsetType == TrailingOffsetType.PRICE_TIER) {
             throw new IllegalArgumentException("unsupported trailing offset type");
         }
     }
@@ -389,7 +389,8 @@ public final class SimulatedExchange {
         double offset = switch (order.trailingOffsetType) {
             case PRICE -> order.trailingOffset;
             case BASIS_POINTS -> marketPrice * order.trailingOffset / 10_000.0;
-            case TICKS, PRICE_TIER -> order.trailingOffset * tickSizeProvider.apply(order.symbol, marketPrice);
+            case TICKS -> order.trailingOffset * tickSizeProvider.apply(order.symbol, marketPrice);
+            case PRICE_TIER -> throw new IllegalArgumentException("PRICE_TIER is not supported by Nautilus Rust");
         };
         return order.side == SignalDirection.BUY ? marketPrice + offset : marketPrice - offset;
     }
@@ -398,7 +399,8 @@ public final class SimulatedExchange {
         double offset = switch (order.trailingOffsetType) {
             case PRICE -> order.limitOffset;
             case BASIS_POINTS -> marketPrice * order.limitOffset / 10_000.0;
-            case TICKS, PRICE_TIER -> order.limitOffset * tickSizeProvider.apply(order.symbol, marketPrice);
+            case TICKS -> order.limitOffset * tickSizeProvider.apply(order.symbol, marketPrice);
+            case PRICE_TIER -> throw new IllegalArgumentException("PRICE_TIER is not supported by Nautilus Rust");
         };
         return order.side == SignalDirection.BUY ? marketPrice + offset : marketPrice - offset;
     }

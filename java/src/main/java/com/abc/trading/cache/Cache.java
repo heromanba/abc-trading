@@ -46,12 +46,6 @@ public final class Cache {
         return tickScheme.tickSize(price);
     }
 
-    public TickScheme tickScheme(String symbol) {
-        TickScheme tickScheme = tickSchemes.get(symbol);
-        if (tickScheme == null) throw new IllegalArgumentException("Unknown instrument: " + symbol);
-        return tickScheme;
-    }
-
     public int position(String symbol) {
         return positions.getOrDefault(symbol, 0);
     }
