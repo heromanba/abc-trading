@@ -185,6 +185,19 @@ class OrderLifecycleTest {
         }
         }
 
+    @Test
+    void usesInstrumentTickSchemeForTicksAndPriceTierOffsets() {
+        try (NautilusKernel kernel = new NautilusKernel()) {
+            kernel.addVenue("XNAS");
+            kernel.addInstrumentTiered("BET", "XNAS", new com.abc.trading.data.PriceTier[] {
+                    new com.abc.trading.data.PriceTier(0.0, 10.0, 0.01),
+                    new com.abc.trading.data.PriceTier(10.0, Double.POSITIVE_INFINITY, 0.5)
+            });
+            assertEquals(0.01, kernel.cache().tickSize("BET", 9.99));
+            assertEquals(0.5, kernel.cache().tickSize("BET", 10.0));
+        }
+    }
+
     private static void publishStop(NautilusKernel kernel, String orderId,
             TriggerType triggerType, double triggerPrice) {
         kernel.bus().publish(new OrderIntent("strategy", "AAPL", 1, 100, "corr", orderId,
