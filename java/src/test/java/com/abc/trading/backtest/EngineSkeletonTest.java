@@ -57,7 +57,7 @@ class EngineSkeletonTest {
         exchange.processBar(new com.abc.trading.data.Bar("AAPL", 200, 119.0, 2));
 
         assertEquals(1, fills.size());
-        assertEquals(120.0, fills.get(0).price());
+        assertEquals(119.0, fills.get(0).price());
         assertEquals(0, exchange.pendingLimitOrderCount());
     }
 

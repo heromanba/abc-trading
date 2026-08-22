@@ -18,4 +18,9 @@ public final class DataEngine {
         bus.publish("data.market." + snapshot.symbol(), snapshot);
         bus.publish(snapshot);
     }
+
+    public void publishOrderBook(OrderBookSnapshot snapshot) {
+        bus.publish("data.book." + snapshot.symbol(), snapshot);
+        bus.publish(snapshot);
+    }
 }

@@ -12,7 +12,8 @@ public record OrderFill(
                 double price,
                 int position,
                 double realizedPnl,
-                Commission commission
+                Commission commission,
+                LiquiditySide liquiditySide
 ) {
         public OrderFill(
                 String strategyId,
@@ -30,6 +31,14 @@ public record OrderFill(
                         side, quantity, price, position, realizedPnl, Commission.zero("USD"));
         }
 
+        public OrderFill(
+                String strategyId, String symbol, long inputSequence, long marketTimestamp,
+                String correlationId, String orderId, SignalDirection side, int quantity,
+                double price, int position, double realizedPnl, Commission commission) {
+                this(strategyId, symbol, inputSequence, marketTimestamp, correlationId, orderId,
+                        side, quantity, price, position, realizedPnl, commission, LiquiditySide.TAKER);
+        }
+
         public OrderFill withState(int nextPosition, double nextRealizedPnl) {
                 return new OrderFill(
                                 strategyId,
@@ -43,7 +52,8 @@ public record OrderFill(
                                 price,
                                 nextPosition,
                                 nextRealizedPnl,
-                                commission);
+                                commission,
+                                liquiditySide);
         }
 
         public OrderFill withCommission(Commission nextCommission) {
@@ -59,12 +69,19 @@ public record OrderFill(
                                 price,
                                 position,
                                 realizedPnl,
-                                nextCommission);
+                                nextCommission,
+                                liquiditySide);
         }
 
         public OrderFill withQuantity(int nextQuantity) {
                 return new OrderFill(
                                 strategyId, symbol, inputSequence, marketTimestamp, correlationId, orderId,
-                                side, nextQuantity, price, position, realizedPnl, commission);
+                                side, nextQuantity, price, position, realizedPnl, commission, liquiditySide);
+        }
+
+        public OrderFill withLiquiditySide(LiquiditySide nextLiquiditySide) {
+                return new OrderFill(
+                                strategyId, symbol, inputSequence, marketTimestamp, correlationId, orderId,
+                                side, quantity, price, position, realizedPnl, commission, nextLiquiditySide);
         }
 }

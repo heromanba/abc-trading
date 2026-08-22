@@ -6,7 +6,7 @@ import jpype
 from pathlib import Path
 
 from abc_trading._java import ensure_jvm, java_class
-from abc_trading.model.data import Bar, MarketDataSnapshot
+from abc_trading.model.data import Bar, MarketDataSnapshot, OrderBookSnapshot
 
 
 class StrategyContext:
@@ -291,6 +291,11 @@ class BacktestEngine:
         java_type = java_class("com.abc.trading.data.MarketDataSnapshot")
         java_snapshots = jpype.JArray(java_type)([snapshot.java for snapshot in snapshots])
         self._java.runMarketData(java_snapshots)
+
+    def run_order_books(self, snapshots: list[OrderBookSnapshot]) -> None:
+        java_type = java_class("com.abc.trading.data.OrderBookSnapshot")
+        java_snapshots = jpype.JArray(java_type)([snapshot.java for snapshot in snapshots])
+        self._java.runOrderBooks(java_snapshots)
 
     @property
     def started(self) -> bool:

@@ -3,6 +3,7 @@ package com.abc.trading.backtest;
 import com.abc.trading.data.Bar;
 import com.abc.trading.data.MarketDataSnapshot;
 import com.abc.trading.data.TickScheme;
+import com.abc.trading.data.OrderBookSnapshot;
 import com.abc.trading.events.CsvEventLogger;
 import com.abc.trading.events.Event;
 import com.abc.trading.events.EventLogger;
@@ -176,7 +177,7 @@ public final class BacktestEngine implements AutoCloseable {
                 SettledOrderFill.class.getSimpleName(), EventType.ORDER_FILL, fill.strategyId(), fill.side(),
                 fill.correlationId(), fill.orderId(), fill.price(), fill.quantity(),
                 settledFill.position(), fill.realizedPnl(),
-                fill.commission().amount(), fill.commission().currency()));
+                fill.commission().amount(), fill.commission().currency(), fill.liquiditySide()));
     }
 
     private void logPositionUpdate(PositionUpdate update) {
@@ -306,6 +307,23 @@ public final class BacktestEngine implements AutoCloseable {
     public void runMarketData(MarketDataSnapshot[] snapshots) {
         if (!started) throw new IllegalStateException("Engine must be started before running");
         kernel.runMarketData(snapshots);
+    }
+
+    public void runOrderBooks(OrderBookSnapshot[] snapshots) {
+        if (!started) throw new IllegalStateException("Engine must be started before running");
+        kernel.runOrderBooks(snapshots);
+    }
+
+    public void submitMarketOrder(String strategyId, String symbol, String orderId,
+            SignalDirection side, int quantity, long timestampNs, double price) {
+        kernel.bus().publish(new OrderIntent(strategyId, symbol, kernel.currentInputSequence(), timestampNs,
+                orderId + "-corr", orderId, side, quantity, price, kernel.portfolio().position(symbol), 0.0));
+    }
+
+    public void submitLimitOrder(String strategyId, String symbol, String orderId,
+            SignalDirection side, int quantity, long timestampNs, double limitPrice) {
+        kernel.bus().publish(new LimitOrderIntent(strategyId, symbol, kernel.currentInputSequence(), timestampNs,
+                orderId + "-corr", orderId, side, quantity, limitPrice, kernel.portfolio().position(symbol), 0.0));
     }
 
     public void start() {

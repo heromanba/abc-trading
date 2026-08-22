@@ -4,6 +4,7 @@ import com.abc.trading.cache.Cache;
 import com.abc.trading.data.Bar;
 import com.abc.trading.data.MarketDataSnapshot;
 import com.abc.trading.data.TickScheme;
+import com.abc.trading.data.OrderBookSnapshot;
 import com.abc.trading.data.DataEngine;
 import com.abc.trading.msgbus.MessageBus;
 import com.abc.trading.portfolio.Portfolio;
@@ -89,6 +90,7 @@ public final class NautilusKernel implements AutoCloseable {
         executionEngine.registerClient(new BacktestExecutionClient(exchange));
         bus.subscribe("data.bar.*", Bar.class, exchange::processBar, 100);
         bus.subscribe("data.market.*", MarketDataSnapshot.class, exchange::processMarketData, 100);
+        bus.subscribe("data.book.*", OrderBookSnapshot.class, exchange::processOrderBook, 100);
     }
 
     public void addStrategy(String symbol, StrategyHandler strategy) {
@@ -146,6 +148,20 @@ public final class NautilusKernel implements AutoCloseable {
             inputSequence++;
             clock.setTimestampNs(snapshot.tsInit());
             dataEngine.publishMarketData(snapshot);
+        }
+    }
+
+    public void runOrderBooks(OrderBookSnapshot[] snapshots) {
+        if (lifecycle.state() != ComponentState.RUNNING) {
+            throw new IllegalStateException("Kernel must be running before processing order books");
+        }
+        if (snapshots == null) throw new IllegalArgumentException("snapshots are required");
+        Arrays.sort(snapshots, Comparator.comparingLong(OrderBookSnapshot::tsInit)
+                .thenComparing(OrderBookSnapshot::symbol));
+        for (OrderBookSnapshot snapshot : snapshots) {
+            inputSequence++;
+            clock.setTimestampNs(snapshot.tsInit());
+            dataEngine.publishOrderBook(snapshot);
         }
     }
 

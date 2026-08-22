@@ -75,6 +75,37 @@ class MarketDataSnapshot:
         return int(self._java.sequence())
 
 
+class BookLevel:
+    def __init__(self, price: float, quantity: int) -> None:
+        self._java = java_class("com.abc.trading.data.BookLevel")(price, quantity)
+
+
+class OrderBookSnapshot:
+    def __init__(
+        self,
+        symbol: str,
+        timestamp: int,
+        bids: list[tuple[float, int]],
+        asks: list[tuple[float, int]],
+        sequence: int = 0,
+    ) -> None:
+        level_type = java_class("com.abc.trading.data.BookLevel")
+        list_type = java_class("java.util.ArrayList")
+        java_bids = list_type()
+        java_asks = list_type()
+        for price, quantity in bids:
+            java_bids.add(level_type(price, quantity))
+        for price, quantity in asks:
+            java_asks.add(level_type(price, quantity))
+        self._java = java_class("com.abc.trading.data.OrderBookSnapshot")(
+            symbol, timestamp, java_bids, java_asks, sequence
+        )
+
+    @property
+    def java(self) -> object:
+        return self._java
+
+
 @dataclass(frozen=True)
 class BarType:
     value: str

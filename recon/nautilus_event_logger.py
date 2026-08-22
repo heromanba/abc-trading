@@ -36,6 +36,7 @@ COLUMNS = (
     "realized_pnl",
     "commission",
     "commission_currency",
+    "liquidity_side",
 )
 
 
@@ -58,6 +59,7 @@ class EventLogger:
         row["price"] = _format_float(values.get("price"))
         row["realized_pnl"] = _format_float(values.get("realized_pnl"))
         row["commission"] = _format_float(values.get("commission"))
+        row["liquidity_side"] = str(values.get("liquidity_side", ""))
         self._csv.writerow(row)
         self._writer.flush()
 
@@ -252,6 +254,10 @@ class ReconStrategy(Strategy):
             realized_pnl=_value(event, "realized_pnl", 0.0),
             commission=commission,
             commission_currency=commission_currency or "USD",
+            liquidity_side={"1": "MAKER", "2": "TAKER"}.get(
+                str(_value(event, "liquidity_side", "")),
+                str(_value(event, "liquidity_side", "")),
+            ),
         )
 
     def _log_position_event(self, event: Any) -> None:
@@ -269,6 +275,7 @@ class ReconStrategy(Strategy):
             quantity=_value(event, "quantity", 0),
             current_position=int(self.portfolio.net_position(self.instrument_id)),
             realized_pnl=_value(event, "realized_pnl", 0.0),
+            liquidity_side="",
         )
 
     def on_stop(self) -> None:

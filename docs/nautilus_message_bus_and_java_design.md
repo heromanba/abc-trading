@@ -702,6 +702,11 @@ python recon/compare_trigger_states.py \
 The focused comparator ignores backend-specific sequence encodings and
 compares ordered status transitions for each client order.
 
+The order-book replay uses `order_book_market_data.csv` as one immutable L2
+ladder. Java consumes `OrderBookSnapshot`; Nautilus consumes the equivalent
+`OrderBookDepth10`. The replay compares every fill's price, quantity, order
+identifier, and liquidity side in order.
+
 ### 11.2 Trailing stops and local emulation
 
 Trailing orders mirror Nautilus fields:

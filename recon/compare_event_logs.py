@@ -24,6 +24,7 @@ COLUMNS = (
     "realized_pnl",
     "commission",
     "commission_currency",
+    "liquidity_side",
 )
 NUMERIC_COLUMNS = {"price", "realized_pnl", "commission"}
 NUMERIC_TOLERANCE = 1e-5

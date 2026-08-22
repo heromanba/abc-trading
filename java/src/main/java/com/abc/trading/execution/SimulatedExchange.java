@@ -2,6 +2,8 @@ package com.abc.trading.execution;
 
 import com.abc.trading.data.Bar;
 import com.abc.trading.data.MarketDataSnapshot;
+import com.abc.trading.data.BookLevel;
+import com.abc.trading.data.OrderBookSnapshot;
 import com.abc.trading.execution.commands.CancelOrder;
 import com.abc.trading.execution.commands.ModifyOrder;
 
@@ -21,6 +23,7 @@ public final class SimulatedExchange {
     private final VenueId venue;
     private final Map<String, Double> lastPrices = new LinkedHashMap<>();
     private final Map<String, MarketDataSnapshot> marketData = new LinkedHashMap<>();
+    private final Map<String, BookState> books = new LinkedHashMap<>();
     private final Map<String, WorkingOrder> workingOrders = new LinkedHashMap<>();
     private final Consumer<OrderFill> fillHandler;
     private final Consumer<Object> lifecycleHandler;
@@ -68,14 +71,23 @@ public final class SimulatedExchange {
     }
 
     public void processMarketData(MarketDataSnapshot snapshot) {
-        currentTimestamp = snapshot.tsInit();
-        lastPrices.put(snapshot.symbol(), snapshot.last());
         marketData.put(snapshot.symbol(), snapshot);
+        processOrderBook(OrderBookSnapshot.fromMarketData(snapshot));
+    }
+
+    public void processOrderBook(OrderBookSnapshot snapshot) {
+        currentTimestamp = snapshot.tsInit();
+        double bid = snapshot.bids().isEmpty() ? snapshot.asks().get(0).price() : snapshot.bids().get(0).price();
+        double ask = snapshot.asks().isEmpty() ? snapshot.bids().get(0).price() : snapshot.asks().get(0).price();
+        double midpoint = (bid + ask) / 2.0;
+        marketData.put(snapshot.symbol(), new MarketDataSnapshot(
+                snapshot.symbol(), snapshot.tsInit(), bid, ask, midpoint, midpoint, midpoint, snapshot.sequence()));
+        lastPrices.put(snapshot.symbol(), midpoint);
+        books.put(snapshot.symbol(), BookState.from(snapshot));
         expireDueOrders();
         drainDueCommands();
         processTriggers(snapshot.symbol());
-        tryMatchMarket(snapshot.symbol());
-        tryMatchLimit(snapshot.symbol());
+        tryMatchOrders(snapshot.symbol());
     }
 
     public void submitLimitOrder(LimitOrderIntent order) {
@@ -184,39 +196,26 @@ public final class SimulatedExchange {
             emitCanceled(workingOrder, currentTimestamp);
             return;
         }
-        if (workingOrder.limit) tryMatchLimit(workingOrder.symbol);
-        else fill(workingOrder, currentPrice(workingOrder.symbol), LiquiditySide.TAKER);
+        tryMatchOrder(workingOrder);
         if (workingOrder.timeInForce == TimeInForce.IOC && workingOrders.containsKey(workingOrder.orderId)) {
             cancelWorkingOrder(workingOrder, currentTimestamp);
         }
     }
 
     private void tryMatchLimit(String symbol) {
-        List<WorkingOrder> candidates = new ArrayList<>();
-        for (WorkingOrder order : workingOrders.values()) {
-            if (order.limit && (!order.stop || order.triggered) && order.symbol.equals(symbol)) candidates.add(order);
-        }
-        for (WorkingOrder order : candidates) {
-            if (!workingOrders.containsKey(order.orderId)) continue;
-            boolean crossed = order.side == SignalDirection.BUY
-                    ? currentPrice(symbol) <= order.price : currentPrice(symbol) >= order.price;
-            if (crossed) fill(order, order.price, LiquiditySide.MAKER);
-            if (order.timeInForce == TimeInForce.IOC && workingOrders.containsKey(order.orderId)) {
-                cancelWorkingOrder(order, currentTimestamp);
-            }
-        }
+        tryMatchOrders(symbol);
     }
 
-    private void tryMatchMarket(String symbol) {
+    private void tryMatchOrders(String symbol) {
         List<WorkingOrder> candidates = new ArrayList<>();
         for (WorkingOrder order : workingOrders.values()) {
-            if (!order.limit && (!order.stop || order.triggered) && order.symbol.equals(symbol)) {
+            if ((!order.stop || order.triggered) && order.symbol.equals(symbol)) {
                 candidates.add(order);
             }
         }
         for (WorkingOrder order : candidates) {
             if (!workingOrders.containsKey(order.orderId)) continue;
-            fill(order, currentPrice(symbol), LiquiditySide.TAKER);
+            tryMatchOrder(order);
             if (order.timeInForce == TimeInForce.IOC && workingOrders.containsKey(order.orderId)) {
                 cancelWorkingOrder(order, currentTimestamp);
             }
@@ -240,7 +239,7 @@ public final class SimulatedExchange {
                     order.inputSequence, currentTimestamp, order.triggerPrice));
             tryMatchLimit(order.symbol);
         } else {
-            fill(order, currentPrice(order.symbol), LiquiditySide.TAKER);
+            tryMatchOrder(order);
         }
         if (order.timeInForce == TimeInForce.IOC && workingOrders.containsKey(order.orderId)) {
             cancelWorkingOrder(order, currentTimestamp);
@@ -297,17 +296,50 @@ public final class SimulatedExchange {
         return result;
     }
 
-    private void fill(WorkingOrder order, double price, LiquiditySide liquiditySide) {
-        int remaining = order.quantity - order.filledQuantity;
-        int fillQuantity = Math.min(remaining, maxFillQuantity);
+    private void fill(WorkingOrder order, double price, int fillQuantity, LiquiditySide liquiditySide) {
         if (fillQuantity <= 0) return;
         OrderFill fill = new OrderFill(order.strategyId, order.symbol, order.inputSequence,
                 currentTimestamp, order.correlationId, order.orderId, order.side, fillQuantity,
                 price, order.currentPosition, order.realizedPnl)
+                .withLiquiditySide(liquiditySide)
                 .withCommission(feeModel.calculate(fillQuantity, price, liquiditySide));
         order.filledQuantity += fillQuantity;
         fillHandler.accept(fill);
         if (order.filledQuantity == order.quantity) workingOrders.remove(order.orderId);
+    }
+
+    private void tryMatchOrder(WorkingOrder order) {
+        if (order.stop && !order.triggered) return;
+        BookState book = books.get(order.symbol);
+        if (book == null) return;
+        boolean crossed;
+        if (!order.limit) {
+            crossed = true;
+        } else if (order.side == SignalDirection.BUY) {
+            crossed = book.bestAsk() <= order.price;
+        } else {
+            crossed = book.bestBid() >= order.price;
+        }
+        if (!crossed && order.limit) {
+            order.resting = true;
+            return;
+        }
+        LiquiditySide liquiditySide = order.resting ? LiquiditySide.MAKER : LiquiditySide.TAKER;
+        int budget = maxFillQuantity;
+        while (budget > 0 && order.quantity > order.filledQuantity) {
+            BookLevel level = book.bestLevel(order.side == SignalDirection.BUY);
+            if (level == null) break;
+            boolean eligible = !order.limit || (order.side == SignalDirection.BUY
+                    ? level.price() <= order.price : level.price() >= order.price);
+            if (!eligible) break;
+            int fillQuantity = Math.min(Math.min(level.quantity(), order.quantity - order.filledQuantity), budget);
+            fill(order, level.price(), fillQuantity, liquiditySide);
+            book.consume(order.side == SignalDirection.BUY, fillQuantity);
+            budget -= fillQuantity;
+        }
+        if (order.quantity > order.filledQuantity) {
+            order.resting = order.limit;
+        }
     }
 
     private void expireDueOrders() {
@@ -445,6 +477,7 @@ public final class SimulatedExchange {
         private boolean triggered;
         private boolean activated;
         private boolean previousTriggerMatch;
+        private boolean resting;
 
         private WorkingOrder(String strategyId, String symbol, long inputSequence, long marketTimestamp,
                 String correlationId, String orderId, SignalDirection side, int quantity, double price,
@@ -494,6 +527,60 @@ public final class SimulatedExchange {
                     limit.triggerPrice() > 0.0 || limit.trailingOffsetType() != null,
                     limit.triggerPrice(), limit.triggerType(), limit.activationPrice(), limit.trailingOffset(),
                     limit.trailingOffsetType(), limit.limitOffset());
+        }
+    }
+
+    private static final class BookState {
+        private final List<MutableLevel> bids;
+        private final List<MutableLevel> asks;
+
+        private BookState(List<MutableLevel> bids, List<MutableLevel> asks) {
+            this.bids = bids;
+            this.asks = asks;
+        }
+
+        private static BookState from(OrderBookSnapshot snapshot) {
+            List<MutableLevel> bids = new ArrayList<>();
+            for (BookLevel level : snapshot.bids()) bids.add(new MutableLevel(level));
+            List<MutableLevel> asks = new ArrayList<>();
+            for (BookLevel level : snapshot.asks()) asks.add(new MutableLevel(level));
+            return new BookState(bids, asks);
+        }
+
+        private BookLevel bestLevel(boolean buying) {
+            List<MutableLevel> levels = buying ? asks : bids;
+            return levels.isEmpty() ? null : levels.get(0).value();
+        }
+
+        private double bestAsk() {
+            if (asks.isEmpty()) return Double.POSITIVE_INFINITY;
+            return asks.get(0).price;
+        }
+
+        private double bestBid() {
+            if (bids.isEmpty()) return Double.NEGATIVE_INFINITY;
+            return bids.get(0).price;
+        }
+
+        private void consume(boolean buying, int quantity) {
+            List<MutableLevel> levels = buying ? asks : bids;
+            MutableLevel level = levels.get(0);
+            level.quantity -= quantity;
+            if (level.quantity == 0) levels.remove(0);
+        }
+    }
+
+    private static final class MutableLevel {
+        private final double price;
+        private int quantity;
+
+        private MutableLevel(BookLevel level) {
+            this.price = level.price();
+            this.quantity = level.quantity();
+        }
+
+        private BookLevel value() {
+            return new BookLevel(price, quantity);
         }
     }
 }
