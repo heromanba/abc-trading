@@ -228,6 +228,22 @@ public final class BacktestEngine implements AutoCloseable {
         kernel.addVenue(venue);
     }
 
+    public void configureAccount(String venue, double startingBalance, String currency, double leverage) {
+        kernel.configureAccount(venue, startingBalance, currency, leverage);
+    }
+
+    public double accountBalance(String venue, long timestamp) {
+        com.abc.trading.portfolio.AccountState state = kernel.accountState(venue, timestamp);
+        if (state == null) throw new IllegalArgumentException("Unknown account: " + venue);
+        return state.balanceTotal();
+    }
+
+    public com.abc.trading.portfolio.AccountState accountState(String venue, long timestamp) {
+        com.abc.trading.portfolio.AccountState state = kernel.accountState(venue, timestamp);
+        if (state == null) throw new IllegalArgumentException("Unknown account: " + venue);
+        return state;
+    }
+
     public void setMaxFillQuantity(String venue, int quantity) {
         kernel.exchange(venue).setMaxFillQuantity(quantity);
     }

@@ -23,6 +23,7 @@ public final class ExecutionEngine {
     private final MessageBus bus;
     private final RiskEngine riskEngine;
     private final Cache cache;
+    private final Portfolio portfolio;
     private final Map<VenueId, ExecutionClient> clients = new LinkedHashMap<>();
     private final OrderStateMachine stateMachine = new OrderStateMachine();
     private final OrderEmulator orderEmulator;
@@ -30,6 +31,7 @@ public final class ExecutionEngine {
     public ExecutionEngine(MessageBus bus, RiskEngine riskEngine, Portfolio portfolio, Cache cache) {
         this.bus = bus;
         this.riskEngine = riskEngine;
+        this.portfolio = portfolio;
         this.cache = cache;
         this.orderEmulator = new OrderEmulator(this::releaseEmulated);
         bus.subscribe(SubmitOrder.class, this::submit);
@@ -59,14 +61,23 @@ public final class ExecutionEngine {
             }
         });
         bus.subscribe(OrderAccepted.class, accepted -> portfolio.applyOrderIntent(accepted.order()));
+        bus.subscribe(LimitOrderAccepted.class, accepted -> portfolio.applyLimitOrderIntent(accepted.order()));
+        bus.subscribe(OrderRejected.class, rejected -> portfolio.releaseOrder(rejected.order().symbol(), rejected.order().orderId()));
+        bus.subscribe(LimitOrderRejected.class, rejected -> portfolio.releaseOrder(rejected.order().symbol(), rejected.order().orderId()));
         bus.subscribe(OrderFill.class, fill -> {
             stateMachine.fill(fill.orderId(), fill.quantity(), fill.price());
             PositionUpdate positionUpdate = portfolio.applyFill(fill);
             bus.publish(new SettledOrderFill(fill, positionUpdate.position(), positionUpdate.realizedPnl()));
             bus.publish(positionUpdate);
         });
-        bus.subscribe(OrderExpired.class, this::expire);
-        bus.subscribe(OrderCanceled.class, this::venueCanceled);
+        bus.subscribe(OrderExpired.class, event -> {
+            portfolio.releaseOrder(event.symbol(), event.orderId());
+            expire(event);
+        });
+        bus.subscribe(OrderCanceled.class, event -> {
+            portfolio.releaseOrder(event.command().symbol(), event.command().clientOrderId());
+            venueCanceled(event);
+        });
         bus.subscribe(OrderTriggered.class, event -> stateMachine.trigger(event.orderId()));
     }
 

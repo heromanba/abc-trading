@@ -165,6 +165,24 @@ class BacktestEngine:
     def add_venue(self, venue: str) -> None:
         self._java.addVenue(venue)
 
+    def configure_account(
+        self, venue: str, starting_balance: float, currency: str = "USD", leverage: float = 1.0
+    ) -> None:
+        self._java.configureAccount(venue, starting_balance, currency, leverage)
+
+    def account_state(self, venue: str, timestamp: int) -> dict[str, float | str | int]:
+        state = self._java.accountState(venue, timestamp)
+        return {
+            "venue": str(state.venue()),
+            "currency": str(state.currency()),
+            "balance_total": float(state.balanceTotal()),
+            "balance_locked": float(state.balanceLocked()),
+            "balance_free": float(state.balanceFree()),
+            "margin_initial": float(state.marginInitial()),
+            "margin_maintenance": float(state.marginMaintenance()),
+            "timestamp": int(state.tsInit()),
+        }
+
     def add_instrument(self, symbol: str, venue: str, tick_size: float = 0.01) -> None:
         self._java.addInstrument(symbol, venue, tick_size)
 

@@ -54,7 +54,7 @@ public final class NautilusKernel implements AutoCloseable {
         clock = new SimulatedClock();
         cache = new Cache();
         portfolio = new Portfolio(cache);
-        riskEngine = new RiskEngine(Integer.MAX_VALUE, cache);
+        riskEngine = new RiskEngine(Integer.MAX_VALUE, cache, portfolio);
         executionEngine = new ExecutionEngine(bus, riskEngine, portfolio, cache);
         dataEngine = new DataEngine(bus);
         trader = new Trader(bus, cache, () -> inputSequence);
@@ -99,6 +99,17 @@ public final class NautilusKernel implements AutoCloseable {
         bus.subscribe("data.book.l3.*", OrderBookL3Snapshot.class, exchange::processOrderBookL3, 100);
         bus.subscribe("data.book.l3.delta.*", OrderBookL3Delta.class, exchange::processOrderBookL3Delta, 100);
         bus.subscribe("data.trade.*", TradeTick.class, exchange::processTradeTick, 100);
+    }
+
+    public void configureAccount(String venue, double startingBalance, String currency, double leverage) {
+        if (lifecycle.state() != ComponentState.PRE_INITIALIZED && lifecycle.state() != ComponentState.READY) {
+            throw new IllegalStateException("Cannot configure accounts after initialization");
+        }
+        portfolio.configureAccount(venue, startingBalance, currency, leverage);
+    }
+
+    public com.abc.trading.portfolio.AccountState accountState(String venue, long timestamp) {
+        return portfolio.accountState(venue, timestamp);
     }
 
     public void addStrategy(String symbol, StrategyHandler strategy) {

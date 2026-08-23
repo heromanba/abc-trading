@@ -4,6 +4,7 @@ import com.abc.trading.execution.OrderIntent;
 import com.abc.trading.execution.LimitOrderIntent;
 import com.abc.trading.cache.Cache;
 import com.abc.trading.execution.SignalDirection;
+import com.abc.trading.portfolio.Portfolio;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -12,6 +13,7 @@ import java.util.Map;
 public final class RiskEngine {
     private final int maxQuantity;
     private final Cache cache;
+    private final Portfolio portfolio;
     private final Map<String, Double> maxNotionalPerOrder = new LinkedHashMap<>();
     private TradingState tradingState = TradingState.ACTIVE;
 
@@ -20,9 +22,14 @@ public final class RiskEngine {
     }
 
     public RiskEngine(int maxQuantity, Cache cache) {
+        this(maxQuantity, cache, null);
+    }
+
+    public RiskEngine(int maxQuantity, Cache cache, Portfolio portfolio) {
         if (maxQuantity <= 0) throw new IllegalArgumentException("maxQuantity must be positive");
         this.maxQuantity = maxQuantity;
         this.cache = cache;
+        this.portfolio = portfolio;
     }
 
     public RiskDecision evaluate(OrderIntent order) {
@@ -50,6 +57,9 @@ public final class RiskEngine {
             boolean increasesExposure = position > 0 && order.side() == SignalDirection.BUY
                     || position < 0 && order.side() == SignalDirection.SELL;
             if (increasesExposure) return RiskDecision.rejected("trading is reducing exposure");
+        }
+        if (portfolio != null && !portfolio.canReserve(order)) {
+            return RiskDecision.rejected("insufficient available margin");
         }
         return RiskDecision.allow();
     }
@@ -79,6 +89,9 @@ public final class RiskEngine {
             boolean increasesExposure = position > 0 && order.side() == SignalDirection.BUY
                     || position < 0 && order.side() == SignalDirection.SELL;
             if (increasesExposure) return RiskDecision.rejected("trading is reducing exposure");
+        }
+        if (portfolio != null && !portfolio.canReserve(order)) {
+            return RiskDecision.rejected("insufficient available margin");
         }
         return RiskDecision.allow();
     }

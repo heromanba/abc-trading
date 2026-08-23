@@ -39,6 +39,7 @@ def run(input_path: Path, output_path: Path) -> None:
     event_path = output_path.with_name(output_path.stem + "_events.csv")
     engine = BacktestEngine(event_path)
     engine.add_venue(venue)
+    engine.configure_account(venue, 1_000_000.0, "USD", 1.0)
     engine.add_instrument(symbol, venue)
     engine.start()
     try:

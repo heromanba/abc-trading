@@ -2,6 +2,7 @@ package com.abc.trading.portfolio;
 
 import com.abc.trading.cache.Cache;
 import com.abc.trading.execution.OrderIntent;
+import com.abc.trading.execution.LimitOrderIntent;
 import com.abc.trading.execution.OrderFill;
 
 import java.util.LinkedHashMap;
@@ -12,13 +13,19 @@ public final class Portfolio {
     private final Cache cache;
     private final Map<String, Double> averagePrices = new LinkedHashMap<>();
     private final Map<String, Double> realizedPnl = new LinkedHashMap<>();
+    private final AccountLedger accountLedger = new AccountLedger();
 
     public Portfolio(Cache cache) {
         this.cache = cache;
     }
 
     public void applyOrderIntent(OrderIntent order) {
+        accountLedger.reserve(cache.venue(order.symbol()), order.orderId(), order.quantity(), order.price());
         cache.recordOrder(order);
+    }
+
+    public void applyLimitOrderIntent(LimitOrderIntent order) {
+        accountLedger.reserve(cache.venue(order.symbol()), order.orderId(), order.quantity(), order.limitPrice());
     }
 
     public PositionUpdate applyFill(OrderFill fill) {
@@ -48,6 +55,12 @@ public final class Portfolio {
         double cumulativeRealizedPnl = realizedPnl.getOrDefault(fill.symbol(), 0.0) + realizedPnlDelta;
         realizedPnl.put(fill.symbol(), cumulativeRealizedPnl);
         cache.updatePosition(fill.symbol(), nextPosition);
+        if (cache.hasInstrument(fill.symbol())) {
+            String venue = cache.venue(fill.symbol());
+            accountLedger.applyFill(venue, fill, realizedPnlDelta);
+            accountLedger.updatePosition(venue, fill.symbol(), nextPosition,
+                averagePrices.getOrDefault(fill.symbol(), 0.0), fill.marketTimestamp());
+        }
         return new PositionUpdate(
                 fill.symbol(),
                 fill.inputSequence(),
@@ -64,5 +77,25 @@ public final class Portfolio {
 
     public double realizedPnl(String symbol) {
         return realizedPnl.getOrDefault(symbol, 0.0);
+    }
+
+    public void configureAccount(String venue, double startingBalance, String currency, double leverage) {
+        accountLedger.configure(venue, startingBalance, currency, leverage);
+    }
+
+    public boolean canReserve(OrderIntent order) {
+        return accountLedger.canReserve(cache.venue(order.symbol()), order.quantity(), order.price());
+    }
+
+    public boolean canReserve(LimitOrderIntent order) {
+        return accountLedger.canReserve(cache.venue(order.symbol()), order.quantity(), order.limitPrice());
+    }
+
+    public void releaseOrder(String symbol, String orderId) {
+        if (cache.hasInstrument(symbol)) accountLedger.release(orderId);
+    }
+
+    public AccountState accountState(String venue, long timestamp) {
+        return accountLedger.state(venue, timestamp);
     }
 }
