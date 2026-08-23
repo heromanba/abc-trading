@@ -9,6 +9,8 @@ import com.abc.trading.data.BookAction;
 import com.abc.trading.data.OrderBookL3Snapshot;
 import com.abc.trading.data.OrderBookL3Delta;
 import com.abc.trading.data.VenueOrder;
+import com.abc.trading.data.TradeTick;
+import com.abc.trading.data.AggressorSide;
 import com.abc.trading.execution.commands.CancelOrder;
 import com.abc.trading.execution.commands.ModifyOrder;
 
@@ -146,6 +148,17 @@ public final class SimulatedExchange {
         tryMatchOrders(delta.symbol());
     }
 
+    public void processTradeTick(TradeTick trade) {
+        L3BookState book = l3Books.get(trade.symbol());
+        if (book == null) throw new IllegalStateException("No L3 order-book snapshot for " + trade.symbol());
+        currentTimestamp = trade.tsInit();
+        updateMarketDataFromL3Trade(trade.symbol(), trade.tsInit(), trade.price(), trade.sequence());
+        expireDueOrders();
+        drainDueCommands();
+        processTriggers(trade.symbol());
+        book.advanceQueuesOnTrade(trade, this);
+    }
+
     private void updateMarketDataFromL3(String symbol, long timestamp, long sequence) {
         L3BookState book = l3Books.get(symbol);
         double bid = book.bestBid();
@@ -156,6 +169,17 @@ public final class SimulatedExchange {
         marketData.put(symbol, new MarketDataSnapshot(symbol, timestamp, bid, ask,
                 midpoint, midpoint, midpoint, sequence));
         lastPrices.put(symbol, midpoint);
+    }
+
+    private void updateMarketDataFromL3Trade(String symbol, long timestamp, double last, long sequence) {
+        L3BookState book = l3Books.get(symbol);
+        double bid = book.bestBid();
+        double ask = book.bestAsk();
+        if (bid <= 0.0) bid = last;
+        if (!Double.isFinite(ask)) ask = last;
+        marketData.put(symbol, new MarketDataSnapshot(symbol, timestamp, bid, ask,
+                last, last, last, sequence));
+        lastPrices.put(symbol, last);
     }
 
     public void submitLimitOrder(LimitOrderIntent order) {
@@ -780,6 +804,49 @@ public final class SimulatedExchange {
             for (WorkingOrder order : currentQueueOrders) {
                 order.queueAhead = 0;
                 order.queueAheadOrders.clear();
+            }
+        }
+
+        private void advanceQueuesOnTrade(TradeTick trade, SimulatedExchange exchange) {
+            List<WorkingOrder> candidates = new ArrayList<>();
+            for (WorkingOrder order : currentQueueOrders) {
+                if (!order.queueInitialized || order.queueAhead <= 0
+                        || Double.compare(order.price, trade.price()) != 0) continue;
+                boolean passiveSide = switch (trade.aggressorSide()) {
+                    case BUYER -> order.side == SignalDirection.SELL;
+                    case SELLER -> order.side == SignalDirection.BUY;
+                    case NO_AGGRESSOR -> true;
+                };
+                if (passiveSide && order.quantity > order.filledQuantity) candidates.add(order);
+            }
+            candidates.sort((left, right) -> Long.compare(left.insertionSequence, right.insertionSequence));
+
+            int remaining = trade.quantity();
+            for (WorkingOrder order : candidates) {
+                if (remaining <= 0) break;
+                int consumedAhead = Math.min(remaining, order.queueAhead);
+                consumeQueueAhead(order, consumedAhead);
+                remaining -= consumedAhead;
+                if (remaining <= 0) continue;
+                int fillQuantity = Math.min(Math.min(remaining, order.quantity - order.filledQuantity), exchange.maxFillQuantity);
+                exchange.fill(order, trade.price(), fillQuantity, LiquiditySide.MAKER);
+                remaining -= fillQuantity;
+            }
+        }
+
+        private static void consumeQueueAhead(WorkingOrder order, int quantity) {
+            int remaining = quantity;
+            order.queueAhead -= quantity;
+            while (remaining > 0 && !order.queueAheadOrders.isEmpty()) {
+                String venueOrderId = order.queueAheadOrders.keySet().iterator().next();
+                int aheadQuantity = order.queueAheadOrders.get(venueOrderId);
+                if (aheadQuantity <= remaining) {
+                    order.queueAheadOrders.remove(venueOrderId);
+                    remaining -= aheadQuantity;
+                } else {
+                    order.queueAheadOrders.put(venueOrderId, aheadQuantity - remaining);
+                    remaining = 0;
+                }
             }
         }
 

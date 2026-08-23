@@ -176,6 +176,20 @@ class OrderBookL3Delta:
         return self._java
 
 
+class TradeTick:
+    def __init__(self, symbol: str, timestamp: int, price: float, quantity: int,
+                 aggressor_side: str, sequence: int = 0) -> None:
+        self._java = java_class("com.abc.trading.data.TradeTick")(
+            symbol, timestamp, price, quantity,
+            java_class("com.abc.trading.data.AggressorSide").valueOf(aggressor_side),
+            sequence
+        )
+
+    @property
+    def java(self) -> object:
+        return self._java
+
+
 @dataclass(frozen=True)
 class BarType:
     value: str

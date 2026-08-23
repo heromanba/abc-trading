@@ -8,6 +8,7 @@ import com.abc.trading.data.OrderBookSnapshot;
 import com.abc.trading.data.OrderBookDelta;
 import com.abc.trading.data.OrderBookL3Snapshot;
 import com.abc.trading.data.OrderBookL3Delta;
+import com.abc.trading.data.TradeTick;
 import com.abc.trading.data.DataEngine;
 import com.abc.trading.msgbus.MessageBus;
 import com.abc.trading.portfolio.Portfolio;
@@ -97,6 +98,7 @@ public final class NautilusKernel implements AutoCloseable {
         bus.subscribe("data.book.delta.*", OrderBookDelta.class, exchange::processOrderBookDelta, 100);
         bus.subscribe("data.book.l3.*", OrderBookL3Snapshot.class, exchange::processOrderBookL3, 100);
         bus.subscribe("data.book.l3.delta.*", OrderBookL3Delta.class, exchange::processOrderBookL3Delta, 100);
+        bus.subscribe("data.trade.*", TradeTick.class, exchange::processTradeTick, 100);
     }
 
     public void addStrategy(String symbol, StrategyHandler strategy) {
@@ -204,6 +206,17 @@ public final class NautilusKernel implements AutoCloseable {
             inputSequence++;
             clock.setTimestampNs(delta.tsInit());
             dataEngine.publishOrderBookL3Delta(delta);
+        }
+    }
+
+    public void runTradeTicks(TradeTick[] trades) {
+        if (lifecycle.state() != ComponentState.RUNNING) throw new IllegalStateException("Kernel must be running before processing trades");
+        if (trades == null) throw new IllegalArgumentException("trades are required");
+        Arrays.sort(trades, Comparator.comparingLong(TradeTick::tsInit).thenComparing(TradeTick::symbol));
+        for (TradeTick trade : trades) {
+            inputSequence++;
+            clock.setTimestampNs(trade.tsInit());
+            dataEngine.publishTradeTick(trade);
         }
     }
 

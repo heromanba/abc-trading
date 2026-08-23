@@ -47,6 +47,24 @@ mvn -pl java test
 PYTHONPATH=python .venv/bin/python recon/abc_trading_stock_multi_instrument_example.py
 ```
 
+## L3 MBO parity check
+
+The L3 fixture uses individual venue orders, queue-ahead trades, and a market
+order consuming a named ask. Run both backends from the repository root:
+
+```bash
+mvn -pl java test
+PYTHONPATH=python /home/wangchu/anaconda3/envs/py312_nt/bin/python recon/java_l3_order_book_recon.py
+/home/wangchu/anaconda3/envs/py312_nt/bin/python recon/nautilus_l3_order_book_recon.py
+/home/wangchu/anaconda3/envs/py312_nt/bin/python recon/compare_l3_order_book_recon.py \
+	recon/output/nautilus_l3_fills.csv recon/output/java_l3_fills.csv
+```
+
+The comparator checks client order, price, quantity, liquidity side, and fill
+order. Nautilus `venue_order_id` identifies the client order assigned by the
+venue; it does not expose the passive L3 book order ID on `OrderFilled`. The
+Java output retains its passive book-order attribution as a diagnostic field.
+
 ## Java library boundary
 
 The Java `BacktestEngine` is an importable JPype library, not a command-line

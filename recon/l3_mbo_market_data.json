@@ -1,0 +1,22 @@
+{
+  "symbol": "AAPL",
+  "venue": "XNAS",
+  "snapshot": {
+    "timestamp_ns": 100,
+    "sequence": 1,
+    "bids": [
+      {"order_id": "bid-ahead", "side": "BUY", "price": 100.0, "quantity": 5, "sequence": 1}
+    ],
+    "asks": [
+      {"order_id": "ask-1", "side": "SELL", "price": 102.0, "quantity": 5, "sequence": 1}
+    ]
+  },
+  "orders": [
+    {"order_id": "queued-buy", "type": "LIMIT", "side": "BUY", "quantity": 2, "price": 100.0, "timestamp_ns": 100, "sequence": 1},
+    {"order_id": "market-buy", "type": "MARKET", "side": "BUY", "quantity": 3, "price": 100.0, "timestamp_ns": 100, "sequence": 2}
+  ],
+  "events": [
+    {"type": "TRADE", "timestamp_ns": 101, "sequence": 2, "price": 100.0, "quantity": 3, "aggressor_side": "SELLER"},
+    {"type": "TRADE", "timestamp_ns": 102, "sequence": 3, "price": 100.0, "quantity": 4, "aggressor_side": "SELLER"}
+  ]
+}

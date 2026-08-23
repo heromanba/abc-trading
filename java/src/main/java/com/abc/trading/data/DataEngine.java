@@ -38,4 +38,9 @@ public final class DataEngine {
         bus.publish("data.book.l3.delta." + delta.symbol(), delta);
         bus.publish(delta);
     }
+
+    public void publishTradeTick(TradeTick trade) {
+        bus.publish("data.trade." + trade.symbol(), trade);
+        bus.publish(trade);
+    }
 }

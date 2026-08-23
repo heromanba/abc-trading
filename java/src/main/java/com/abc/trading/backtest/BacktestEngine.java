@@ -7,6 +7,7 @@ import com.abc.trading.data.OrderBookSnapshot;
 import com.abc.trading.data.OrderBookDelta;
 import com.abc.trading.data.OrderBookL3Snapshot;
 import com.abc.trading.data.OrderBookL3Delta;
+import com.abc.trading.data.TradeTick;
 import com.abc.trading.events.CsvEventLogger;
 import com.abc.trading.events.Event;
 import com.abc.trading.events.EventLogger;
@@ -331,6 +332,11 @@ public final class BacktestEngine implements AutoCloseable {
     public void runOrderBookL3Deltas(OrderBookL3Delta[] deltas) {
         if (!started) throw new IllegalStateException("Engine must be started before running");
         kernel.runOrderBookL3Deltas(deltas);
+    }
+
+    public void runTradeTicks(TradeTick[] trades) {
+        if (!started) throw new IllegalStateException("Engine must be started before running");
+        kernel.runTradeTicks(trades);
     }
 
     public void submitMarketOrder(String strategyId, String symbol, String orderId,
