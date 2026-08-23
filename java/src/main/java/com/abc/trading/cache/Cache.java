@@ -2,6 +2,7 @@ package com.abc.trading.cache;
 
 import com.abc.trading.execution.OrderIntent;
 import com.abc.trading.data.TickScheme;
+import com.abc.trading.data.InstrumentSpec;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -10,6 +11,7 @@ import java.util.Map;
 public final class Cache {
     private final Map<String, String> instruments = new LinkedHashMap<>();
     private final Map<String, TickScheme> tickSchemes = new LinkedHashMap<>();
+    private final Map<String, InstrumentSpec> instrumentsBySymbol = new LinkedHashMap<>();
     private final Map<String, Integer> positions = new LinkedHashMap<>();
     private final Map<String, OrderIntent> orders = new LinkedHashMap<>();
 
@@ -22,11 +24,26 @@ public final class Cache {
     }
 
     public void addInstrument(String symbol, String venue, TickScheme tickScheme) {
+        addInstrument(InstrumentSpec.defaults(symbol, venue, tickScheme));
+    }
+
+    public void addInstrument(String symbol, String venue, TickScheme tickScheme,
+            String baseCurrency, String quoteCurrency, double marginInitialRate,
+            double marginMaintenanceRate) {
+        addInstrument(new InstrumentSpec(symbol, venue, tickScheme, baseCurrency, quoteCurrency,
+                marginInitialRate, marginMaintenanceRate));
+    }
+
+    public void addInstrument(InstrumentSpec instrument) {
+        String symbol = instrument.symbol();
+        String venue = instrument.venue();
+        TickScheme tickScheme = instrument.tickScheme();
         if (symbol == null || symbol.isBlank()) throw new IllegalArgumentException("symbol is required");
         if (venue == null || venue.isBlank()) throw new IllegalArgumentException("venue is required");
         if (tickScheme == null) throw new IllegalArgumentException("tickScheme is required");
         instruments.put(symbol, venue);
         tickSchemes.put(symbol, tickScheme);
+        instrumentsBySymbol.put(symbol, instrument);
         positions.putIfAbsent(symbol, 0);
     }
 
@@ -44,6 +61,12 @@ public final class Cache {
         TickScheme tickScheme = tickSchemes.get(symbol);
         if (tickScheme == null) throw new IllegalArgumentException("Unknown instrument: " + symbol);
         return tickScheme.tickSize(price);
+    }
+
+    public InstrumentSpec instrument(String symbol) {
+        InstrumentSpec instrument = instrumentsBySymbol.get(symbol);
+        if (instrument == null) throw new IllegalArgumentException("Unknown instrument: " + symbol);
+        return instrument;
     }
 
     public int position(String symbol) {

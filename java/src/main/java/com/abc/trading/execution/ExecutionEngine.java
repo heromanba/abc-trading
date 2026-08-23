@@ -11,6 +11,7 @@ import com.abc.trading.execution.commands.SubmitOrder;
 import com.abc.trading.execution.commands.CancelOrder;
 import com.abc.trading.execution.commands.ModifyOrder;
 import com.abc.trading.data.MarketDataSnapshot;
+import com.abc.trading.portfolio.AccountStateEvent;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -60,8 +61,14 @@ public final class ExecutionEngine {
                 bus.publish(new LimitOrderRejected(order, error.getMessage()));
             }
         });
-        bus.subscribe(OrderAccepted.class, accepted -> portfolio.applyOrderIntent(accepted.order()));
-        bus.subscribe(LimitOrderAccepted.class, accepted -> portfolio.applyLimitOrderIntent(accepted.order()));
+        bus.subscribe(OrderAccepted.class, accepted -> {
+            portfolio.applyOrderIntent(accepted.order());
+            publishAccountState(accepted.order().symbol(), accepted.order().marketTimestamp());
+        });
+        bus.subscribe(LimitOrderAccepted.class, accepted -> {
+            portfolio.applyLimitOrderIntent(accepted.order());
+            publishAccountState(accepted.order().symbol(), accepted.order().marketTimestamp());
+        });
         bus.subscribe(OrderRejected.class, rejected -> portfolio.releaseOrder(rejected.order().symbol(), rejected.order().orderId()));
         bus.subscribe(LimitOrderRejected.class, rejected -> portfolio.releaseOrder(rejected.order().symbol(), rejected.order().orderId()));
         bus.subscribe(OrderFill.class, fill -> {
@@ -69,6 +76,10 @@ public final class ExecutionEngine {
             PositionUpdate positionUpdate = portfolio.applyFill(fill);
             bus.publish(new SettledOrderFill(fill, positionUpdate.position(), positionUpdate.realizedPnl()));
             bus.publish(positionUpdate);
+            if (cache.hasInstrument(fill.symbol())) {
+                String venue = cache.venue(fill.symbol());
+                bus.publish(new AccountStateEvent(portfolio.accountState(venue, fill.marketTimestamp())));
+            }
         });
         bus.subscribe(OrderExpired.class, event -> {
             portfolio.releaseOrder(event.symbol(), event.orderId());
@@ -79,6 +90,12 @@ public final class ExecutionEngine {
             venueCanceled(event);
         });
         bus.subscribe(OrderTriggered.class, event -> stateMachine.trigger(event.orderId()));
+    }
+
+    private void publishAccountState(String symbol, long timestamp) {
+        if (cache.hasInstrument(symbol)) {
+            bus.publish(new AccountStateEvent(portfolio.accountStateForSymbol(symbol, timestamp)));
+        }
     }
 
     public void registerClient(ExecutionClient client) {

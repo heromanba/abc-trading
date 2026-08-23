@@ -66,6 +66,86 @@ class AccountLedgerTest {
         assertEquals(1_008.0, closed.balanceFree(), 1e-9);
     }
 
+    @Test
+    void cashAccountSettlesNotionalAndDoesNotLockPositionMargin() {
+        Cache cache = cache();
+        Portfolio portfolio = new Portfolio(cache);
+        portfolio.configureAccount("XNAS", 1_000.0, "USD", 1.0, AccountType.CASH);
+        portfolio.applyOrderIntent(order("buy", SignalDirection.BUY, 2, 100.0));
+
+        AccountState reserved = portfolio.accountState("XNAS", 100);
+        assertEquals(200.0, reserved.balanceLocked(), 1e-9);
+        assertEquals(800.0, reserved.balanceFree(), 1e-9);
+
+        portfolio.applyFill(fill("buy", SignalDirection.BUY, 2, 100.0, 1.0));
+        AccountState settled = portfolio.accountState("XNAS", 101);
+        assertEquals(799.0, settled.balanceTotal(), 1e-9);
+        assertEquals(0.0, settled.balanceLocked(), 1e-9);
+        assertEquals(799.0, settled.balanceFree(), 1e-9);
+    }
+
+    @Test
+    void accountSupportsAdditionalCurrencyBalances() {
+        Cache cache = cache();
+        Portfolio portfolio = new Portfolio(cache);
+        portfolio.configureAccount("XNAS", 1_000.0, "USD", 1.0);
+        portfolio.deposit("XNAS", "EUR", 250.0);
+
+        AccountState state = portfolio.accountState("XNAS", 100);
+
+        assertEquals(2, state.balances().size());
+        assertEquals(250.0, state.balances().get("EUR").free(), 1e-9);
+    }
+
+    @Test
+    void instrumentMarginRatesControlInitialAndMaintenanceRequirements() {
+        Cache cache = new Cache();
+        cache.addInstrument("AAPL", "XNAS", TickScheme.fixed(0.01),
+                "AAPL", "USD", 0.10, 0.05);
+        Portfolio portfolio = new Portfolio(cache);
+        portfolio.configureAccount("XNAS", 1_000.0, "USD", 2.0);
+        portfolio.applyOrderIntent(order("buy", SignalDirection.BUY, 2, 100.0));
+        portfolio.applyFill(fill("buy", SignalDirection.BUY, 2, 100.0, 0.0));
+
+        AccountState state = portfolio.accountState("XNAS", 100);
+
+        assertEquals(10.0, state.marginInitial(), 1e-9);
+        assertEquals(5.0, state.marginMaintenance(), 1e-9);
+    }
+
+    @Test
+    void cashAccountOnlyAllowsSellingHeldPosition() {
+        Cache cache = cache();
+        Portfolio portfolio = new Portfolio(cache);
+        portfolio.configureAccount("XNAS", 1_000.0, "USD", 1.0, AccountType.CASH);
+        RiskEngine risk = new RiskEngine(100, cache, portfolio);
+
+        assertFalse(risk.evaluate(order("sell", SignalDirection.SELL, 1, 100.0)).approved());
+        cache.updatePosition("AAPL", 1);
+        assertTrue(risk.evaluate(order("sell-held", SignalDirection.SELL, 1, 100.0)).approved());
+    }
+
+    @Test
+    void convertsQuotedInstrumentMarginIntoAccountCurrency() {
+        Cache cache = new Cache();
+        cache.addInstrument("DAX", "XEUR", TickScheme.fixed(0.01),
+                "DAX", "EUR", 1.0, 0.5);
+        Portfolio portfolio = new Portfolio(cache);
+        portfolio.configureAccount("XEUR", 1_000.0, "USD", 1.0);
+        RiskEngine risk = new RiskEngine(100, cache, portfolio);
+        OrderIntent order = new OrderIntent("strategy", "DAX", 1, 100, "corr", "eur-buy",
+                SignalDirection.BUY, 1, 100.0, 0, 0.0);
+
+        assertFalse(risk.evaluate(order).approved());
+        portfolio.setFxRate("EUR", "USD", 1.10);
+        assertTrue(risk.evaluate(order).approved());
+        portfolio.applyOrderIntent(order);
+
+        AccountState state = portfolio.accountState("XEUR", 100);
+        assertEquals(110.0, state.balanceLocked(), 1e-9);
+        assertEquals(890.0, state.balanceFree(), 1e-9);
+    }
+
     private static Cache cache() {
         Cache cache = new Cache();
         cache.addInstrument("AAPL", "XNAS", TickScheme.fixed(0.01));

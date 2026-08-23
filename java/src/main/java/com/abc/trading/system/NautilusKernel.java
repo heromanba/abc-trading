@@ -9,6 +9,7 @@ import com.abc.trading.data.OrderBookDelta;
 import com.abc.trading.data.OrderBookL3Snapshot;
 import com.abc.trading.data.OrderBookL3Delta;
 import com.abc.trading.data.TradeTick;
+import com.abc.trading.portfolio.AccountType;
 import com.abc.trading.data.DataEngine;
 import com.abc.trading.msgbus.MessageBus;
 import com.abc.trading.portfolio.Portfolio;
@@ -75,6 +76,16 @@ public final class NautilusKernel implements AutoCloseable {
         cache.addInstrument(symbol, venue, tickScheme);
     }
 
+    public void addInstrument(String symbol, String venue, TickScheme tickScheme,
+            String baseCurrency, String quoteCurrency, double marginInitialRate,
+            double marginMaintenanceRate) {
+        if (lifecycle.state() != ComponentState.PRE_INITIALIZED && lifecycle.state() != ComponentState.READY) {
+            throw new IllegalStateException("Cannot add instruments after initialization");
+        }
+        cache.addInstrument(symbol, venue, tickScheme, baseCurrency, quoteCurrency,
+                marginInitialRate, marginMaintenanceRate);
+    }
+
     public void addVenue(String venue) {
         addVenue(SimulatedVenueConfig.defaults(new VenueId(venue)));
     }
@@ -102,10 +113,23 @@ public final class NautilusKernel implements AutoCloseable {
     }
 
     public void configureAccount(String venue, double startingBalance, String currency, double leverage) {
+        configureAccount(venue, startingBalance, currency, leverage, AccountType.MARGIN);
+    }
+
+    public void configureAccount(String venue, double startingBalance, String currency, double leverage,
+            AccountType accountType) {
         if (lifecycle.state() != ComponentState.PRE_INITIALIZED && lifecycle.state() != ComponentState.READY) {
             throw new IllegalStateException("Cannot configure accounts after initialization");
         }
-        portfolio.configureAccount(venue, startingBalance, currency, leverage);
+        portfolio.configureAccount(venue, startingBalance, currency, leverage, accountType);
+    }
+
+    public void deposit(String venue, String currency, double amount) {
+        portfolio.deposit(venue, currency, amount);
+    }
+
+    public void setFxRate(String fromCurrency, String toCurrency, double rate) {
+        portfolio.setFxRate(fromCurrency, toCurrency, rate);
     }
 
     public com.abc.trading.portfolio.AccountState accountState(String venue, long timestamp) {

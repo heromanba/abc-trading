@@ -166,9 +166,17 @@ class BacktestEngine:
         self._java.addVenue(venue)
 
     def configure_account(
-        self, venue: str, starting_balance: float, currency: str = "USD", leverage: float = 1.0
+        self, venue: str, starting_balance: float, currency: str = "USD", leverage: float = 1.0,
+        account_type: str = "MARGIN"
     ) -> None:
-        self._java.configureAccount(venue, starting_balance, currency, leverage)
+        account_class = java_class("com.abc.trading.portfolio.AccountType")
+        self._java.configureAccount(venue, starting_balance, currency, leverage, account_class.valueOf(account_type))
+
+    def deposit(self, venue: str, currency: str, amount: float) -> None:
+        self._java.deposit(venue, currency, amount)
+
+    def set_fx_rate(self, from_currency: str, to_currency: str, rate: float) -> None:
+        self._java.setFxRate(from_currency, to_currency, rate)
 
     def account_state(self, venue: str, timestamp: int) -> dict[str, float | str | int]:
         state = self._java.accountState(venue, timestamp)
@@ -183,8 +191,17 @@ class BacktestEngine:
             "timestamp": int(state.tsInit()),
         }
 
-    def add_instrument(self, symbol: str, venue: str, tick_size: float = 0.01) -> None:
-        self._java.addInstrument(symbol, venue, tick_size)
+    def add_instrument(
+        self, symbol: str, venue: str, tick_size: float = 0.01,
+        base_currency: str | None = None, quote_currency: str | None = None,
+        margin_initial_rate: float = 1.0, margin_maintenance_rate: float = 0.5,
+    ) -> None:
+        if base_currency is None and quote_currency is None:
+            self._java.addInstrument(symbol, venue, tick_size)
+            return
+        self._java.addInstrument(symbol, venue, java_class("com.abc.trading.data.TickScheme").fixed(tick_size),
+                                 base_currency or symbol, quote_currency or "USD",
+                                 margin_initial_rate, margin_maintenance_rate)
 
     def set_max_fill_quantity(self, venue: str, quantity: int) -> None:
         self._java.setMaxFillQuantity(venue, quantity)

@@ -16,5 +16,6 @@ public enum EventType {
     ORDER_EMULATED,
     ORDER_RELEASED,
     ORDER_FILL,
-    POSITION_UPDATE
+    POSITION_UPDATE,
+    ACCOUNT_STATE
 }

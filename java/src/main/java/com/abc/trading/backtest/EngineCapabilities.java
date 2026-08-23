@@ -14,7 +14,7 @@ public final class EngineCapabilities {
                 new EngineCapability("backtest-data-iterator", true, "crates/backtest/src/data_iterator.rs", "Bar-only iterator"),
                 new EngineCapability("latency-model", true, "crates/execution/src/models/latency.rs", "Static operation latency with FIFO timestamp ordering"),
                 new EngineCapability("fee-model", true, "crates/execution/src/models/fee.rs", "Fixed, maker/taker, per-contract, probability, capped, and notional models"),
-                new EngineCapability("accounting", false, "crates/portfolio/src/portfolio.rs", "Minimal position and realized PnL"),
+                new EngineCapability("accounting", true, "crates/portfolio/src/portfolio.rs", "Single-currency and configured multi-currency balance, margin, commission, and PnL ledger"),
                 new EngineCapability("actors", true, "crates/common/src/actor/mod.rs", "Lifecycle interface only"),
                 new EngineCapability("execution-algorithms", true, "crates/trading/src/algorithm/mod.rs", "Interface only")
         );

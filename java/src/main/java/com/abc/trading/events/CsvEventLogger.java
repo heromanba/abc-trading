@@ -22,7 +22,7 @@ public final class CsvEventLogger implements EventLogger {
                     StandardOpenOption.TRUNCATE_EXISTING,
                     StandardOpenOption.WRITE
             );
-            writer.write("input_sequence,lifecycle_sequence,market_timestamp,symbol,source_event_type,event_type,strategy_id,signal_direction,correlation_id,order_id,price,quantity,current_position,realized_pnl,commission,commission_currency,liquidity_side,venue_order_id");
+            writer.write("input_sequence,lifecycle_sequence,market_timestamp,symbol,source_event_type,event_type,strategy_id,signal_direction,correlation_id,order_id,price,quantity,current_position,realized_pnl,commission,commission_currency,liquidity_side,venue_order_id,account_currency,account_total,account_locked,account_free,margin_initial,margin_maintenance");
             writer.newLine();
             writer.flush();
         } catch (IOException e) {
@@ -68,7 +68,13 @@ public final class CsvEventLogger implements EventLogger {
                 + formatDouble(event.commission()) + ","
                 + nullSafe(event.commissionCurrency()) + ","
                 + (event.liquiditySide() == null ? "" : event.liquiditySide().name())
-                + "," + nullSafe(event.venueOrderId());
+                + "," + nullSafe(event.venueOrderId())
+                + "," + nullSafe(event.accountCurrency())
+                + "," + formatDouble(event.accountTotal())
+                + "," + formatDouble(event.accountLocked())
+                + "," + formatDouble(event.accountFree())
+                + "," + formatDouble(event.marginInitial())
+                + "," + formatDouble(event.marginMaintenance());
     }
 
     private static String nullSafe(String value) {

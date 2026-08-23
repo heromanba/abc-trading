@@ -65,7 +65,7 @@ def compare(expected_path: Path, actual_path: Path) -> int:
     ) as actual_file:
         expected = csv.DictReader(expected_file)
         actual = csv.DictReader(actual_file)
-        if tuple(expected.fieldnames or ()) != COLUMNS or tuple(actual.fieldnames or ()) != COLUMNS:
+        if not set(COLUMNS).issubset(expected.fieldnames or ()) or not set(COLUMNS).issubset(actual.fieldnames or ()):
             raise ValueError("unexpected reconciliation CSV schema")
 
         expected_rows = _canonical_rows(expected)

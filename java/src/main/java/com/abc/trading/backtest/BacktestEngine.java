@@ -8,6 +8,7 @@ import com.abc.trading.data.OrderBookDelta;
 import com.abc.trading.data.OrderBookL3Snapshot;
 import com.abc.trading.data.OrderBookL3Delta;
 import com.abc.trading.data.TradeTick;
+import com.abc.trading.portfolio.AccountType;
 import com.abc.trading.events.CsvEventLogger;
 import com.abc.trading.events.Event;
 import com.abc.trading.events.EventLogger;
@@ -37,6 +38,7 @@ import com.abc.trading.execution.commands.ModifyOrder;
 import com.abc.trading.execution.OrderFill;
 import com.abc.trading.execution.SettledOrderFill;
 import com.abc.trading.portfolio.PositionUpdate;
+import com.abc.trading.portfolio.AccountStateEvent;
 import com.abc.trading.system.ComponentState;
 import com.abc.trading.system.NautilusKernel;
 import com.abc.trading.trading.StrategyHandler;
@@ -68,6 +70,7 @@ public final class BacktestEngine implements AutoCloseable {
         kernel.bus().subscribe(OrderFill.class, this::logOrderFill, 100);
         kernel.bus().subscribe(SettledOrderFill.class, this::logSettledOrderFill, 100);
         kernel.bus().subscribe(PositionUpdate.class, this::logPositionUpdate);
+        kernel.bus().subscribe(AccountStateEvent.class, this::logAccountState);
         kernel.bus().subscribe(OrderCanceled.class, event -> logCancel(event.command(), EventType.ORDER_CANCEL));
         kernel.bus().subscribe(OrderCancelRejected.class, event -> logCancel(event.command(), EventType.ORDER_CANCEL_REJECT));
         kernel.bus().subscribe(OrderModified.class, event -> logModify(event.command(), EventType.ORDER_MODIFY));
@@ -192,6 +195,15 @@ public final class BacktestEngine implements AutoCloseable {
                 "", update.orderId(), 0.0, update.quantity(), update.position(), update.realizedPnl()));
     }
 
+    private void logAccountState(AccountStateEvent event) {
+        var state = event.state();
+        log(new Event(0, nextLifecycleSequence(), state.tsInit(), "",
+                AccountStateEvent.class.getSimpleName(), EventType.ACCOUNT_STATE,
+                "", SignalDirection.HOLD, "", "", 0.0, 0, 0, 0.0, 0.0, state.currency(), null, "",
+                state.currency(), state.balanceTotal(), state.balanceLocked(), state.balanceFree(),
+                state.marginInitial(), state.marginMaintenance()));
+    }
+
     private void log(Event event) {
         logger.log(event);
     }
@@ -230,6 +242,19 @@ public final class BacktestEngine implements AutoCloseable {
 
     public void configureAccount(String venue, double startingBalance, String currency, double leverage) {
         kernel.configureAccount(venue, startingBalance, currency, leverage);
+    }
+
+    public void configureAccount(String venue, double startingBalance, String currency, double leverage,
+            AccountType accountType) {
+        kernel.configureAccount(venue, startingBalance, currency, leverage, accountType);
+    }
+
+    public void deposit(String venue, String currency, double amount) {
+        kernel.deposit(venue, currency, amount);
+    }
+
+    public void setFxRate(String fromCurrency, String toCurrency, double rate) {
+        kernel.setFxRate(fromCurrency, toCurrency, rate);
     }
 
     public double accountBalance(String venue, long timestamp) {
