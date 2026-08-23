@@ -1,3 +1,7 @@
+---
+title: ABC Trading Java Rewrite
+---
+
 # ABC Trading Java Rewrite
 
 ## Implementation Status Report
@@ -6,21 +10,25 @@
 
 **Purpose:** describe what is implemented in Java so far, how the pieces fit together, how each class is used, and why the boundaries were chosen.
 
-**Status:** implementation snapshot as of 2026-08-22.
+**Status:** implementation snapshot as of 2026-08-23.
 
 ## 1. Executive Summary
 
 The Java rewrite is a deterministic, synchronous, backtest-oriented trading runtime shaped after Nautilus Trader. Java owns the runtime loop, message routing, order state, risk boundary, simulated execution, portfolio position state, and event logging. Python owns the strategy callback and historical-data loading at the current integration boundary.
 
-The strongest verified feature is cross-backend behavioral reconciliation. The shared historical-bar workflow currently compares 228 semantic lifecycle rows between Nautilus and Java. The dedicated order-book fixture compares five fills across multiple price levels, both market directions, a resting limit order, and liquidity classification.
+The strongest verified feature is cross-backend behavioral reconciliation. The shared historical-bar workflow currently compares 228 semantic lifecycle rows between Nautilus and Java. The dedicated L3 MBO fixture compares two fills across a named venue order, queue-ahead trades, maker/taker classification, and deterministic fill ordering.
 
 ### Verified results
 
 ```text
 mvn -q clean test
 MATCH rows=228
-MATCH fills=5
+MATCH L3 fills=2
 ```
+
+The current Java test suite covers the deterministic runtime, L3 queue behavior,
+and account settlement. Account-state events expose total, locked, free,
+initial-margin, maintenance-margin, and currency information.
 
 ### Main implemented feature groups
 
@@ -35,11 +43,15 @@ MATCH fills=5
 - local order emulation
 - fixed tick-size configuration for Rust-supported `TICKS` trailing offsets
 - L2 aggregate order-book snapshots and deltas
+- L3 individual venue-order snapshots and deltas
+- trade-driven L3 queue-ahead consumption
 - partial fills and multiple fills across price levels
 - maker/taker liquidity classification
 - static operation latency
 - multiple fee models
-- minimal net-position and realized-PnL accounting
+- cash and margin account settlement
+- instrument-specific margin rates and explicit FX conversion
+- multi-currency balance views and account-state events
 - CSV lifecycle logging
 - Rust-vs-Java reconciliation fixtures and comparators
 
@@ -115,6 +127,9 @@ BAR / MARKET SNAPSHOT / ORDER BOOK SNAPSHOT OR DELTA
                                   order state + portfolio fill
                                                |
                                                v
+                               AccountLedger + events
+                                                |
+                                                v
                                       CSV event logger
 ```
 
@@ -140,7 +155,7 @@ com.abc.trading
 |-- indicators        EMA and SMA
 |-- model             money and immutable order models
 |-- msgbus            typed synchronous bus and transport backings
-|-- portfolio         positions, realized PnL, configuration
+|-- portfolio         positions, balances, margin, PnL, account events
 |-- reconciliation    Java-side comparison DTOs
 |-- risk              risk decisions and trading state
 |-- system            kernel, clock, trader, component lifecycle
@@ -165,12 +180,15 @@ The Python bridge lives under `python/abc_trading`; reconciliation scripts live 
 | Partial/multiple fills | Implemented | working orders and `OrderStateMachine` | Quantity and average fill price tracked |
 | L2 book snapshots | Implemented | `OrderBookSnapshot`, `BookLevel` | Aggregate depth per price level |
 | L2 book deltas | Implemented | `OrderBookDelta`, `BookAction` | `ADD`, `UPDATE`, `DELETE`, `CLEAR` |
-| L3 individual venue queue | Partial | not modeled as individual venue orders | Strategy-order FIFO exists; full venue-order IDs/queue accounting is future work |
+| L3 individual venue queue | Implemented | `VenueOrder`, `OrderBookL3Snapshot`, `OrderBookL3Delta`, `TradeTick`, `SimulatedExchange` | Individual order identity, price-time priority, queue-ahead deltas, and trade-driven queue consumption |
 | Liquidity classification | Implemented | `OrderFill.liquiditySide` | `MAKER`/`TAKER` included in reconciliation CSV |
 | Fees | Implemented | `FeeModel` implementations | Fixed, maker/taker, per-contract, probability, capped, notional/tiered |
 | Static latency | Implemented | `LatencyModel`, `StaticLatencyModel` | Operation latency with deterministic timestamp ordering |
-| Minimal accounting | Implemented | `Portfolio`, `PositionUpdate`, `Money` | Net position and realized PnL |
-| Cash/margin account | Partial | no full balance/margin engine | Current portfolio is not a complete Nautilus account model |
+| Position/PnL accounting | Implemented | `Portfolio`, `PositionUpdate`, `Money` | Net position, average price, realized PnL, and commission effects |
+| Cash/margin account | Implemented baseline | `AccountLedger`, `AccountState`, `AccountBalance`, `AccountType` | Reservations, free/locked balances, cash settlement, initial/maintenance margin |
+| Instrument margin metadata | Implemented | `InstrumentSpec`, `Cache` | Quote/base currencies and instrument-specific margin rates |
+| FX conversion | Implemented baseline | `AccountLedger`, `Portfolio`, `BacktestEngine` | Explicit configured rates for cross-currency margin and PnL conversion |
+| Account-state events | Implemented | `AccountStateEvent`, `Event`, `CsvEventLogger` | Balance and margin transitions are observable in canonical logs |
 | Decimal accounting | Partial | primitive `double` | `BigDecimal`/fixed-point remains a future accounting hardening step |
 | Local order emulator | Implemented | `OrderEmulator` | Snapshot-triggered local ownership and release |
 | Disruptor bus | Scaffold only | `DisruptorMessageBus` | Publish method is still a TODO |
@@ -210,6 +228,12 @@ The following catalog covers the Java production types currently under `java/src
 | `BookLevel` | Price and aggregate quantity at one level | Small immutable unit for L2 depth |
 | `OrderBookSnapshot` | Complete immutable bid/ask ladder | Snapshot replacement is simple and deterministic for replay |
 | `OrderBookDelta` | One book mutation | Mirrors Rust add/update/delete/clear event semantics |
+| `VenueOrder` | Individual venue order with side, price, size, and sequence | Preserves L3 MBO identity instead of flattening depth into aggregate levels |
+| `OrderBookL3Snapshot` | Complete individual-order bid/ask state | Establishes deterministic price-time priority at snapshot boundaries |
+| `OrderBookL3Delta` | Add, update, delete, or clear one venue order | Allows queue position to respond to exact venue-order mutations |
+| `TradeTick` | Executed market trade with aggressor side | Drives queue-ahead consumption independently from book-depth updates |
+| `AggressorSide` | Buyer, seller, or no-aggressor trade classification | Determines which passive queue can advance |
+| `InstrumentSpec` | Base/quote currencies and initial/maintenance margin rates | Carries the instrument facts needed by accounting and risk |
 | `BookAction` | `ADD`, `UPDATE`, `DELETE`, `CLEAR` | Makes book mutation intent explicit |
 | `TickScheme` | Instrument-owned fixed tick increment | Rust currently supports `TICKS` through `price_increment`; Java avoids a hard-coded exchange tick in that path |
 | `DataEngine` | Publishes bars, market snapshots, books, and deltas | Separates data distribution from data ownership |
@@ -220,7 +244,7 @@ The following catalog covers the Java production types currently under `java/src
 
 | Type | Usage | Design rationale |
 |---|---|---|
-| `Event` | Canonical CSV row with lifecycle, order, PnL, commission, and liquidity | One stable schema supports cross-backend comparison |
+| `Event` | Canonical CSV row with lifecycle, order, PnL, commission, liquidity, balance, and margin | One stable schema supports cross-backend comparison and account evidence |
 | `EventType` | Semantic event vocabulary | Keeps logger output independent from concrete Java event class names |
 | `EventLogger` | Event logging contract | Allows CSV or another sink later |
 | `CsvEventLogger` | Writes synchronized CSV rows | Human-readable evidence and simple reconciliation input |
@@ -323,10 +347,15 @@ The following catalog covers the Java production types currently under `java/src
 
 | Type | Usage | Design rationale |
 |---|---|---|
-| `Portfolio` | Applies fills, updates positions, tracks average price and realized PnL | Minimal deterministic state owner for current backtest slice |
+| `Portfolio` | Applies fills, updates positions, tracks average price, PnL, and account settlement | Keeps position and account transitions coordinated after execution |
 | `PositionUpdate` | Post-fill position/PnL event | Makes portfolio transition observable |
 | `PortfolioConfig` | PnL/snapshot options | Configuration boundary for future account behavior |
-| `RiskEngine` | Validates side, quantity, instrument, price, notional, and trading state | Keeps risk before venue execution |
+| `AccountLedger` | Tracks currency balances, order reservations, position margin, FX conversion, and settlement | Isolates account mutation from order matching and supports deterministic snapshots |
+| `AccountState` | Immutable primary balance and margin snapshot with per-currency balances | Mirrors Nautilus `AccountState` as an observable accounting boundary |
+| `AccountBalance` | Total, locked, and free amount for one currency | Preserves the invariant `total = locked + free` |
+| `AccountType` | `CASH` or `MARGIN` settlement policy | Makes borrowing and position-reservation semantics explicit |
+| `AccountStateEvent` | Publishes an account snapshot after acceptance or settlement | Allows account changes to enter the same event evidence stream |
+| `RiskEngine` | Validates side, quantity, instrument, price, notional, trading state, and available margin | Keeps risk before venue execution and prevents unsupported exposure |
 | `RiskDecision` | Allow/reject result | Separates risk result from order event emission |
 | `RiskEngineConfig` | Immutable risk options | Future policy configuration boundary |
 | `TradingState` | Active, halted, reducing state vocabulary | Enables global risk policy changes |
@@ -392,7 +421,39 @@ CLEAR   -> clear one side
 
 Market buys read asks from lowest to highest. Market sells read bids from highest to lowest. Crossed limits take available opposite-side liquidity; unfilled limits rest as makers. Working strategy orders are sorted by better price first and insertion sequence second.
 
-### 6.3 Numeric representation
+For L3 MBO, each `VenueOrder` remains distinct. Orders at the same price are
+ordered by venue sequence and then ID. A resting client order snapshots the
+quantity and IDs ahead of it. Venue deletes and size decreases advance that
+queue; size increases retain the venue order's position. A trade tick advances
+only the passive side selected by its aggressor side, consuming queue-ahead
+quantity before a client maker order receives a fill.
+
+### 6.3 Account and margin behavior
+
+`AccountLedger` is deliberately downstream of execution and upstream of
+account-state logging:
+
+```text
+accepted order -> reserve initial margin or cash
+venue fill     -> release proportional reservation
+               -> apply commission and realized PnL
+               -> update position margin
+               -> publish AccountStateEvent
+cancel/expiry/reject -> release reservation
+```
+
+Margin accounts reserve quote-currency notional multiplied by the instrument's
+initial-margin rate and divided by leverage. Open positions report both initial
+and maintenance margin using `InstrumentSpec`. Cash accounts reserve buy-side
+funds, settle buy/sell notional in the quote currency, and reject uncovered
+sells. Additional currencies can be deposited and converted through explicitly
+configured FX rates; missing conversion data rejects a reservation rather than
+silently treating currencies as equal.
+
+These rules are a deterministic backtest baseline. They do not yet model every
+Nautilus derivative margin model, mark-to-market unrealized PnL, or live FX feed.
+
+### 6.4 Numeric representation
 
 The current runtime uses primitive `double` prices and PnL for bridge and hot-path simplicity. Raw source prices are not rounded in the Python data loader. Reconciliation uses shared instrument precision and a numeric tolerance. A future production accounting layer should use fixed-point integers or `BigDecimal` for money and exact decimal settlement while retaining primitives for routing/indexing where appropriate.
 
@@ -453,6 +514,37 @@ limit-buy-1   100.00 x 2  MAKER
 
 The order-book comparator checks order, price, quantity, and liquidity side for every fill.
 
+### L3 MBO workflow
+
+Shared fixture:
+
+```text
+recon/l3_mbo_market_data.json
+```
+
+The Java runner and Nautilus runner both load the same individual venue orders,
+submit the same limit and market orders, process the same seller-aggressor
+trades, and emit compact fill rows. The comparator verifies client order,
+price, quantity, liquidity side, and fill order:
+
+```text
+MATCH L3 fills=2
+```
+
+Nautilus `venue_order_id` identifies the client order's venue assignment. The
+Java simulator additionally records the passive L3 book order ID when it is
+known; that diagnostic identity is intentionally not treated as a Rust parity
+field because it is not present in Nautilus `OrderFilled`.
+
+### Account workflow
+
+Account evidence is emitted through the same Java CSV stream as lifecycle
+events. `ACCOUNT_STATE` rows contain the primary currency, total, locked and
+free balances, initial margin, and maintenance margin. The account tests cover
+margin reservations, cash notional settlement, commissions, realized PnL,
+instrument-specific rates, FX conversion, uncovered cash sells, and additional
+currency balances.
+
 ## 9. Tests and Validation
 
 Current Java tests cover:
@@ -471,21 +563,70 @@ Current Java tests cover:
 - tick configuration
 - L2 depth traversal and FIFO
 - persistent order-book deltas
+- individual L3 venue-order identity and queue-ahead changes
+- trade-driven queue consumption and aggressor-side behavior
 - portfolio position/PnL behavior
+- cash/margin account settlement and account-state events
 
-The Java module currently contains 122 production source files and 13 test files. The test suite is intentionally focused on the current deterministic backtest slice; it is not yet a complete replacement of all Nautilus modules.
+The Java module currently contains 133 production source files and 15 test files. The test suite is intentionally focused on the current deterministic backtest slice; it is not yet a complete replacement of all Nautilus modules.
 
 ## 10. Current Gaps and Recommended Next Work
 
-1. **Full account model:** cash balances, margin, buying power, leverage, multi-currency conversion, unrealized PnL, and account snapshots.
-2. **L3 order book:** individual venue orders, queue position, order IDs, and exact queue adjustments on deltas.
-3. **Persistent event store:** replayable event persistence beyond CSV evidence logs.
-4. **Live adapters:** REST/WebSocket data and execution clients, reconnects, throttling, and external reconciliation.
-5. **Exact accounting:** fixed-point or `BigDecimal` money model with explicit currency precision.
-6. **Execution algorithms:** actual algorithm scheduling rather than the current interface boundary.
-7. **Disruptor integration:** complete the `DisruptorMessageBus` publication path only if profiling shows the synchronous bus is insufficient.
-8. **Capability metadata refresh:** update `EngineCapabilities` descriptions to reflect the now-implemented L2 book and lifecycle behavior.
+1. **Exact account parity:** instrument-specific derivative margin models, mark-to-market unrealized PnL, dynamic FX data, and full Rust account-event comparison.
+2. **Persistent event store:** replayable event persistence beyond CSV evidence logs.
+3. **Live adapters:** REST/WebSocket data and execution clients, reconnects, throttling, and external reconciliation.
+4. **Exact accounting:** fixed-point or `BigDecimal` money model with explicit currency precision.
+5. **Execution algorithms:** actual algorithm scheduling rather than the current interface boundary.
+6. **Disruptor integration:** complete the `DisruptorMessageBus` publication path only if profiling shows the synchronous bus is insufficient.
 
 ## 11. Design Conclusion
 
-The Java implementation has moved beyond isolated skeleton classes. It now forms a coherent deterministic backtest runtime with explicit Rust-shaped ownership boundaries and executable cross-backend evidence. The most important remaining work is not another isolated order type; it is completing the account model and L3/order-book semantics so fills, balances, margin, and replay state can be reconciled under realistic venue behavior.
+The Java implementation has moved beyond isolated skeleton classes. It now forms a coherent deterministic backtest runtime with explicit Rust-shaped ownership boundaries and executable cross-backend evidence. L3 queue semantics and a baseline cash/margin ledger are implemented; the next parity work is exact derivative account behavior and richer market-data-driven valuation.
+
+## 12. Business Knowledge and Rust Reference
+
+### 12.1 Why these boundaries matter to a trading system
+
+The rewrite follows trading-domain ownership rather than treating the
+application as a generic event processor:
+
+| Business concept | Operational meaning | Java owner | Nautilus/Rust reference |
+|---|---|---|---|
+| Market data | The venue's observable state and executed trades | `DataEngine`, `OrderBook*`, `TradeTick` | `crates/data`, `crates/model/src/data` |
+| Price-time priority | Earlier and better-priced liquidity receives execution first | `SimulatedExchange.L3BookState` | `crates/model/src/orderbook`, matching engine |
+| Queue ahead | A passive order cannot fill until visible liquidity ahead is consumed or removed | `WorkingOrder` queue fields and L3 state | `crates/execution/src/matching_engine/engine.rs` queue methods |
+| Maker/taker | Determines execution role and often fee schedule | `LiquiditySide`, `FeeModel` | `LiquiditySide`, fill-model paths in matching engine |
+| Risk | Prevents invalid or unaffordable exposure before routing | `RiskEngine` | `crates/risk/src/engine` |
+| Free versus locked funds | Separates immediately tradable capital from order/position commitments | `AccountLedger`, `AccountState` | `AccountBalance`, `CashAccount`, `MarginAccount` |
+| Initial versus maintenance margin | Initial margin gates new exposure; maintenance margin measures ongoing safety | `InstrumentSpec`, `AccountLedger` | `MarginBalance`, `AccountsManager` |
+| Realized PnL | PnL becomes final when a position is reduced or closed | `Portfolio` | `AccountsManager::update_balances`, position PnL methods |
+| Settlement | A fill changes positions, balances, commissions, and observable state | `ExecutionEngine` and `Portfolio` | portfolio event and account-state flow |
+
+### 12.2 Rust source map
+
+The Java implementation is anchored to these Nautilus areas:
+
+| Java area | Nautilus reference | Reason for the mapping |
+|---|---|---|
+| `MessageBus` and topic routing | `crates/common/src/message_bus` and component messaging | Preserve synchronous in-process dispatch semantics for deterministic replay |
+| `NautilusKernel` and lifecycle | `crates/system`, `crates/common/src/actor` | Keep composition, clock, lifecycle, and ownership explicit |
+| Order models and state machine | `crates/model/src/orders`, `crates/execution/src/engine` | Match validated order vocabulary and legal transitions |
+| `SimulatedExchange` | `crates/backtest/src/exchange`, `crates/execution/src/matching_engine` | Keep venue matching, triggers, TIF, fills, and queue behavior together |
+| L3 queue tracking | `engine.rs`: `snapshot_queue_position`, `decrement_queue_on_trade`, `advance_l3_queue_on_delete`, `adjust_l3_queue_on_update` | Preserve quantity-ahead and per-book-order behavior |
+| `Portfolio` and `AccountLedger` | `crates/portfolio/src/portfolio.rs`, `manager.rs`, `accounts/cash.rs`, `accounts/margin.rs` | Separate positions, balance settlement, and margin policy |
+| `RiskEngine` | `crates/risk/src/engine/mod.rs` | Perform affordability and exposure checks before execution |
+| CSV reconciliation | `crates/model` events and Python backtest surfaces | Compare observable semantics while excluding backend-only IDs |
+
+### 12.3 Business interpretation of a fill
+
+For a market buy, the simulator consumes the lowest available asks. For a
+resting buy, a seller-aggressor trade first consumes the bid queue ahead and
+only the excess can fill the client. A fill then has four consequences:
+
+1. The order state advances by the fill quantity.
+2. The portfolio position and average price change.
+3. Commission and realized PnL change account equity.
+4. Reserved funds and position margin are recalculated and published.
+
+This sequence is why matching, risk, portfolio, and account settlement are
+separate classes even though one market event can touch all of them.
