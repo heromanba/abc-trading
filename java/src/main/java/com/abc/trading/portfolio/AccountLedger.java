@@ -2,7 +2,6 @@ package com.abc.trading.portfolio;
 
 import com.abc.trading.data.InstrumentSpec;
 import com.abc.trading.data.FxRateUpdate;
-import com.abc.trading.data.MarketDataSnapshot;
 import com.abc.trading.execution.OrderFill;
 import com.abc.trading.execution.SignalDirection;
 
@@ -73,7 +72,9 @@ public final class AccountLedger {
         Account account = account(venue);
         if (account == null) return true;
         if (account.type == AccountType.CASH && side == SignalDirection.SELL && position < quantity) return false;
-        double required = requiredMargin(quantity, price, account, instrument, side);
+        if (account.type == AccountType.MARGIN && increasesExposure(side, position)
+            && isMaintenanceBreached(account)) return false;
+        double required = requiredMargin(quantity, price, account, instrument, side, position);
         String currency = instrument == null ? account.currency : instrument.quoteCurrency();
         String availableCurrency = account.totals.containsKey(currency) ? currency : account.currency;
         double available = account.totals.getOrDefault(availableCurrency, 0.0)
@@ -95,7 +96,7 @@ public final class AccountLedger {
         }
         String currency = instrument == null ? account.currency : instrument.quoteCurrency();
         reservations.put(orderId, new Reservation(venue, currency,
-                quantity, requiredMargin(quantity, price, account, instrument, side)));
+            quantity, requiredMargin(quantity, price, account, instrument, side, position)));
     }
 
     public void release(String orderId) {
@@ -120,9 +121,10 @@ public final class AccountLedger {
             if (!Double.isFinite(settledCash)) return;
             account.totals.merge(settlementCurrency, settledCash - commission, Double::sum);
         } else {
-            double pnl = convert(realizedPnlDelta, currency, account.currency);
-            if (!Double.isFinite(pnl)) return;
-            account.totals.merge(account.currency, pnl, Double::sum);
+            double realized = convert(realizedPnlDelta + fill.commission().amount(), currency, account.currency);
+            double commission = convert(fill.commission().amount(), fill.commission().currency(), account.currency);
+            if (!Double.isFinite(realized) || !Double.isFinite(commission)) return;
+            account.totals.merge(account.currency, realized - commission, Double::sum);
         }
         Reservation reservation = reservations.get(fill.orderId());
         if (reservation != null) {
@@ -199,13 +201,31 @@ public final class AccountLedger {
         return Double.NaN;
     }
 
+    private static boolean increasesExposure(SignalDirection side, int position) {
+        return position == 0
+                || position > 0 && side == SignalDirection.BUY
+                || position < 0 && side == SignalDirection.SELL;
+    }
+
+    private boolean isMaintenanceBreached(Account account) {
+        double maintenance = account.maintenanceMargin(account.currency, this);
+        double unrealized = account.unrealized(account.currency, this);
+        double equity = account.totals.getOrDefault(account.currency, 0.0) + unrealized;
+        return maintenance > 0.0 && equity < maintenance;
+    }
+
     private static double margin(int quantity, double price, double leverage, double rate) {
         return quantity * price * rate / leverage;
     }
 
     private static double requiredMargin(int quantity, double price, Account account,
-            InstrumentSpec instrument, SignalDirection side) {
+            InstrumentSpec instrument, SignalDirection side, int position) {
         if (account.type == AccountType.CASH && side == SignalDirection.SELL) return 0.0;
+        if (account.type == AccountType.MARGIN && position != 0
+                && Integer.signum(position) != Integer.signum(side == SignalDirection.BUY ? 1 : -1)) {
+            quantity = Math.max(0, quantity - Math.abs(position));
+            if (quantity == 0) return 0.0;
+        }
         return instrument == null ? margin(quantity, price, account.leverage, 1.0)
             : marginFor(instrument, quantity, price, account.leverage, false);
         }

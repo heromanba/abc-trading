@@ -149,6 +149,23 @@ class AccountLedgerTest {
         assertEquals(890.0, state.balanceFree(), 1e-9);
     }
 
+        @Test
+        void convertsMarginPnlAndCommissionFromTheirOwnCurrencies() {
+        Cache cache = new Cache();
+        cache.addInstrument("DAX", "XEUR", TickScheme.fixed(0.01),
+            "DAX", "EUR", 1.0, 0.5);
+        Portfolio portfolio = new Portfolio(cache);
+        portfolio.configureAccount("XEUR", 1_000.0, "USD", 1.0);
+        portfolio.setFxRate("EUR", "USD", 1.10);
+        portfolio.applyOrderIntent(new OrderIntent("strategy", "DAX", 1, 100, "corr", "eur-buy",
+            SignalDirection.BUY, 1, 100.0, 0, 0.0));
+        portfolio.applyFill(new OrderFill("strategy", "DAX", 1, 100, "corr", "eur-buy",
+            SignalDirection.BUY, 1, 100.0, 0, 0.0,
+            new Commission(2.0, "USD"), LiquiditySide.TAKER, ""));
+
+        assertEquals(998.0, portfolio.accountState("XEUR", 100).balanceTotal(), 1e-9);
+        }
+
     @Test
     void markToMarketProducesUnrealizedPnlAndMarginThresholds() {
         Cache cache = new Cache();
@@ -166,6 +183,35 @@ class AccountLedgerTest {
         assertEquals(-49.99, state.equity(), 1e-9);
         assertTrue(state.marginCall());
         assertTrue(state.liquidationRequired());
+    }
+
+    @Test
+    void marginBreachBlocksAdditionalExposureButAllowsReduction() {
+        Cache cache = cache();
+        Portfolio portfolio = new Portfolio(cache);
+        portfolio.configureAccount("XNAS", 149.0, "USD", 1.0);
+        portfolio.applyOrderIntent(order("buy", SignalDirection.BUY, 1, 100.0));
+        portfolio.applyFill(fill("buy", SignalDirection.BUY, 1, 100.0, 0.0));
+        portfolio.applyMarketData(new MarketDataSnapshot(
+                "AAPL", 101, 0.01, 0.02, 0.01, 0.01, 0.01, 1));
+        RiskEngine risk = new RiskEngine(100, cache, portfolio);
+
+        assertFalse(risk.evaluate(order("more-buy", SignalDirection.BUY, 1, 1.0)).approved());
+        assertTrue(risk.evaluate(order("close-buy", SignalDirection.SELL, 1, 1.0)).approved());
+    }
+
+    @Test
+    void shortMarkToMarketUsesSignedPositionQuantity() {
+        Cache cache = cache();
+        Portfolio portfolio = new Portfolio(cache);
+        portfolio.configureAccount("XNAS", 1_000.0, "USD", 1.0);
+        portfolio.applyOrderIntent(order("sell", SignalDirection.SELL, 2, 100.0));
+        portfolio.applyFill(fill("sell", SignalDirection.SELL, 2, 100.0, 0.0));
+
+        AccountState state = portfolio.applyMarketData(new MarketDataSnapshot(
+                "AAPL", 101, 90.0, 91.0, 90.5, 90.0, 90.0, 1));
+
+        assertEquals(20.0, state.unrealizedPnl(), 1e-9);
     }
 
     @Test

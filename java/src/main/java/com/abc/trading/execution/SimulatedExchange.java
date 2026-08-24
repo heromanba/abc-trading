@@ -10,7 +10,6 @@ import com.abc.trading.data.OrderBookL3Snapshot;
 import com.abc.trading.data.OrderBookL3Delta;
 import com.abc.trading.data.VenueOrder;
 import com.abc.trading.data.TradeTick;
-import com.abc.trading.data.AggressorSide;
 import com.abc.trading.execution.commands.CancelOrder;
 import com.abc.trading.execution.commands.ModifyOrder;
 

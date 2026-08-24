@@ -237,6 +237,14 @@ public final class BacktestEngine implements AutoCloseable {
 
     public void addInstrument(String symbol, String venue, double tickSize,
             String baseCurrency, String quoteCurrency, double marginInitialRate,
+            double marginMaintenanceRate) {
+        addInstrument(symbol, venue, tickSize, baseCurrency, quoteCurrency,
+                marginInitialRate, marginMaintenanceRate, MarginModelType.NOTIONAL_RATE,
+                0.0, 0.0);
+    }
+
+    public void addInstrument(String symbol, String venue, double tickSize,
+            String baseCurrency, String quoteCurrency, double marginInitialRate,
             double marginMaintenanceRate, MarginModelType marginModelType,
             double initialMarginPerUnit, double maintenanceMarginPerUnit) {
         if (started) throw new IllegalStateException("Cannot add instruments after start");

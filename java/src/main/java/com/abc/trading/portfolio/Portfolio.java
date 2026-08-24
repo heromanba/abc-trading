@@ -58,6 +58,8 @@ public final class Portfolio {
             double total = Math.abs(previousPosition) * previousAverage
                     + Math.abs(signedQuantity) * fill.price();
             averagePrices.put(fill.symbol(), total / Math.abs(nextPosition));
+        } else {
+            averagePrices.put(fill.symbol(), fill.price());
         }
 
         double cumulativeRealizedPnl = realizedPnl.getOrDefault(fill.symbol(), 0.0) + realizedPnlDelta;

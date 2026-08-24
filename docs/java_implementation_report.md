@@ -185,10 +185,12 @@ The Python bridge lives under `python/abc_trading`; reconciliation scripts live 
 | Fees | Implemented | `FeeModel` implementations | Fixed, maker/taker, per-contract, probability, capped, notional/tiered |
 | Static latency | Implemented | `LatencyModel`, `StaticLatencyModel` | Operation latency with deterministic timestamp ordering |
 | Position/PnL accounting | Implemented | `Portfolio`, `PositionUpdate`, `Money` | Net position, average price, realized PnL, and commission effects |
-| Cash/margin account | Implemented baseline | `AccountLedger`, `AccountState`, `AccountBalance`, `AccountType` | Reservations, free/locked balances, cash settlement, initial/maintenance margin |
+| Cash/margin account | Implemented baseline | `AccountLedger`, `AccountState`, `AccountBalance`, `AccountType` | Reservations, free/locked balances, cash settlement, initial/maintenance margin, and threshold events |
 | Instrument margin metadata | Implemented | `InstrumentSpec`, `Cache` | Quote/base currencies and instrument-specific margin rates |
-| FX conversion | Implemented baseline | `AccountLedger`, `Portfolio`, `BacktestEngine` | Explicit configured rates for cross-currency margin and PnL conversion |
+| FX conversion | Implemented | `FxRateUpdate`, `AccountLedger`, `Portfolio`, `BacktestEngine` | Replayable market-data rates for cross-currency margin and PnL conversion |
 | Account-state events | Implemented | `AccountStateEvent`, `Event`, `CsvEventLogger` | Balance and margin transitions are observable in canonical logs |
+| Mark-to-market valuation | Implemented baseline | `Portfolio`, `AccountLedger`, `MarketDataSnapshot` | Mark updates recalculate signed unrealized PnL and threshold flags |
+| Margin model | Implemented baseline | `MarginModelType`, `InstrumentSpec`, `AccountLedger` | Notional-rate and fixed-per-unit formulas with leverage |
 | Decimal accounting | Partial | primitive `double` | `BigDecimal`/fixed-point remains a future accounting hardening step |
 | Local order emulator | Implemented | `OrderEmulator` | Snapshot-triggered local ownership and release |
 | Disruptor bus | Scaffold only | `DisruptorMessageBus` | Publish method is still a TODO |
@@ -233,6 +235,8 @@ The following catalog covers the Java production types currently under `java/src
 | `OrderBookL3Delta` | Add, update, delete, or clear one venue order | Allows queue position to respond to exact venue-order mutations |
 | `TradeTick` | Executed market trade with aggressor side | Drives queue-ahead consumption independently from book-depth updates |
 | `AggressorSide` | Buyer, seller, or no-aggressor trade classification | Determines which passive queue can advance |
+| `FxRateUpdate` | Replayable FX conversion-rate input | Makes cross-currency account valuation deterministic and time-ordered |
+| `MarginModelType` | Notional-rate or fixed-per-unit formula selection | Keeps instrument margin policy explicit rather than hidden in risk code |
 | `InstrumentSpec` | Base/quote currencies and initial/maintenance margin rates | Carries the instrument facts needed by accounting and risk |
 | `BookAction` | `ADD`, `UPDATE`, `DELETE`, `CLEAR` | Makes book mutation intent explicit |
 | `TickScheme` | Instrument-owned fixed tick increment | Rust currently supports `TICKS` through `price_increment`; Java avoids a hard-coded exchange tick in that path |
@@ -355,6 +359,8 @@ The following catalog covers the Java production types currently under `java/src
 | `AccountBalance` | Total, locked, and free amount for one currency | Preserves the invariant `total = locked + free` |
 | `AccountType` | `CASH` or `MARGIN` settlement policy | Makes borrowing and position-reservation semantics explicit |
 | `AccountStateEvent` | Publishes an account snapshot after acceptance or settlement | Allows account changes to enter the same event evidence stream |
+| `AccountMarginCall` | Typed notification when equity falls below maintenance margin | Separates a warning threshold from ordinary account snapshots |
+| `AccountLiquidationRequired` | Typed notification when equity cannot support maintenance | Makes liquidation-required state observable without silently inventing a fill |
 | `RiskEngine` | Validates side, quantity, instrument, price, notional, trading state, and available margin | Keeps risk before venue execution and prevents unsupported exposure |
 | `RiskDecision` | Allow/reject result | Separates risk result from order event emission |
 | `RiskEngineConfig` | Immutable risk options | Future policy configuration boundary |
@@ -451,7 +457,7 @@ configured FX rates; missing conversion data rejects a reservation rather than
 silently treating currencies as equal.
 
 These rules are a deterministic backtest baseline. They do not yet model every
-Nautilus derivative margin model, mark-to-market unrealized PnL, or live FX feed.
+Nautilus derivative margin model, liquidation execution policy, or live FX feed.
 
 ### 6.4 Numeric representation
 
@@ -572,7 +578,7 @@ The Java module currently contains 133 production source files and 15 test files
 
 ## 10. Current Gaps and Recommended Next Work
 
-1. **Exact account parity:** instrument-specific derivative margin models, mark-to-market unrealized PnL, dynamic FX data, and full Rust account-event comparison.
+1. **Exact account parity:** the current baseline needs broader Rust account-event fixtures, full derivative margin models, liquidation execution policy, and market-driven FX coverage.
 2. **Persistent event store:** replayable event persistence beyond CSV evidence logs.
 3. **Live adapters:** REST/WebSocket data and execution clients, reconnects, throttling, and external reconciliation.
 4. **Exact accounting:** fixed-point or `BigDecimal` money model with explicit currency precision.
