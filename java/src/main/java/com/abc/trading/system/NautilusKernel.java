@@ -9,7 +9,9 @@ import com.abc.trading.data.OrderBookDelta;
 import com.abc.trading.data.OrderBookL3Snapshot;
 import com.abc.trading.data.OrderBookL3Delta;
 import com.abc.trading.data.TradeTick;
+import com.abc.trading.data.FxRateUpdate;
 import com.abc.trading.portfolio.AccountType;
+import com.abc.trading.data.MarginModelType;
 import com.abc.trading.data.DataEngine;
 import com.abc.trading.msgbus.MessageBus;
 import com.abc.trading.portfolio.Portfolio;
@@ -84,6 +86,18 @@ public final class NautilusKernel implements AutoCloseable {
         }
         cache.addInstrument(symbol, venue, tickScheme, baseCurrency, quoteCurrency,
                 marginInitialRate, marginMaintenanceRate);
+    }
+
+    public void addInstrument(String symbol, String venue, TickScheme tickScheme,
+            String baseCurrency, String quoteCurrency, double marginInitialRate,
+            double marginMaintenanceRate, MarginModelType marginModelType,
+            double initialMarginPerUnit, double maintenanceMarginPerUnit) {
+        if (lifecycle.state() != ComponentState.PRE_INITIALIZED && lifecycle.state() != ComponentState.READY) {
+            throw new IllegalStateException("Cannot add instruments after initialization");
+        }
+        cache.addInstrument(symbol, venue, tickScheme, baseCurrency, quoteCurrency,
+                marginInitialRate, marginMaintenanceRate, marginModelType,
+                initialMarginPerUnit, maintenanceMarginPerUnit);
     }
 
     public void addVenue(String venue) {
@@ -252,6 +266,18 @@ public final class NautilusKernel implements AutoCloseable {
             inputSequence++;
             clock.setTimestampNs(trade.tsInit());
             dataEngine.publishTradeTick(trade);
+        }
+    }
+
+    public void runFxRates(FxRateUpdate[] updates) {
+        if (lifecycle.state() != ComponentState.RUNNING) throw new IllegalStateException("Kernel must be running before processing FX rates");
+        if (updates == null) throw new IllegalArgumentException("updates are required");
+        Arrays.sort(updates, Comparator.comparingLong(FxRateUpdate::tsInit)
+                .thenComparing(FxRateUpdate::fromCurrency).thenComparing(FxRateUpdate::toCurrency));
+        for (FxRateUpdate update : updates) {
+            inputSequence++;
+            clock.setTimestampNs(update.tsInit());
+            dataEngine.publishFxRate(update);
         }
     }
 

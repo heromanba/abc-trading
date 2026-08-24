@@ -6,7 +6,7 @@ import jpype
 from pathlib import Path
 
 from abc_trading._java import ensure_jvm, java_class
-from abc_trading.model.data import Bar, MarketDataSnapshot, OrderBookSnapshot, OrderBookDelta, OrderBookL3Snapshot, OrderBookL3Delta, TradeTick
+from abc_trading.model.data import Bar, MarketDataSnapshot, OrderBookSnapshot, OrderBookDelta, OrderBookL3Snapshot, OrderBookL3Delta, TradeTick, FxRateUpdate
 
 
 class StrategyContext:
@@ -195,13 +195,17 @@ class BacktestEngine:
         self, symbol: str, venue: str, tick_size: float = 0.01,
         base_currency: str | None = None, quote_currency: str | None = None,
         margin_initial_rate: float = 1.0, margin_maintenance_rate: float = 0.5,
+        margin_model_type: str = "NOTIONAL_RATE", initial_margin_per_unit: float = 0.0,
+        maintenance_margin_per_unit: float = 0.0,
     ) -> None:
         if base_currency is None and quote_currency is None:
             self._java.addInstrument(symbol, venue, tick_size)
             return
         self._java.addInstrument(symbol, venue, java_class("com.abc.trading.data.TickScheme").fixed(tick_size),
                                  base_currency or symbol, quote_currency or "USD",
-                                 margin_initial_rate, margin_maintenance_rate)
+                     margin_initial_rate, margin_maintenance_rate,
+                     java_class("com.abc.trading.data.MarginModelType").valueOf(margin_model_type),
+                     initial_margin_per_unit, maintenance_margin_per_unit)
 
     def set_max_fill_quantity(self, venue: str, quantity: int) -> None:
         self._java.setMaxFillQuantity(venue, quantity)
@@ -351,6 +355,11 @@ class BacktestEngine:
         java_type = java_class("com.abc.trading.data.TradeTick")
         java_trades = jpype.JArray(java_type)([trade.java for trade in trades])
         self._java.runTradeTicks(java_trades)
+
+    def run_fx_rates(self, updates: list[FxRateUpdate]) -> None:
+        java_type = java_class("com.abc.trading.data.FxRateUpdate")
+        java_updates = jpype.JArray(java_type)([update.java for update in updates])
+        self._java.runFxRates(java_updates)
 
     @property
     def started(self) -> bool:

@@ -2,6 +2,9 @@ package com.abc.trading.portfolio;
 
 import com.abc.trading.cache.Cache;
 import com.abc.trading.data.TickScheme;
+import com.abc.trading.data.MarketDataSnapshot;
+import com.abc.trading.data.FxRateUpdate;
+import com.abc.trading.data.MarginModelType;
 import com.abc.trading.execution.Commission;
 import com.abc.trading.execution.OrderFill;
 import com.abc.trading.execution.OrderIntent;
@@ -137,13 +140,47 @@ class AccountLedgerTest {
                 SignalDirection.BUY, 1, 100.0, 0, 0.0);
 
         assertFalse(risk.evaluate(order).approved());
-        portfolio.setFxRate("EUR", "USD", 1.10);
+        portfolio.applyFxRate(new FxRateUpdate("EUR", "USD", 1.10, 100, 1));
         assertTrue(risk.evaluate(order).approved());
         portfolio.applyOrderIntent(order);
 
         AccountState state = portfolio.accountState("XEUR", 100);
         assertEquals(110.0, state.balanceLocked(), 1e-9);
         assertEquals(890.0, state.balanceFree(), 1e-9);
+    }
+
+    @Test
+    void markToMarketProducesUnrealizedPnlAndMarginThresholds() {
+        Cache cache = new Cache();
+        cache.addInstrument("AAPL", "XNAS", TickScheme.fixed(0.01),
+                "AAPL", "USD", 0.10, 0.05);
+        Portfolio portfolio = new Portfolio(cache);
+        portfolio.configureAccount("XNAS", 50.0, "USD", 1.0);
+        portfolio.applyOrderIntent(order("buy", SignalDirection.BUY, 1, 100.0));
+        portfolio.applyFill(fill("buy", SignalDirection.BUY, 1, 100.0, 0.0));
+
+        AccountState state = portfolio.applyMarketData(new MarketDataSnapshot(
+                "AAPL", 101, 0.01, 0.02, 0.01, 0.01, 0.01, 1));
+
+        assertEquals(-99.99, state.unrealizedPnl(), 1e-9);
+        assertEquals(-49.99, state.equity(), 1e-9);
+        assertTrue(state.marginCall());
+        assertTrue(state.liquidationRequired());
+    }
+
+    @Test
+    void fixedPerUnitMarginModelControlsDerivativeRequirement() {
+        Cache cache = new Cache();
+        cache.addInstrument("FUT", "XNAS", TickScheme.fixed(0.01),
+            "FUT", "USD", 0.0, 0.0, MarginModelType.FIXED_PER_UNIT, 10.0, 4.0);
+        Portfolio portfolio = new Portfolio(cache);
+        portfolio.configureAccount("XNAS", 100.0, "USD", 2.0);
+        portfolio.applyOrderIntent(new OrderIntent("strategy", "FUT", 1, 100, "corr", "future",
+            SignalDirection.BUY, 3, 500.0, 0, 0.0));
+
+        AccountState state = portfolio.accountState("XNAS", 100);
+
+        assertEquals(15.0, state.marginInitial(), 1e-9);
     }
 
     private static Cache cache() {

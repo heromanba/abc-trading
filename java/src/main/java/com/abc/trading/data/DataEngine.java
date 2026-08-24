@@ -12,6 +12,7 @@ public final class DataEngine {
 
     public void publishBar(Bar bar) {
         bus.publish("data.bar." + bar.symbol(), bar);
+        bus.publish(bar);
     }
 
     public void publishMarketData(MarketDataSnapshot snapshot) {
@@ -42,5 +43,10 @@ public final class DataEngine {
     public void publishTradeTick(TradeTick trade) {
         bus.publish("data.trade." + trade.symbol(), trade);
         bus.publish(trade);
+    }
+
+    public void publishFxRate(FxRateUpdate update) {
+        bus.publish("data.fx." + update.fromCurrency() + "." + update.toCurrency(), update);
+        bus.publish(update);
     }
 }

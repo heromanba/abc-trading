@@ -1,6 +1,8 @@
 package com.abc.trading.portfolio;
 
 import com.abc.trading.data.InstrumentSpec;
+import com.abc.trading.data.FxRateUpdate;
+import com.abc.trading.data.MarketDataSnapshot;
 import com.abc.trading.execution.OrderFill;
 import com.abc.trading.execution.SignalDirection;
 
@@ -50,6 +52,16 @@ public final class AccountLedger {
         }
         if (!Double.isFinite(rate) || rate <= 0.0) throw new IllegalArgumentException("rate must be positive");
         fxRates.put(fromCurrency + "->" + toCurrency, rate);
+    }
+
+    public void applyFxRate(FxRateUpdate update) {
+        setFxRate(update.fromCurrency(), update.toCurrency(), update.rate());
+    }
+
+    public Map<String, AccountState> states(long timestamp) {
+        Map<String, AccountState> states = new LinkedHashMap<>();
+        for (String venue : accounts.keySet()) states.put(venue, state(venue, timestamp));
+        return Map.copyOf(states);
     }
 
     public boolean canReserve(String venue, int quantity, double price) {
@@ -103,7 +115,10 @@ public final class AccountLedger {
             double cashDelta = fill.side() == SignalDirection.BUY ? -notional : notional;
             double commission = convert(fill.commission().amount(), fill.commission().currency(), currency);
             if (!Double.isFinite(commission)) return;
-            account.totals.merge(currency, cashDelta - commission, Double::sum);
+            String settlementCurrency = account.totals.containsKey(currency) ? currency : account.currency;
+            double settledCash = convert(cashDelta, currency, settlementCurrency);
+            if (!Double.isFinite(settledCash)) return;
+            account.totals.merge(settlementCurrency, settledCash - commission, Double::sum);
         } else {
             double pnl = convert(realizedPnlDelta, currency, account.currency);
             if (!Double.isFinite(pnl)) return;
@@ -128,12 +143,24 @@ public final class AccountLedger {
             double averagePrice, long timestamp) {
         Account account = account(venue);
         if (account == null) return;
-        if (account.type == AccountType.CASH || position == 0) account.positionMargins.remove(instrument.symbol());
+        if (position == 0) account.positionMargins.remove(instrument.symbol());
         else account.positionMargins.put(instrument.symbol(), new MarginRequirement(
-                instrument.quoteCurrency(), margin(Math.abs(position), averagePrice,
-                        account.leverage, instrument.marginInitialRate()),
-                margin(Math.abs(position), averagePrice, account.leverage,
-                        instrument.marginMaintenanceRate())));
+            instrument.symbol(), instrument.quoteCurrency(), position, averagePrice, averagePrice,
+            account.type == AccountType.CASH ? 0.0 : marginFor(instrument, Math.abs(position), averagePrice,
+                account.leverage, false),
+            account.type == AccountType.CASH ? 0.0 : marginFor(instrument, Math.abs(position), averagePrice,
+                account.leverage, true)));
+        }
+
+        public void updateMarketPrice(String venue, InstrumentSpec instrument, double markPrice, long timestamp) {
+        Account account = account(venue);
+        if (account == null) return;
+        MarginRequirement position = account.positionMargins.get(instrument.symbol());
+        if (position != null) {
+            account.positionMargins.put(instrument.symbol(), new MarginRequirement(
+                position.symbol, position.currency, position.quantity, position.averagePrice,
+                markPrice, position.initial, position.maintenance));
+        }
     }
 
     public AccountState state(String venue, long timestamp) {
@@ -151,8 +178,12 @@ public final class AccountLedger {
         if (free < 0.0 && free > -1e-9) free = 0.0;
         double initial = account.initialMargin(account.currency, reservations, this);
         double maintenance = account.maintenanceMargin(account.currency, this);
+        double unrealized = account.unrealized(account.currency, this);
+        double equity = primary.total() + unrealized;
+        boolean marginCall = maintenance > 0.0 && equity < maintenance;
+        boolean liquidationRequired = marginCall && equity <= 0.0;
         return new AccountState(venue, account.currency, primary.total(), locked, free,
-            initial, maintenance, timestamp, balances);
+            initial, maintenance, timestamp, balances, unrealized, equity, marginCall, liquidationRequired);
     }
 
     private Account account(String venue) {
@@ -175,8 +206,18 @@ public final class AccountLedger {
     private static double requiredMargin(int quantity, double price, Account account,
             InstrumentSpec instrument, SignalDirection side) {
         if (account.type == AccountType.CASH && side == SignalDirection.SELL) return 0.0;
-        double rate = instrument == null ? 1.0 : instrument.marginInitialRate();
-        return margin(quantity, price, account.leverage, rate);
+        return instrument == null ? margin(quantity, price, account.leverage, 1.0)
+            : marginFor(instrument, quantity, price, account.leverage, false);
+        }
+
+        private static double marginFor(InstrumentSpec instrument, int quantity, double price,
+            double leverage, boolean maintenance) {
+        return switch (instrument.marginModelType()) {
+            case NOTIONAL_RATE -> margin(quantity, price, leverage,
+                maintenance ? instrument.marginMaintenanceRate() : instrument.marginInitialRate());
+            case FIXED_PER_UNIT -> quantity * (maintenance
+                ? instrument.maintenanceMarginPerUnit() : instrument.initialMarginPerUnit()) / leverage;
+        };
     }
 
     private static final class Account {
@@ -196,8 +237,7 @@ public final class AccountLedger {
 
         private double locked(Map<String, Reservation> reservations, String currency, AccountLedger ledger) {
             double result = positionMargins.values().stream()
-                    .mapToDouble(margin -> ledger == null ? (margin.currency.equals(currency) ? margin.initial : 0.0)
-                            : ledger.convert(margin.initial, margin.currency, currency)).sum();
+                .mapToDouble(margin -> ledger.convert(margin.initial, margin.currency, currency)).sum();
             for (Reservation reservation : reservations.values()) {
                 if (reservation.venue.equals(venue)) {
                     result += ledger == null || reservation.currency.equals(currency)
@@ -222,8 +262,16 @@ public final class AccountLedger {
             return positionMargins.values().stream()
                     .mapToDouble(margin -> ledger.convert(margin.maintenance, margin.currency, currency)).sum();
         }
+
+                private double unrealized(String currency, AccountLedger ledger) {
+                    return positionMargins.values().stream()
+                        .mapToDouble(position -> ledger.convert(
+                            (position.markPrice - position.averagePrice) * position.quantity,
+                            position.currency, currency)).sum();
+                }
     }
 
     private record Reservation(String venue, String currency, int quantity, double margin) { }
-    private record MarginRequirement(String currency, double initial, double maintenance) { }
+    private record MarginRequirement(String symbol, String currency, int quantity, double averagePrice,
+            double markPrice, double initial, double maintenance) { }
 }

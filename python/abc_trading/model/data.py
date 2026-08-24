@@ -190,6 +190,18 @@ class TradeTick:
         return self._java
 
 
+class FxRateUpdate:
+    def __init__(self, from_currency: str, to_currency: str, rate: float,
+                 timestamp: int, sequence: int = 0) -> None:
+        self._java = java_class("com.abc.trading.data.FxRateUpdate")(
+            from_currency, to_currency, rate, timestamp, sequence
+        )
+
+    @property
+    def java(self) -> object:
+        return self._java
+
+
 @dataclass(frozen=True)
 class BarType:
     value: str

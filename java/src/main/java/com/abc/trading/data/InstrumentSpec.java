@@ -8,7 +8,17 @@ public record InstrumentSpec(
         String baseCurrency,
         String quoteCurrency,
         double marginInitialRate,
-        double marginMaintenanceRate) {
+        double marginMaintenanceRate,
+        MarginModelType marginModelType,
+        double initialMarginPerUnit,
+        double maintenanceMarginPerUnit) {
+    public InstrumentSpec(String symbol, String venue, TickScheme tickScheme,
+            String baseCurrency, String quoteCurrency, double marginInitialRate,
+            double marginMaintenanceRate) {
+        this(symbol, venue, tickScheme, baseCurrency, quoteCurrency, marginInitialRate,
+                marginMaintenanceRate, MarginModelType.NOTIONAL_RATE, 0.0, 0.0);
+    }
+
     public InstrumentSpec {
         if (symbol == null || symbol.isBlank()) throw new IllegalArgumentException("symbol is required");
         if (venue == null || venue.isBlank()) throw new IllegalArgumentException("venue is required");
@@ -20,6 +30,13 @@ public record InstrumentSpec(
         }
         if (!Double.isFinite(marginMaintenanceRate) || marginMaintenanceRate < 0.0) {
             throw new IllegalArgumentException("marginMaintenanceRate must be finite and non-negative");
+        }
+        if (marginModelType == null) throw new IllegalArgumentException("marginModelType is required");
+        if (!Double.isFinite(initialMarginPerUnit) || initialMarginPerUnit < 0.0) {
+            throw new IllegalArgumentException("initialMarginPerUnit must be finite and non-negative");
+        }
+        if (!Double.isFinite(maintenanceMarginPerUnit) || maintenanceMarginPerUnit < 0.0) {
+            throw new IllegalArgumentException("maintenanceMarginPerUnit must be finite and non-negative");
         }
     }
 

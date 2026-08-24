@@ -13,13 +13,26 @@ public record AccountState(
         double marginInitial,
         double marginMaintenance,
         long tsInit,
-        Map<String, AccountBalance> balances) {
+        Map<String, AccountBalance> balances,
+        double unrealizedPnl,
+        double equity,
+        boolean marginCall,
+        boolean liquidationRequired) {
     public AccountState(
             String venue, String currency, double balanceTotal, double balanceLocked,
             double balanceFree, double marginInitial, double marginMaintenance, long tsInit) {
         this(venue, currency, balanceTotal, balanceLocked, balanceFree, marginInitial,
                 marginMaintenance, tsInit,
-                Map.of(currency, new AccountBalance(currency, balanceTotal, balanceLocked, balanceFree)));
+            Map.of(currency, new AccountBalance(currency, balanceTotal, balanceLocked, balanceFree)),
+            0.0, balanceTotal, false, false);
+        }
+
+        public AccountState(
+            String venue, String currency, double balanceTotal, double balanceLocked,
+            double balanceFree, double marginInitial, double marginMaintenance, long tsInit,
+            Map<String, AccountBalance> balances) {
+        this(venue, currency, balanceTotal, balanceLocked, balanceFree, marginInitial,
+            marginMaintenance, tsInit, balances, 0.0, balanceTotal, false, false);
     }
 
     public AccountState {
@@ -30,6 +43,11 @@ public record AccountState(
         validateFinite(balanceFree, "balanceFree");
         validateNonNegative(marginInitial, "marginInitial");
         validateNonNegative(marginMaintenance, "marginMaintenance");
+        validateFinite(unrealizedPnl, "unrealizedPnl");
+        validateFinite(equity, "equity");
+        if (Math.abs(equity - balanceTotal - unrealizedPnl) > 1e-9) {
+            throw new IllegalArgumentException("equity must equal balanceTotal + unrealizedPnl");
+        }
         if (balances == null || balances.isEmpty()) throw new IllegalArgumentException("balances are required");
         balances = Map.copyOf(new LinkedHashMap<>(balances));
         if (Math.abs(balanceTotal - balanceLocked - balanceFree) > 1e-9) {

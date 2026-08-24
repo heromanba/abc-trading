@@ -27,7 +27,11 @@ public record Event(
         double accountLocked,
         double accountFree,
         double marginInitial,
-        double marginMaintenance
+        double marginMaintenance,
+        double unrealizedPnl,
+        double equity,
+        boolean marginCall,
+        boolean liquidationRequired
 ) {
     public Event(
             long inputSequence,
@@ -46,7 +50,8 @@ public record Event(
             double realizedPnl) {
         this(inputSequence, lifecycleSequence, marketTimestamp, symbol, sourceEventType, eventType,
                 strategyId, signalDirection, correlationId, orderId, price, quantity,
-                currentPosition, realizedPnl, 0.0, "USD", null, "", "", 0.0, 0.0, 0.0, 0.0, 0.0);
+                currentPosition, realizedPnl, 0.0, "USD", null, "", "", 0.0, 0.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, false, false);
     }
 
         public Event(
@@ -57,7 +62,8 @@ public record Event(
                         double commission, String commissionCurrency) {
                 this(inputSequence, lifecycleSequence, marketTimestamp, symbol, sourceEventType, eventType,
                                 strategyId, signalDirection, correlationId, orderId, price, quantity,
-                                currentPosition, realizedPnl, commission, commissionCurrency, null, "", "", 0.0, 0.0, 0.0, 0.0, 0.0);
+                                currentPosition, realizedPnl, commission, commissionCurrency, null, "", "", 0.0, 0.0, 0.0, 0.0, 0.0,
+                                0.0, 0.0, false, false);
         }
 
         public Event(
@@ -68,7 +74,8 @@ public record Event(
                         double commission, String commissionCurrency, LiquiditySide liquiditySide) {
                 this(inputSequence, lifecycleSequence, marketTimestamp, symbol, sourceEventType, eventType,
                                 strategyId, signalDirection, correlationId, orderId, price, quantity,
-                                currentPosition, realizedPnl, commission, commissionCurrency, liquiditySide, "", "", 0.0, 0.0, 0.0, 0.0, 0.0);
+                                currentPosition, realizedPnl, commission, commissionCurrency, liquiditySide, "", "", 0.0, 0.0, 0.0, 0.0, 0.0,
+                                0.0, 0.0, false, false);
         }
 
         public Event(
@@ -81,6 +88,6 @@ public record Event(
                 this(inputSequence, lifecycleSequence, marketTimestamp, symbol, sourceEventType, eventType,
                                 strategyId, signalDirection, correlationId, orderId, price, quantity,
                                 currentPosition, realizedPnl, commission, commissionCurrency, liquiditySide,
-                                venueOrderId, "", 0.0, 0.0, 0.0, 0.0, 0.0);
+                                venueOrderId, "", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, false, false);
         }
 }

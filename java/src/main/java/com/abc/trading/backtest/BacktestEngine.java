@@ -8,7 +8,9 @@ import com.abc.trading.data.OrderBookDelta;
 import com.abc.trading.data.OrderBookL3Snapshot;
 import com.abc.trading.data.OrderBookL3Delta;
 import com.abc.trading.data.TradeTick;
+import com.abc.trading.data.FxRateUpdate;
 import com.abc.trading.portfolio.AccountType;
+import com.abc.trading.data.MarginModelType;
 import com.abc.trading.events.CsvEventLogger;
 import com.abc.trading.events.Event;
 import com.abc.trading.events.EventLogger;
@@ -39,6 +41,8 @@ import com.abc.trading.execution.OrderFill;
 import com.abc.trading.execution.SettledOrderFill;
 import com.abc.trading.portfolio.PositionUpdate;
 import com.abc.trading.portfolio.AccountStateEvent;
+import com.abc.trading.portfolio.AccountMarginCall;
+import com.abc.trading.portfolio.AccountLiquidationRequired;
 import com.abc.trading.system.ComponentState;
 import com.abc.trading.system.NautilusKernel;
 import com.abc.trading.trading.StrategyHandler;
@@ -71,6 +75,8 @@ public final class BacktestEngine implements AutoCloseable {
         kernel.bus().subscribe(SettledOrderFill.class, this::logSettledOrderFill, 100);
         kernel.bus().subscribe(PositionUpdate.class, this::logPositionUpdate);
         kernel.bus().subscribe(AccountStateEvent.class, this::logAccountState);
+        kernel.bus().subscribe(AccountMarginCall.class, event -> logAccountThreshold(event.state(), EventType.MARGIN_CALL));
+        kernel.bus().subscribe(AccountLiquidationRequired.class, event -> logAccountThreshold(event.state(), EventType.LIQUIDATION_REQUIRED));
         kernel.bus().subscribe(OrderCanceled.class, event -> logCancel(event.command(), EventType.ORDER_CANCEL));
         kernel.bus().subscribe(OrderCancelRejected.class, event -> logCancel(event.command(), EventType.ORDER_CANCEL_REJECT));
         kernel.bus().subscribe(OrderModified.class, event -> logModify(event.command(), EventType.ORDER_MODIFY));
@@ -201,7 +207,16 @@ public final class BacktestEngine implements AutoCloseable {
                 AccountStateEvent.class.getSimpleName(), EventType.ACCOUNT_STATE,
                 "", SignalDirection.HOLD, "", "", 0.0, 0, 0, 0.0, 0.0, state.currency(), null, "",
                 state.currency(), state.balanceTotal(), state.balanceLocked(), state.balanceFree(),
-                state.marginInitial(), state.marginMaintenance()));
+                state.marginInitial(), state.marginMaintenance(), state.unrealizedPnl(), state.equity(),
+                state.marginCall(), state.liquidationRequired()));
+    }
+
+    private void logAccountThreshold(com.abc.trading.portfolio.AccountState state, EventType type) {
+        log(new Event(0, nextLifecycleSequence(), state.tsInit(), "",
+                type.name(), type, "", SignalDirection.HOLD, "", "", 0.0, 0, 0, 0.0, 0.0,
+                state.currency(), null, "", state.currency(), state.balanceTotal(), state.balanceLocked(),
+                state.balanceFree(), state.marginInitial(), state.marginMaintenance(), state.unrealizedPnl(),
+                state.equity(), state.marginCall(), state.liquidationRequired()));
     }
 
     private void log(Event event) {
@@ -218,6 +233,16 @@ public final class BacktestEngine implements AutoCloseable {
 
     public void addInstrument(String symbol, String venue, double tickSize) {
         addInstrument(symbol, venue, TickScheme.fixed(tickSize));
+    }
+
+    public void addInstrument(String symbol, String venue, double tickSize,
+            String baseCurrency, String quoteCurrency, double marginInitialRate,
+            double marginMaintenanceRate, MarginModelType marginModelType,
+            double initialMarginPerUnit, double maintenanceMarginPerUnit) {
+        if (started) throw new IllegalStateException("Cannot add instruments after start");
+        kernel.addInstrument(symbol, venue, TickScheme.fixed(tickSize), baseCurrency, quoteCurrency,
+                marginInitialRate, marginMaintenanceRate, marginModelType,
+                initialMarginPerUnit, maintenanceMarginPerUnit);
     }
 
     public void addInstrument(String symbol, String venue, TickScheme tickScheme) {
@@ -378,6 +403,11 @@ public final class BacktestEngine implements AutoCloseable {
     public void runTradeTicks(TradeTick[] trades) {
         if (!started) throw new IllegalStateException("Engine must be started before running");
         kernel.runTradeTicks(trades);
+    }
+
+    public void runFxRates(FxRateUpdate[] updates) {
+        if (!started) throw new IllegalStateException("Engine must be started before running");
+        kernel.runFxRates(updates);
     }
 
     public void submitMarketOrder(String strategyId, String symbol, String orderId,

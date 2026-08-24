@@ -11,7 +11,12 @@ import com.abc.trading.execution.commands.SubmitOrder;
 import com.abc.trading.execution.commands.CancelOrder;
 import com.abc.trading.execution.commands.ModifyOrder;
 import com.abc.trading.data.MarketDataSnapshot;
+import com.abc.trading.data.Bar;
+import com.abc.trading.data.FxRateUpdate;
 import com.abc.trading.portfolio.AccountStateEvent;
+import com.abc.trading.portfolio.AccountMarginCall;
+import com.abc.trading.portfolio.AccountLiquidationRequired;
+import com.abc.trading.portfolio.AccountState;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -37,6 +42,12 @@ public final class ExecutionEngine {
         this.orderEmulator = new OrderEmulator(this::releaseEmulated);
         bus.subscribe(SubmitOrder.class, this::submit);
         bus.subscribe(MarketDataSnapshot.class, orderEmulator::processMarketData);
+        bus.subscribe(Bar.class, bar -> publishAccountState(portfolio.applyMarketData(MarketDataSnapshot.fromBar(bar))));
+        bus.subscribe(MarketDataSnapshot.class, snapshot -> publishAccountState(portfolio.applyMarketData(snapshot)));
+        bus.subscribe(FxRateUpdate.class, update -> {
+            portfolio.applyFxRate(update);
+            publishAccountStates(update.tsInit());
+        });
         bus.subscribe(CancelOrder.class, this::cancel);
         bus.subscribe(ModifyOrder.class, this::modify);
         bus.subscribe(OrderIntent.class, this::submit);
@@ -77,8 +88,7 @@ public final class ExecutionEngine {
             bus.publish(new SettledOrderFill(fill, positionUpdate.position(), positionUpdate.realizedPnl()));
             bus.publish(positionUpdate);
             if (cache.hasInstrument(fill.symbol())) {
-                String venue = cache.venue(fill.symbol());
-                bus.publish(new AccountStateEvent(portfolio.accountState(venue, fill.marketTimestamp())));
+                publishAccountState(portfolio.accountStateForSymbol(fill.symbol(), fill.marketTimestamp()));
             }
         });
         bus.subscribe(OrderExpired.class, event -> {
@@ -93,9 +103,18 @@ public final class ExecutionEngine {
     }
 
     private void publishAccountState(String symbol, long timestamp) {
-        if (cache.hasInstrument(symbol)) {
-            bus.publish(new AccountStateEvent(portfolio.accountStateForSymbol(symbol, timestamp)));
-        }
+        if (cache.hasInstrument(symbol)) publishAccountState(portfolio.accountStateForSymbol(symbol, timestamp));
+    }
+
+    private void publishAccountState(AccountState state) {
+        if (state == null) return;
+        bus.publish(new AccountStateEvent(state));
+        if (state.marginCall()) bus.publish(new AccountMarginCall(state));
+        if (state.liquidationRequired()) bus.publish(new AccountLiquidationRequired(state));
+    }
+
+    private void publishAccountStates(long timestamp) {
+        for (AccountState state : portfolio.accountStates(timestamp).values()) publishAccountState(state);
     }
 
     public void registerClient(ExecutionClient client) {

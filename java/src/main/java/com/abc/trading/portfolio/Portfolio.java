@@ -4,6 +4,8 @@ import com.abc.trading.cache.Cache;
 import com.abc.trading.execution.OrderIntent;
 import com.abc.trading.execution.LimitOrderIntent;
 import com.abc.trading.execution.OrderFill;
+import com.abc.trading.data.FxRateUpdate;
+import com.abc.trading.data.MarketDataSnapshot;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -100,6 +102,21 @@ public final class Portfolio {
 
     public void setFxRate(String fromCurrency, String toCurrency, double rate) {
         accountLedger.setFxRate(fromCurrency, toCurrency, rate);
+    }
+
+    public void applyFxRate(FxRateUpdate update) {
+        accountLedger.applyFxRate(update);
+    }
+
+    public AccountState applyMarketData(MarketDataSnapshot snapshot) {
+        if (!cache.hasInstrument(snapshot.symbol())) return null;
+        String venue = cache.venue(snapshot.symbol());
+        accountLedger.updateMarketPrice(venue, cache.instrument(snapshot.symbol()), snapshot.mark(), snapshot.tsInit());
+        return accountLedger.state(venue, snapshot.tsInit());
+    }
+
+    public Map<String, AccountState> accountStates(long timestamp) {
+        return accountLedger.states(timestamp);
     }
 
     public boolean canReserve(OrderIntent order) {

@@ -22,7 +22,7 @@ public final class CsvEventLogger implements EventLogger {
                     StandardOpenOption.TRUNCATE_EXISTING,
                     StandardOpenOption.WRITE
             );
-            writer.write("input_sequence,lifecycle_sequence,market_timestamp,symbol,source_event_type,event_type,strategy_id,signal_direction,correlation_id,order_id,price,quantity,current_position,realized_pnl,commission,commission_currency,liquidity_side,venue_order_id,account_currency,account_total,account_locked,account_free,margin_initial,margin_maintenance");
+            writer.write("input_sequence,lifecycle_sequence,market_timestamp,symbol,source_event_type,event_type,strategy_id,signal_direction,correlation_id,order_id,price,quantity,current_position,realized_pnl,commission,commission_currency,liquidity_side,venue_order_id,account_currency,account_total,account_locked,account_free,margin_initial,margin_maintenance,unrealized_pnl,equity,margin_call,liquidation_required");
             writer.newLine();
             writer.flush();
         } catch (IOException e) {
@@ -74,7 +74,11 @@ public final class CsvEventLogger implements EventLogger {
                 + "," + formatDouble(event.accountLocked())
                 + "," + formatDouble(event.accountFree())
                 + "," + formatDouble(event.marginInitial())
-                + "," + formatDouble(event.marginMaintenance());
+                + "," + formatDouble(event.marginMaintenance())
+                + "," + formatDouble(event.unrealizedPnl())
+                + "," + formatDouble(event.equity())
+                + "," + event.marginCall()
+                + "," + event.liquidationRequired();
     }
 
     private static String nullSafe(String value) {
