@@ -125,3 +125,23 @@ Expected result:
 ```text
 MATCH account state fields=8
 ```
+
+## Persistent event replay
+
+`BacktestEngine` accepts an optional second path for an append-only JSONL event
+store. Each record has a schema version and monotonic offset. Java consumers
+can replay it into the synchronous `MessageBus` and reconstruct order,
+position, realized-PnL, and account-state projections with `EventReplayer`.
+`EventCheckpoint` stores the next offset and sequence values for resume:
+
+```java
+try (BacktestEngine engine = new BacktestEngine("events.csv", "events.jsonl")) {
+	// configure and run the backtest
+}
+
+EventReplayResult result = EventReplayer.replay(
+		Path.of("events.jsonl"), new MessageBus(null), Path.of("events.checkpoint.json"));
+```
+
+The persistent-store tests cover append/reopen offsets, schema validation,
+checkpoint resume, bus delivery, and state projection recovery.

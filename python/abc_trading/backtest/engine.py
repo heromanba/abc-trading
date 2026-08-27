@@ -155,10 +155,13 @@ class StrategyContext:
 class BacktestEngine:
     """Python-importable engine backed by ``com.abc.trading`` Java classes."""
 
-    def __init__(self, output_path: str | Path) -> None:
+    def __init__(self, output_path: str | Path, event_store_path: str | Path | None = None) -> None:
         ensure_jvm()
         java_type = java_class("com.abc.trading.backtest.BacktestEngine")
-        self._java = java_type(str(Path(output_path).resolve()))
+        java_output = str(Path(output_path).resolve())
+        self._java = java_type(java_output) if event_store_path is None else java_type(
+            java_output, str(Path(event_store_path).resolve())
+        )
         self._started = False
         self._strategy_proxies: list[object] = []
 

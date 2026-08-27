@@ -15,6 +15,8 @@ import com.abc.trading.events.CsvEventLogger;
 import com.abc.trading.events.Event;
 import com.abc.trading.events.EventLogger;
 import com.abc.trading.events.EventType;
+import com.abc.trading.events.CompositeEventLogger;
+import com.abc.trading.events.PersistentEventStore;
 import com.abc.trading.execution.OrderAccepted;
 import com.abc.trading.execution.LimitOrderAccepted;
 import com.abc.trading.execution.LimitOrderDenied;
@@ -52,17 +54,32 @@ import com.abc.trading.trading.StrategyHandler;
 import com.abc.trading.trading.StrategySignal;
 
 import java.nio.file.Path;
+import java.util.List;
 
 /** JPype-friendly backtest library boundary for Python-owned strategies. */
 public final class BacktestEngine implements AutoCloseable {
     private final NautilusKernel kernel = new NautilusKernel();
     private final EventLogger logger;
+    private final PersistentEventStore eventStore;
     private long lifecycleSequence;
     private boolean started;
 
     public BacktestEngine(String outputPath) {
-        this.logger = new CsvEventLogger(Path.of(outputPath));
+        this(outputPath, null);
+    }
+
+    public BacktestEngine(String outputPath, String eventStorePath) {
+        EventLogger csvLogger = new CsvEventLogger(Path.of(outputPath));
+        this.eventStore = eventStorePath == null || eventStorePath.isBlank()
+                ? null : new PersistentEventStore(Path.of(eventStorePath));
+        this.logger = eventStore == null ? csvLogger
+                : new CompositeEventLogger(List.of(csvLogger, eventStore));
         registerEventLoggers();
+    }
+
+    public PersistentEventStore eventStore() {
+        if (eventStore == null) throw new IllegalStateException("persistent event store is not configured");
+        return eventStore;
     }
 
     private void registerEventLoggers() {
