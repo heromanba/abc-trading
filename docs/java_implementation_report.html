@@ -1,0 +1,1464 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang xml:lang>
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>ABC Trading Java Rewrite</title>
+  <style>
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    span.underline{text-decoration: underline;}
+    div.column{display: inline-block; vertical-align: top; width: 50%;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    ul.task-list{list-style: none;}
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+  </style>
+  <link rel="stylesheet" href="data:text/css,%40page%20%7B%20size%3A%20A4%3B%20margin%3A%2015mm%2014mm%2016mm%3B%20%7D%0A%3Aroot%20%7B%20%2D%2Dink%3A%20%231d2733%3B%20%2D%2Dmuted%3A%20%23586979%3B%20%2D%2Dline%3A%20%23cbd5df%3B%20%2D%2Daccent%3A%20%23126782%3B%20%2D%2Dsoft%3A%20%23eef5f7%3B%20%7D%0A%2A%20%7B%20box%2Dsizing%3A%20border%2Dbox%3B%20%7D%0Abody%20%7B%20color%3A%20var%28%2D%2Dink%29%3B%20font%2Dfamily%3A%20%22DejaVu%20Sans%22%2C%20sans%2Dserif%3B%20font%2Dsize%3A%209%2E5pt%3B%20line%2Dheight%3A%201%2E38%3B%20%7D%0Ah1%2C%20h2%2C%20h3%20%7B%20font%2Dfamily%3A%20%22DejaVu%20Sans%22%2C%20sans%2Dserif%3B%20color%3A%20var%28%2D%2Daccent%29%3B%20page%2Dbreak%2Dafter%3A%20avoid%3B%20%7D%0Ah1%20%7B%20font%2Dsize%3A%2025pt%3B%20margin%2Dtop%3A%200%3B%20border%2Dbottom%3A%203px%20solid%20var%28%2D%2Daccent%29%3B%20padding%2Dbottom%3A%208px%3B%20%7D%0Ah2%20%7B%20font%2Dsize%3A%2016pt%3B%20margin%2Dtop%3A%2022px%3B%20border%2Dbottom%3A%201px%20solid%20var%28%2D%2Dline%29%3B%20padding%2Dbottom%3A%203px%3B%20%7D%0Ah3%20%7B%20font%2Dsize%3A%2011%2E5pt%3B%20margin%2Dtop%3A%2015px%3B%20%7D%0Ap%20%7B%20margin%3A%206px%200%3B%20%7D%0Acode%2C%20pre%20%7B%20font%2Dfamily%3A%20%22DejaVu%20Sans%20Mono%22%2C%20monospace%3B%20font%2Dsize%3A%208%2E2pt%3B%20%7D%0Apre%20%7B%20background%3A%20var%28%2D%2Dsoft%29%3B%20border%2Dleft%3A%203px%20solid%20var%28%2D%2Daccent%29%3B%20padding%3A%208px%3B%20white%2Dspace%3A%20pre%2Dwrap%3B%20page%2Dbreak%2Dinside%3A%20avoid%3B%20%7D%0Atable%20%7B%20width%3A%20100%25%3B%20border%2Dcollapse%3A%20collapse%3B%20margin%3A%208px%200%2012px%3B%20font%2Dsize%3A%208%2E1pt%3B%20page%2Dbreak%2Dinside%3A%20auto%3B%20%7D%0Athead%20%7B%20display%3A%20table%2Dheader%2Dgroup%3B%20%7D%0Atr%20%7B%20page%2Dbreak%2Dinside%3A%20avoid%3B%20%7D%0Ath%20%7B%20background%3A%20var%28%2D%2Daccent%29%3B%20color%3A%20white%3B%20text%2Dalign%3A%20left%3B%20%7D%0Ath%2C%20td%20%7B%20border%3A%201px%20solid%20var%28%2D%2Dline%29%3B%20padding%3A%204px%205px%3B%20vertical%2Dalign%3A%20top%3B%20%7D%0Atr%3Anth%2Dchild%28even%29%20td%20%7B%20background%3A%20%23f7fafb%3B%20%7D%0Aul%2C%20ol%20%7B%20margin%2Dtop%3A%204px%3B%20%7D%0Ablockquote%20%7B%20border%2Dleft%3A%203px%20solid%20var%28%2D%2Daccent%29%3B%20margin%2Dleft%3A%200%3B%20padding%2Dleft%3A%2010px%3B%20color%3A%20var%28%2D%2Dmuted%29%3B%20%7D%0Ahr%20%7B%20border%3A%200%3B%20border%2Dtop%3A%201px%20solid%20var%28%2D%2Dline%29%3B%20%7D%0A" />
+  <!--[if lt IE 9]>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
+  <![endif]-->
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">ABC Trading Java Rewrite</h1>
+</header>
+<h1 id="abc-trading-java-rewrite">ABC Trading Java Rewrite</h1>
+<h2 id="implementation-status-report">Implementation Status Report</h2>
+<p><strong>Scope:</strong> <code>java/src/main/java</code>, <code>java/src/test/java</code>, the Python JPype facade, and the Rust-vs-Java reconciliation tools.</p>
+<p><strong>Purpose:</strong> describe what is implemented in Java so far, how the pieces fit together, how each class is used, and why the boundaries were chosen.</p>
+<p><strong>Status:</strong> implementation snapshot as of 2026-08-23.</p>
+<h2 id="executive-summary">1. Executive Summary</h2>
+<p>The Java rewrite is a deterministic, synchronous, backtest-oriented trading runtime shaped after Nautilus Trader. Java owns the runtime loop, message routing, order state, risk boundary, simulated execution, portfolio position state, and event logging. Python owns the strategy callback and historical-data loading at the current integration boundary.</p>
+<p>The strongest verified feature is cross-backend behavioral reconciliation. The shared historical-bar workflow currently compares 228 semantic lifecycle rows between Nautilus and Java. The dedicated L3 MBO fixture compares two fills across a named venue order, queue-ahead trades, maker/taker classification, and deterministic fill ordering.</p>
+<h3 id="verified-results">Verified results</h3>
+<pre class="text"><code>mvn -q clean test
+MATCH rows=228
+MATCH L3 fills=2</code></pre>
+<p>The current Java test suite covers the deterministic runtime, L3 queue behavior, and account settlement. Account-state events expose total, locked, free, initial-margin, maintenance-margin, and currency information.</p>
+<h3 id="main-implemented-feature-groups">Main implemented feature groups</h3>
+<ul>
+<li>synchronous typed message bus with topic routing, priorities, wildcards, endpoints, and correlation callbacks</li>
+<li>component lifecycle and kernel composition</li>
+<li>Python strategy callbacks through JPype</li>
+<li>market and limit orders</li>
+<li>stop-market and stop-limit orders</li>
+<li>trailing stop market and trailing stop limit orders</li>
+<li>order lifecycle state machine</li>
+<li>cancel, modify, reject, deny, expiry, IOC, FOK, GTD, and DAY behavior</li>
+<li>local order emulation</li>
+<li>fixed tick-size configuration for Rust-supported <code>TICKS</code> trailing offsets</li>
+<li>L2 aggregate order-book snapshots and deltas</li>
+<li>L3 individual venue-order snapshots and deltas</li>
+<li>trade-driven L3 queue-ahead consumption</li>
+<li>partial fills and multiple fills across price levels</li>
+<li>maker/taker liquidity classification</li>
+<li>static operation latency</li>
+<li>multiple fee models</li>
+<li>cash and margin account settlement</li>
+<li>instrument-specific margin rates and explicit FX conversion</li>
+<li>multi-currency balance views and account-state events</li>
+<li>CSV lifecycle logging</li>
+<li>Rust-vs-Java reconciliation fixtures and comparators</li>
+</ul>
+<h2 id="architecture">2. Architecture</h2>
+<h3 id="runtime-composition">2.1 Runtime composition</h3>
+<pre class="text"><code>Python strategy / historical data
+              |
+              | JPype callbacks and value objects
+              v
++--------------------------------------------------+
+| BacktestEngine                                  |
+|  facade, logger, Python-facing lifecycle         |
++--------------------------+-----------------------+
+                           |
+                           v
++--------------------------------------------------+
+| NautilusKernel                                  |
+|  clock, cache, data engine, risk, execution,    |
+|  trader, venues, lifecycle                      |
++------+-------------------+----------------------+
+       |                   |
+       v                   v
++-------------+   +-------------------------------+
+| MessageBus  |   | Trader / StrategyContext      |
+| sync typed  |   | StrategySignal / OrderApi    |
++------+------+   +---------------+---------------+
+       |                              |
+       v                              v
++-------------+              +---------------------+
+| RiskEngine  |              | ExecutionEngine     |
++------+------+              | state machine       |
+       |                     | emulator            |
+       v                     +----------+----------+
++-------------+                         |
+| OrderState  |                         v
+| transitions  |                +--------------------+
++-------------+                | SimulatedExchange  |
+                               | book, TIF, fills   |
+                               +----------+---------+
+                                          |
+                                          v
+                               +--------------------+
+                               | Portfolio / events |
+                               +--------------------+</code></pre>
+<h3 id="data-and-order-flow">2.2 Data and order flow</h3>
+<pre class="text"><code>BAR / MARKET SNAPSHOT / ORDER BOOK SNAPSHOT OR DELTA
+                         |
+                         v
+                    DataEngine
+                         |
+                         v
+                    MessageBus
+                         |
+              +----------+----------+
+              |                     |
+              v                     v
+       strategy callback       simulated venue
+              |                     |
+              v                     v
+          OrderApi             book matching
+              |                     |
+              v                     v
+         SubmitOrder ----&gt; RiskEngine ----&gt; ExecutionEngine
+                                               |
+                                               v
+                                  order state + portfolio fill
+                                               |
+                                               v
+                               AccountLedger + events
+                                                |
+                                                v
+                                      CSV event logger</code></pre>
+<h3 id="design-principles">2.3 Design principles</h3>
+<ol type="1">
+<li><strong>Synchronous by default.</strong> The core <code>MessageBus</code> calls handlers during <code>publish</code>; it is not a worker queue.</li>
+<li><strong>Explicit boundaries.</strong> Data, risk, execution, portfolio, strategy, and reconciliation are separate Java packages.</li>
+<li><strong>Deterministic ordering.</strong> Input bars are sorted by timestamp and symbol. Bus handlers use priority and registration order. Working orders use price priority and insertion sequence.</li>
+<li><strong>Immutable messages.</strong> Records are used for commands, events, market snapshots, book levels, and order state.</li>
+<li><strong>Primitive hot path.</strong> Prices, quantities, timestamps, and PnL are currently primitive-backed <code>double</code>/<code>int</code>/<code>long</code>. Exact decimal behavior is established through shared precision and tolerance rules rather than <code>BigDecimal</code> in the hot path.</li>
+<li><strong>Source anchoring.</strong> Rust paths are recorded in capability metadata and the reconciliation harness compares observable behavior rather than only totals.</li>
+</ol>
+<h2 id="package-structure">3. Package Structure</h2>
+<pre class="text"><code>com.abc.trading
+|-- backtest          runner facade, iterator, capability metadata
+|-- cache             instruments, positions, orders
+|-- common.factories  typed order construction
+|-- data              bars, market snapshots, book snapshots/deltas, ticks
+|-- events            event schema and CSV logger
+|-- execution         commands, state machine, venue, fills, fees, latency
+|-- indicators        EMA and SMA
+|-- model             money and immutable order models
+|-- msgbus            typed synchronous bus and transport backings
+|-- portfolio         positions, balances, margin, PnL, account events
+|-- reconciliation    Java-side comparison DTOs
+|-- risk              risk decisions and trading state
+|-- system            kernel, clock, trader, component lifecycle
+`-- trading           actors, strategies, context, order API</code></pre>
+<p>The Python bridge lives under <code>python/abc_trading</code>; reconciliation scripts live under <code>recon</code>.</p>
+<h2 id="feature-matrix">4. Feature Matrix</h2>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Feature</th>
+<th>Status</th>
+<th>Implementation surface</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Typed synchronous message bus</td>
+<td>Implemented</td>
+<td><code>msgbus.MessageBus</code>, <code>TypedTopicRouter</code>, <code>TypedEndpointMap</code></td>
+<td>Direct dispatch, wildcard topics, priorities, endpoint sends, request/response correlation</td>
+</tr>
+<tr class="even">
+<td>Kernel lifecycle</td>
+<td>Implemented</td>
+<td><code>NautilusKernel</code>, <code>ComponentLifecycle</code></td>
+<td>Initialization, start, stop, reset, dispose, fault/degrade vocabulary</td>
+</tr>
+<tr class="odd">
+<td>Strategy callbacks</td>
+<td>Implemented</td>
+<td><code>Trader</code>, <code>StrategyContext</code>, Python <code>BacktestEngine</code></td>
+<td>Python strategy receives Java-driven bars and context</td>
+</tr>
+<tr class="even">
+<td>Market orders</td>
+<td>Implemented</td>
+<td><code>OrderApi</code>, <code>ExecutionEngine</code>, <code>SimulatedExchange</code></td>
+<td>Immediate or latency-delayed execution</td>
+</tr>
+<tr class="odd">
+<td>Limit orders</td>
+<td>Implemented</td>
+<td>same</td>
+<td>Cross book levels or rest as maker</td>
+</tr>
+<tr class="even">
+<td>Stop market/limit</td>
+<td>Implemented</td>
+<td>order models, trigger evaluation, state machine</td>
+<td>Stop-market fills immediately; stop-limit enters <code>TRIGGERED</code></td>
+</tr>
+<tr class="odd">
+<td>Trailing stops</td>
+<td>Implemented</td>
+<td>trailing models, exchange ratchet</td>
+<td><code>PRICE</code>, <code>BASIS_POINTS</code>, <code>TICKS</code>; <code>PRICE_TIER</code> intentionally rejected to match current Rust</td>
+</tr>
+<tr class="even">
+<td>Cancel/modify</td>
+<td>Implemented</td>
+<td>command records, execution client, state machine</td>
+<td>Explicit pending and reject states</td>
+</tr>
+<tr class="odd">
+<td>TIF</td>
+<td>Implemented</td>
+<td><code>TimeInForce</code>, exchange</td>
+<td><code>GTC</code>, <code>IOC</code>, <code>FOK</code>, <code>GTD</code>, <code>DAY</code></td>
+</tr>
+<tr class="even">
+<td>Partial/multiple fills</td>
+<td>Implemented</td>
+<td>working orders and <code>OrderStateMachine</code></td>
+<td>Quantity and average fill price tracked</td>
+</tr>
+<tr class="odd">
+<td>L2 book snapshots</td>
+<td>Implemented</td>
+<td><code>OrderBookSnapshot</code>, <code>BookLevel</code></td>
+<td>Aggregate depth per price level</td>
+</tr>
+<tr class="even">
+<td>L2 book deltas</td>
+<td>Implemented</td>
+<td><code>OrderBookDelta</code>, <code>BookAction</code></td>
+<td><code>ADD</code>, <code>UPDATE</code>, <code>DELETE</code>, <code>CLEAR</code></td>
+</tr>
+<tr class="odd">
+<td>L3 individual venue queue</td>
+<td>Implemented</td>
+<td><code>VenueOrder</code>, <code>OrderBookL3Snapshot</code>, <code>OrderBookL3Delta</code>, <code>TradeTick</code>, <code>SimulatedExchange</code></td>
+<td>Individual order identity, price-time priority, queue-ahead deltas, and trade-driven queue consumption</td>
+</tr>
+<tr class="even">
+<td>Liquidity classification</td>
+<td>Implemented</td>
+<td><code>OrderFill.liquiditySide</code></td>
+<td><code>MAKER</code>/<code>TAKER</code> included in reconciliation CSV</td>
+</tr>
+<tr class="odd">
+<td>Fees</td>
+<td>Implemented</td>
+<td><code>FeeModel</code> implementations</td>
+<td>Fixed, maker/taker, per-contract, probability, capped, notional/tiered</td>
+</tr>
+<tr class="even">
+<td>Static latency</td>
+<td>Implemented</td>
+<td><code>LatencyModel</code>, <code>StaticLatencyModel</code></td>
+<td>Operation latency with deterministic timestamp ordering</td>
+</tr>
+<tr class="odd">
+<td>Position/PnL accounting</td>
+<td>Implemented</td>
+<td><code>Portfolio</code>, <code>PositionUpdate</code>, <code>Money</code></td>
+<td>Net position, average price, realized PnL, and commission effects</td>
+</tr>
+<tr class="even">
+<td>Cash/margin account</td>
+<td>Implemented baseline</td>
+<td><code>AccountLedger</code>, <code>AccountState</code>, <code>AccountBalance</code>, <code>AccountType</code></td>
+<td>Reservations, free/locked balances, cash settlement, initial/maintenance margin, and threshold events</td>
+</tr>
+<tr class="odd">
+<td>Instrument margin metadata</td>
+<td>Implemented</td>
+<td><code>InstrumentSpec</code>, <code>Cache</code></td>
+<td>Quote/base currencies and instrument-specific margin rates</td>
+</tr>
+<tr class="even">
+<td>FX conversion</td>
+<td>Implemented</td>
+<td><code>FxRateUpdate</code>, <code>AccountLedger</code>, <code>Portfolio</code>, <code>BacktestEngine</code></td>
+<td>Replayable market-data rates for cross-currency margin and PnL conversion</td>
+</tr>
+<tr class="odd">
+<td>Account-state events</td>
+<td>Implemented</td>
+<td><code>AccountStateEvent</code>, <code>Event</code>, <code>CsvEventLogger</code></td>
+<td>Balance and margin transitions are observable in canonical logs</td>
+</tr>
+<tr class="even">
+<td>Mark-to-market valuation</td>
+<td>Implemented baseline</td>
+<td><code>Portfolio</code>, <code>AccountLedger</code>, <code>MarketDataSnapshot</code></td>
+<td>Mark updates recalculate signed unrealized PnL and threshold flags</td>
+</tr>
+<tr class="odd">
+<td>Margin model</td>
+<td>Implemented baseline</td>
+<td><code>MarginModelType</code>, <code>InstrumentSpec</code>, <code>AccountLedger</code></td>
+<td>Notional-rate and fixed-per-unit formulas with leverage</td>
+</tr>
+<tr class="even">
+<td>Decimal accounting</td>
+<td>Partial</td>
+<td>primitive <code>double</code></td>
+<td><code>BigDecimal</code>/fixed-point remains a future accounting hardening step</td>
+</tr>
+<tr class="odd">
+<td>Local order emulator</td>
+<td>Implemented</td>
+<td><code>OrderEmulator</code></td>
+<td>Snapshot-triggered local ownership and release</td>
+</tr>
+<tr class="even">
+<td>Disruptor bus</td>
+<td>Scaffold only</td>
+<td><code>DisruptorMessageBus</code></td>
+<td>Publish method is still a TODO</td>
+</tr>
+<tr class="odd">
+<td>External ring-buffer backing</td>
+<td>Implemented as backing</td>
+<td><code>RingBufferMessageBusBacking</code></td>
+<td>Bounded queue; full-buffer policy currently drops and reports</td>
+</tr>
+<tr class="even">
+<td>Persistence/event store</td>
+<td>Not implemented</td>
+<td>no event-store module</td>
+<td>CSV logging is available</td>
+</tr>
+<tr class="odd">
+<td>Live adapters</td>
+<td>Not implemented</td>
+<td>no REST/WebSocket adapter layer</td>
+<td>Current target is deterministic backtest behavior</td>
+</tr>
+</tbody>
+</table>
+<h2 id="class-and-type-catalog">5. Class and Type Catalog</h2>
+<p>The following catalog covers the Java production types currently under <code>java/src/main/java</code>.</p>
+<h3 id="backtest-package">5.1 Backtest package</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Type</th>
+<th>Usage</th>
+<th>Design rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>BacktestEngine</code></td>
+<td>Public JPype-friendly facade; registers venues/instruments/strategies and runs data</td>
+<td>Keeps Python integration simple while Java owns orchestration and logging</td>
+</tr>
+<tr class="even">
+<td><code>BacktestDataIterator</code></td>
+<td>Stores and iterates historical bars</td>
+<td>Mirrors a deterministic replay boundary and supports reset/clear</td>
+</tr>
+<tr class="odd">
+<td><code>BacktestEngineConfig</code></td>
+<td>Immutable runner options</td>
+<td>Makes sort/stream/analysis intent explicit even where the current facade uses defaults</td>
+</tr>
+<tr class="even">
+<td><code>BacktestResult</code></td>
+<td>Immutable run summary DTO</td>
+<td>Separates result reporting from runtime state</td>
+</tr>
+<tr class="odd">
+<td><code>EngineCapability</code></td>
+<td>One capability/status record</td>
+<td>Makes Rust mapping and implementation status inspectable</td>
+</tr>
+<tr class="even">
+<td><code>EngineCapabilities</code></td>
+<td>Registry of current capability mappings</td>
+<td>Documents implemented and pending Rust-aligned surfaces</td>
+</tr>
+<tr class="odd">
+<td><code>SimulatedVenueConfig</code></td>
+<td>Venue flags, latency, and fee configuration</td>
+<td>Keeps venue behavior configurable without changing kernel composition</td>
+</tr>
+</tbody>
+</table>
+<h3 id="cache-and-common-factory-packages">5.2 Cache and common factory packages</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Type</th>
+<th>Usage</th>
+<th>Design rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>Cache</code></td>
+<td>Instrument venue mapping, positions, and recorded orders</td>
+<td>Central deterministic state store shared by risk, execution, and portfolio</td>
+</tr>
+<tr class="even">
+<td><code>OrderFactory</code></td>
+<td>Creates client IDs and typed market/limit/stop/trailing orders</td>
+<td>Centralizes identity generation and model construction</td>
+</tr>
+</tbody>
+</table>
+<h3 id="data-package">5.3 Data package</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Type</th>
+<th>Usage</th>
+<th>Design rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>Bar</code></td>
+<td>Immutable close-price input for strategy and legacy replay</td>
+<td>Minimal bar boundary with primitive fields and stable sequence</td>
+</tr>
+<tr class="even">
+<td><code>MarketDataSnapshot</code></td>
+<td>Carries bid, ask, last, mark, index</td>
+<td>Gives trigger evaluation one deterministic multi-source input</td>
+</tr>
+<tr class="odd">
+<td><code>BookLevel</code></td>
+<td>Price and aggregate quantity at one level</td>
+<td>Small immutable unit for L2 depth</td>
+</tr>
+<tr class="even">
+<td><code>OrderBookSnapshot</code></td>
+<td>Complete immutable bid/ask ladder</td>
+<td>Snapshot replacement is simple and deterministic for replay</td>
+</tr>
+<tr class="odd">
+<td><code>OrderBookDelta</code></td>
+<td>One book mutation</td>
+<td>Mirrors Rust add/update/delete/clear event semantics</td>
+</tr>
+<tr class="even">
+<td><code>VenueOrder</code></td>
+<td>Individual venue order with side, price, size, and sequence</td>
+<td>Preserves L3 MBO identity instead of flattening depth into aggregate levels</td>
+</tr>
+<tr class="odd">
+<td><code>OrderBookL3Snapshot</code></td>
+<td>Complete individual-order bid/ask state</td>
+<td>Establishes deterministic price-time priority at snapshot boundaries</td>
+</tr>
+<tr class="even">
+<td><code>OrderBookL3Delta</code></td>
+<td>Add, update, delete, or clear one venue order</td>
+<td>Allows queue position to respond to exact venue-order mutations</td>
+</tr>
+<tr class="odd">
+<td><code>TradeTick</code></td>
+<td>Executed market trade with aggressor side</td>
+<td>Drives queue-ahead consumption independently from book-depth updates</td>
+</tr>
+<tr class="even">
+<td><code>AggressorSide</code></td>
+<td>Buyer, seller, or no-aggressor trade classification</td>
+<td>Determines which passive queue can advance</td>
+</tr>
+<tr class="odd">
+<td><code>FxRateUpdate</code></td>
+<td>Replayable FX conversion-rate input</td>
+<td>Makes cross-currency account valuation deterministic and time-ordered</td>
+</tr>
+<tr class="even">
+<td><code>MarginModelType</code></td>
+<td>Notional-rate or fixed-per-unit formula selection</td>
+<td>Keeps instrument margin policy explicit rather than hidden in risk code</td>
+</tr>
+<tr class="odd">
+<td><code>InstrumentSpec</code></td>
+<td>Base/quote currencies and initial/maintenance margin rates</td>
+<td>Carries the instrument facts needed by accounting and risk</td>
+</tr>
+<tr class="even">
+<td><code>BookAction</code></td>
+<td><code>ADD</code>, <code>UPDATE</code>, <code>DELETE</code>, <code>CLEAR</code></td>
+<td>Makes book mutation intent explicit</td>
+</tr>
+<tr class="odd">
+<td><code>TickScheme</code></td>
+<td>Instrument-owned fixed tick increment</td>
+<td>Rust currently supports <code>TICKS</code> through <code>price_increment</code>; Java avoids a hard-coded exchange tick in that path</td>
+</tr>
+<tr class="even">
+<td><code>DataEngine</code></td>
+<td>Publishes bars, market snapshots, books, and deltas</td>
+<td>Separates data distribution from data ownership</td>
+</tr>
+<tr class="odd">
+<td><code>DataClient</code></td>
+<td>Contract for data clients</td>
+<td>Extension point for live or external data sources</td>
+</tr>
+<tr class="even">
+<td><code>DataEngineConfig</code></td>
+<td>Immutable data-engine options</td>
+<td>Configuration boundary for future subscription/replay policies</td>
+</tr>
+</tbody>
+</table>
+<h3 id="events-package">5.4 Events package</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Type</th>
+<th>Usage</th>
+<th>Design rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>Event</code></td>
+<td>Canonical CSV row with lifecycle, order, PnL, commission, liquidity, balance, and margin</td>
+<td>One stable schema supports cross-backend comparison and account evidence</td>
+</tr>
+<tr class="even">
+<td><code>EventType</code></td>
+<td>Semantic event vocabulary</td>
+<td>Keeps logger output independent from concrete Java event class names</td>
+</tr>
+<tr class="odd">
+<td><code>EventLogger</code></td>
+<td>Event logging contract</td>
+<td>Allows CSV or another sink later</td>
+</tr>
+<tr class="even">
+<td><code>CsvEventLogger</code></td>
+<td>Writes synchronized CSV rows</td>
+<td>Human-readable evidence and simple reconciliation input</td>
+</tr>
+</tbody>
+</table>
+<h3 id="execution-commands-and-order-intents">5.5 Execution commands and order intents</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Type</th>
+<th>Usage</th>
+<th>Design rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>SubmitOrder</code></td>
+<td>Rust-shaped command envelope</td>
+<td>Carries order model, type, TIF, trigger, trailing, and emulation metadata</td>
+</tr>
+<tr class="even">
+<td><code>CancelOrder</code></td>
+<td>Cancel command</td>
+<td>Separates command from resulting canceled event</td>
+</tr>
+<tr class="odd">
+<td><code>ModifyOrder</code></td>
+<td>Quantity, price, and trigger modification command</td>
+<td>Mirrors Rust optional modify fields</td>
+</tr>
+<tr class="even">
+<td><code>OrderType</code></td>
+<td>Market, limit, stop, and trailing variants</td>
+<td>Explicit dispatch rather than implicit model inspection</td>
+</tr>
+<tr class="odd">
+<td><code>OrderIntent</code></td>
+<td>Market-style internal execution input</td>
+<td>Lightweight transport from risk to venue</td>
+</tr>
+<tr class="even">
+<td><code>LimitOrderIntent</code></td>
+<td>Limit-style internal execution input</td>
+<td>Keeps limit price and trailing-limit data explicit</td>
+</tr>
+<tr class="odd">
+<td><code>SignalDirection</code></td>
+<td><code>BUY</code>, <code>SELL</code>, <code>HOLD</code></td>
+<td>Shared side vocabulary for strategies, orders, and events</td>
+</tr>
+<tr class="even">
+<td><code>TimeInForce</code></td>
+<td><code>GTC</code>, <code>IOC</code>, <code>FOK</code>, <code>GTD</code>, <code>DAY</code></td>
+<td>Controls working-order lifetime and remainder handling</td>
+</tr>
+<tr class="odd">
+<td><code>TriggerType</code></td>
+<td>Trigger price source vocabulary</td>
+<td>Matches Rust last, quote, mark, index, midpoint, and double-match concepts</td>
+</tr>
+<tr class="even">
+<td><code>TrailingOffsetType</code></td>
+<td><code>PRICE</code>, <code>BASIS_POINTS</code>, <code>TICKS</code>, <code>PRICE_TIER</code></td>
+<td>Java rejects <code>PRICE_TIER</code> because current Rust rejects it</td>
+</tr>
+<tr class="odd">
+<td><code>OrderAccepted</code></td>
+<td>Accepted market-style event</td>
+<td>Makes venue acknowledgement observable</td>
+</tr>
+<tr class="even">
+<td><code>LimitOrderAccepted</code></td>
+<td>Accepted limit-style event</td>
+<td>Preserves order-type-specific event flow</td>
+</tr>
+<tr class="odd">
+<td><code>OrderDenied</code></td>
+<td>Risk/system denial event</td>
+<td>Represents failure before venue acceptance</td>
+</tr>
+<tr class="even">
+<td><code>LimitOrderDenied</code></td>
+<td>Limit risk denial event</td>
+<td>Keeps limit denial payload typed</td>
+</tr>
+<tr class="odd">
+<td><code>OrderRejected</code></td>
+<td>Venue rejection event</td>
+<td>Distinguishes venue rejection from local denial</td>
+</tr>
+<tr class="even">
+<td><code>LimitOrderRejected</code></td>
+<td>Limit venue rejection event</td>
+<td>Typed limit rejection counterpart</td>
+</tr>
+<tr class="odd">
+<td><code>OrderCanceled</code></td>
+<td>Successful cancel event</td>
+<td>Drives terminal <code>CANCELED</code> transition</td>
+</tr>
+<tr class="even">
+<td><code>OrderCancelRejected</code></td>
+<td>Failed cancel event</td>
+<td>Restores the prior open state</td>
+</tr>
+<tr class="odd">
+<td><code>OrderModified</code></td>
+<td>Successful modify event</td>
+<td>Makes accepted updates observable</td>
+</tr>
+<tr class="even">
+<td><code>OrderModifyRejected</code></td>
+<td>Failed modify event</td>
+<td>Restores the prior open state</td>
+</tr>
+<tr class="odd">
+<td><code>OrderExpired</code></td>
+<td>GTD/DAY expiry event</td>
+<td>Drives terminal <code>EXPIRED</code> transition</td>
+</tr>
+<tr class="even">
+<td><code>OrderTriggered</code></td>
+<td>Stop-limit trigger event</td>
+<td>Drives <code>ACCEPTED -&gt; TRIGGERED</code></td>
+</tr>
+<tr class="odd">
+<td><code>OrderEmulated</code></td>
+<td>Local emulator ownership event</td>
+<td>Drives <code>INITIALIZED -&gt; EMULATED</code></td>
+</tr>
+<tr class="even">
+<td><code>OrderReleased</code></td>
+<td>Emulator release event</td>
+<td>Drives <code>EMULATED -&gt; RELEASED</code></td>
+</tr>
+<tr class="odd">
+<td><code>OrderVoided</code></td>
+<td>Fill-correction event</td>
+<td>Represents the Rust terminal correction vocabulary</td>
+</tr>
+<tr class="even">
+<td><code>OrderFill</code></td>
+<td>One execution fill</td>
+<td>Carries quantity, price, commission, and liquidity side</td>
+</tr>
+<tr class="odd">
+<td><code>SettledOrderFill</code></td>
+<td>Fill after portfolio settlement</td>
+<td>Separates raw venue fill from state-settled fill</td>
+</tr>
+<tr class="even">
+<td><code>OrderState</code></td>
+<td>Immutable submitted/filled/remaining snapshot</td>
+<td>Makes state queryable without exposing mutable order internals</td>
+</tr>
+<tr class="odd">
+<td><code>OrderStatus</code></td>
+<td>Full Rust status vocabulary</td>
+<td>Predicates identify open and terminal states</td>
+</tr>
+<tr class="even">
+<td><code>OrderStateMachine</code></td>
+<td>Validates every order transition</td>
+<td>Prevents invalid lifecycle jumps and preserves prior pending state</td>
+</tr>
+<tr class="odd">
+<td><code>OrderMatchingEngine</code></td>
+<td>Stateless legacy single-price matcher</td>
+<td>Retained as a small model-level utility; <code>SimulatedExchange</code> owns current book matching</td>
+</tr>
+<tr class="even">
+<td><code>ExecutionClient</code></td>
+<td>Venue execution contract</td>
+<td>Allows simulated and future live clients to share the boundary</td>
+</tr>
+<tr class="odd">
+<td><code>BacktestExecutionClient</code></td>
+<td>Adapts <code>SimulatedExchange</code> to <code>ExecutionClient</code></td>
+<td>Keeps execution-engine venue routing independent from simulator details</td>
+</tr>
+<tr class="even">
+<td><code>ExecutionEngine</code></td>
+<td>Risk, emulator, client routing, state, and portfolio coordination</td>
+<td>Central execution boundary corresponding to Rust execution orchestration</td>
+</tr>
+<tr class="odd">
+<td><code>SimulatedExchange</code></td>
+<td>Working orders, book consumption, triggers, TIF, latency, fills</td>
+<td>Owns venue-specific matching and deterministic liquidity consumption</td>
+</tr>
+<tr class="even">
+<td><code>OrderEmulator</code></td>
+<td>Holds locally emulated submit commands and releases on snapshots</td>
+<td>Mirrors Rust emulator ownership before venue submission</td>
+</tr>
+<tr class="odd">
+<td><code>Commission</code></td>
+<td>Immutable fee amount/currency</td>
+<td>Keeps fill fee data explicit and testable</td>
+</tr>
+<tr class="even">
+<td><code>FeeModel</code></td>
+<td>Fee calculation contract</td>
+<td>Supports interchangeable venue fee policies</td>
+</tr>
+<tr class="odd">
+<td><code>FixedFeeModel</code></td>
+<td>Fixed commission policy</td>
+<td>Useful for per-order or one-time fees</td>
+</tr>
+<tr class="even">
+<td><code>MakerTakerFeeModel</code></td>
+<td>Rate-based maker/taker policy</td>
+<td>Calculates fee from notional and liquidity side</td>
+</tr>
+<tr class="odd">
+<td><code>PerContractFeeModel</code></td>
+<td>Quantity-based policy</td>
+<td>Models contract-style fees without notional math</td>
+</tr>
+<tr class="even">
+<td><code>ProbabilityPriceFeeModel</code></td>
+<td>Probability/price fee policy</td>
+<td>Supports specialized instrument fee formulas</td>
+</tr>
+<tr class="odd">
+<td><code>CappedOptionFeeModel</code></td>
+<td>Capped option fee policy</td>
+<td>Prevents fee growth beyond a configured cap</td>
+</tr>
+<tr class="even">
+<td><code>TieredNotionalOptionFeeModel</code></td>
+<td>Notional-tier option fee policy</td>
+<td>Models tiered fee schedules</td>
+</tr>
+<tr class="odd">
+<td><code>LiquiditySide</code></td>
+<td><code>MAKER</code> or <code>TAKER</code></td>
+<td>Explicitly records how liquidity was consumed or provided</td>
+</tr>
+<tr class="even">
+<td><code>LatencyModel</code></td>
+<td>Operation latency contract</td>
+<td>Allows deterministic or future stochastic latency models</td>
+</tr>
+<tr class="odd">
+<td><code>StaticLatencyModel</code></td>
+<td>Base plus operation-specific latency</td>
+<td>Current reproducible latency implementation</td>
+</tr>
+<tr class="even">
+<td><code>VenueId</code></td>
+<td>Validated venue value object</td>
+<td>Rust uses validated identity strings rather than enums</td>
+</tr>
+<tr class="odd">
+<td><code>DeterministicOrderId</code></td>
+<td>Deterministic order identity helper</td>
+<td>Supports reproducible event correlation</td>
+</tr>
+<tr class="even">
+<td><code>ExecutionEngineConfig</code></td>
+<td>Immutable execution configuration DTO</td>
+<td>Future configuration hook for execution policy</td>
+</tr>
+</tbody>
+</table>
+<h3 id="order-model-package">5.6 Order model package</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Type</th>
+<th>Usage</th>
+<th>Design rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>Order</code></td>
+<td>Sealed common order interface</td>
+<td>Gives factories and submit commands one typed model boundary</td>
+</tr>
+<tr class="even">
+<td><code>MarketOrder</code></td>
+<td>Immediate market order model</td>
+<td>Immutable validated order metadata</td>
+</tr>
+<tr class="odd">
+<td><code>LimitOrder</code></td>
+<td>Resting/crossing limit order model</td>
+<td>Separates limit price from market execution</td>
+</tr>
+<tr class="even">
+<td><code>StopMarketOrder</code></td>
+<td>Triggered market order model</td>
+<td>Carries trigger price and trigger source</td>
+</tr>
+<tr class="odd">
+<td><code>StopLimitOrder</code></td>
+<td>Triggered limit order model</td>
+<td>Carries both trigger and limit price</td>
+</tr>
+<tr class="even">
+<td><code>TrailingStopMarketOrder</code></td>
+<td>Dynamic stop-market model</td>
+<td>Carries activation and offset metadata</td>
+</tr>
+<tr class="odd">
+<td><code>TrailingStopLimitOrder</code></td>
+<td>Dynamic stop-limit model</td>
+<td>Adds limit offset to trailing stop metadata</td>
+</tr>
+<tr class="even">
+<td><code>Money</code></td>
+<td>Immutable amount/currency value</td>
+<td>Shared primitive-backed monetary boundary; full account precision remains future work</td>
+</tr>
+</tbody>
+</table>
+<h3 id="indicators-package">5.7 Indicators package</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Type</th>
+<th>Usage</th>
+<th>Design rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>ExponentialMovingAverage</code></td>
+<td>Stateful EMA updates</td>
+<td>Keeps indicator state in Java and minimizes bridge calls</td>
+</tr>
+<tr class="even">
+<td><code>SimpleMovingAverage</code></td>
+<td>Stateful rolling average</td>
+<td>Matches strategy warm-up behavior with explicit count/initialization</td>
+</tr>
+</tbody>
+</table>
+<h3 id="message-bus-package">5.8 Message bus package</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Type</th>
+<th>Usage</th>
+<th>Design rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>MessageBus</code></td>
+<td>Typed synchronous publish/send/request/response</td>
+<td>Core in-memory runtime path; no queue by default</td>
+</tr>
+<tr class="even">
+<td><code>TypedTopicRouter</code></td>
+<td>Wildcard topic matching with cached indexes</td>
+<td>Separates topic routing from generic bus storage</td>
+</tr>
+<tr class="odd">
+<td><code>TypedEndpointMap</code></td>
+<td>Exact typed endpoint lookup</td>
+<td>Models point-to-point Rust endpoint delivery</td>
+</tr>
+<tr class="even">
+<td><code>Handler</code></td>
+<td>Generic typed callback</td>
+<td>Keeps message bus API type-safe</td>
+</tr>
+<tr class="odd">
+<td><code>Serializer</code></td>
+<td>Serialization contract</td>
+<td>Boundary for external bus messages</td>
+</tr>
+<tr class="even">
+<td><code>JacksonSerializer</code></td>
+<td>Jackson implementation</td>
+<td>Uses existing project dependency for structured payloads</td>
+</tr>
+<tr class="odd">
+<td><code>BusMessage</code></td>
+<td>External message envelope</td>
+<td>Carries payload type and serialized payload</td>
+</tr>
+<tr class="even">
+<td><code>MessageBusEvent</code></td>
+<td>Topic/payload event record</td>
+<td>Data unit for transport-backed bus implementations</td>
+</tr>
+<tr class="odd">
+<td><code>MessageBusRouter</code></td>
+<td>Legacy untyped routing contract</td>
+<td>Extension point for non-generic bus consumers</td>
+</tr>
+<tr class="even">
+<td><code>MessageHandler</code></td>
+<td>Legacy untyped callback contract</td>
+<td>Supports the Disruptor-shaped scaffold</td>
+</tr>
+<tr class="odd">
+<td><code>MessageBusBacking</code></td>
+<td>External transport backing contract</td>
+<td>Separates transport buffering from synchronous bus semantics</td>
+</tr>
+<tr class="even">
+<td><code>RingBufferMessageBusBacking</code></td>
+<td>Bounded <code>ArrayBlockingQueue</code> backing</td>
+<td>External-flow buffering with explicit full-buffer behavior</td>
+</tr>
+<tr class="odd">
+<td><code>DisruptorMessageBus</code></td>
+<td>LMAX Disruptor-shaped facade</td>
+<td>Performance experiment/scaffold; publish integration remains TODO</td>
+</tr>
+<tr class="even">
+<td><code>SerializationEncoding</code></td>
+<td>Encoding vocabulary</td>
+<td>Configuration marker for serialized messages</td>
+</tr>
+</tbody>
+</table>
+<h3 id="portfolio-risk-and-reconciliation-packages">5.9 Portfolio, risk, and reconciliation packages</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Type</th>
+<th>Usage</th>
+<th>Design rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>Portfolio</code></td>
+<td>Applies fills, updates positions, tracks average price, PnL, and account settlement</td>
+<td>Keeps position and account transitions coordinated after execution</td>
+</tr>
+<tr class="even">
+<td><code>PositionUpdate</code></td>
+<td>Post-fill position/PnL event</td>
+<td>Makes portfolio transition observable</td>
+</tr>
+<tr class="odd">
+<td><code>PortfolioConfig</code></td>
+<td>PnL/snapshot options</td>
+<td>Configuration boundary for future account behavior</td>
+</tr>
+<tr class="even">
+<td><code>AccountLedger</code></td>
+<td>Tracks currency balances, order reservations, position margin, FX conversion, and settlement</td>
+<td>Isolates account mutation from order matching and supports deterministic snapshots</td>
+</tr>
+<tr class="odd">
+<td><code>AccountState</code></td>
+<td>Immutable primary balance and margin snapshot with per-currency balances</td>
+<td>Mirrors Nautilus <code>AccountState</code> as an observable accounting boundary</td>
+</tr>
+<tr class="even">
+<td><code>AccountBalance</code></td>
+<td>Total, locked, and free amount for one currency</td>
+<td>Preserves the invariant <code>total = locked + free</code></td>
+</tr>
+<tr class="odd">
+<td><code>AccountType</code></td>
+<td><code>CASH</code> or <code>MARGIN</code> settlement policy</td>
+<td>Makes borrowing and position-reservation semantics explicit</td>
+</tr>
+<tr class="even">
+<td><code>AccountStateEvent</code></td>
+<td>Publishes an account snapshot after acceptance or settlement</td>
+<td>Allows account changes to enter the same event evidence stream</td>
+</tr>
+<tr class="odd">
+<td><code>AccountMarginCall</code></td>
+<td>Typed notification when equity falls below maintenance margin</td>
+<td>Separates a warning threshold from ordinary account snapshots</td>
+</tr>
+<tr class="even">
+<td><code>AccountLiquidationRequired</code></td>
+<td>Typed notification when equity cannot support maintenance</td>
+<td>Makes liquidation-required state observable without silently inventing a fill</td>
+</tr>
+<tr class="odd">
+<td><code>RiskEngine</code></td>
+<td>Validates side, quantity, instrument, price, notional, trading state, and available margin</td>
+<td>Keeps risk before venue execution and prevents unsupported exposure</td>
+</tr>
+<tr class="even">
+<td><code>RiskDecision</code></td>
+<td>Allow/reject result</td>
+<td>Separates risk result from order event emission</td>
+</tr>
+<tr class="odd">
+<td><code>RiskEngineConfig</code></td>
+<td>Immutable risk options</td>
+<td>Future policy configuration boundary</td>
+</tr>
+<tr class="even">
+<td><code>TradingState</code></td>
+<td>Active, halted, reducing state vocabulary</td>
+<td>Enables global risk policy changes</td>
+</tr>
+<tr class="odd">
+<td><code>ReconciliationComparator</code></td>
+<td>Java-side comparison utility</td>
+<td>Keeps semantic comparison logic available inside the Java module</td>
+</tr>
+<tr class="even">
+<td><code>ReconciliationResult</code></td>
+<td>Immutable comparison result</td>
+<td>Carries match status, row count, and mismatch information</td>
+</tr>
+</tbody>
+</table>
+<h3 id="system-and-trading-packages">5.10 System and trading packages</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Type</th>
+<th>Usage</th>
+<th>Design rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>NautilusKernel</code></td>
+<td>Composition root and chronological replay owner</td>
+<td>Mirrors Nautilus runtime orchestration and owns global input sequence</td>
+</tr>
+<tr class="even">
+<td><code>NautilusKernelBuilder</code></td>
+<td>Kernel construction helper</td>
+<td>Provides a future fluent composition boundary</td>
+</tr>
+<tr class="odd">
+<td><code>NautilusKernelConfig</code></td>
+<td>Kernel options</td>
+<td>Separates runtime policy from kernel implementation</td>
+</tr>
+<tr class="even">
+<td><code>Clock</code></td>
+<td>Clock abstraction</td>
+<td>Allows simulated and future real clocks</td>
+</tr>
+<tr class="odd">
+<td><code>SimulatedClock</code></td>
+<td>Replay clock</td>
+<td>Makes event time explicit and testable</td>
+</tr>
+<tr class="even">
+<td><code>ComponentLifecycle</code></td>
+<td>Shared lifecycle transition table</td>
+<td>Centralizes valid component state changes</td>
+</tr>
+<tr class="odd">
+<td><code>ComponentState</code></td>
+<td>Lifecycle state vocabulary</td>
+<td>Mirrors initialized/ready/running/stopped/faulted concepts</td>
+</tr>
+<tr class="even">
+<td><code>ComponentTrigger</code></td>
+<td>Lifecycle transition vocabulary</td>
+<td>Keeps trigger names separate from state names</td>
+</tr>
+<tr class="odd">
+<td><code>Trader</code></td>
+<td>Strategy registration, contexts, and bar subscriptions</td>
+<td>Owns strategy lifecycle and symbol routing</td>
+</tr>
+<tr class="even">
+<td><code>Actor</code></td>
+<td>Actor lifecycle contract</td>
+<td>Structural boundary for event-driven components</td>
+</tr>
+<tr class="odd">
+<td><code>StrategyHandler</code></td>
+<td>Java callback contract used by Python proxy</td>
+<td>Small callback surface for strategy execution</td>
+</tr>
+<tr class="even">
+<td><code>StrategyContext</code></td>
+<td>Current bar, position, sequence, and order API</td>
+<td>Gives strategies controlled runtime access</td>
+</tr>
+<tr class="odd">
+<td><code>OrderApi</code></td>
+<td>Creates and publishes typed orders; cancel/modify/emulation</td>
+<td>Keeps strategy code independent from command construction details</td>
+</tr>
+<tr class="even">
+<td><code>StrategySignal</code></td>
+<td>Strategy-generated signal event</td>
+<td>Separates intent observation from order submission</td>
+</tr>
+<tr class="odd">
+<td><code>ExecutionAlgorithm</code></td>
+<td>Execution-algorithm contract</td>
+<td>Extension point for TWAP/VWAP-like algorithms</td>
+</tr>
+</tbody>
+</table>
+<h2 id="important-runtime-details">6. Important Runtime Details</h2>
+<h3 id="order-lifecycle">6.1 Order lifecycle</h3>
+<pre class="text"><code>INITIALIZED
+    |
+    +--&gt; DENIED
+    |
+    +--&gt; EMULATED --&gt; RELEASED --&gt; SUBMITTED --&gt; ACCEPTED
+                                      |              |
+                                      |              +--&gt; PENDING_UPDATE --&gt; ACCEPTED
+                                      |              |                    \-&gt; PARTIALLY_FILLED
+                                      |              +--&gt; PENDING_CANCEL --&gt; CANCELED
+                                      |              +--&gt; REJECTED
+                                      |
+                                      +--&gt; PARTIALLY_FILLED --&gt; FILLED
+                                      |                    \-&gt; EXPIRED / CANCELED
+                                      +--&gt; EXPIRED
+                                      +--&gt; CANCELED
+                                      +--&gt; FILLED
+                                      +--&gt; VOIDED after fill correction</code></pre>
+<p>Stop-market orders execute immediately on trigger. Stop-limit orders emit <code>TRIGGERED</code> and then match as limit orders. Trailing orders first activate and ratchet their trigger/limit prices before they can trigger.</p>
+<h3 id="order-book-behavior">6.2 Order-book behavior</h3>
+<p><code>OrderBookSnapshot</code> replaces the visible L2 book. <code>OrderBookDelta</code> mutates a persistent book:</p>
+<pre class="text"><code>ADD     -&gt; add quantity at price
+UPDATE  -&gt; replace quantity at price
+DELETE  -&gt; remove price level
+CLEAR   -&gt; clear one side</code></pre>
+<p>Market buys read asks from lowest to highest. Market sells read bids from highest to lowest. Crossed limits take available opposite-side liquidity; unfilled limits rest as makers. Working strategy orders are sorted by better price first and insertion sequence second.</p>
+<p>For L3 MBO, each <code>VenueOrder</code> remains distinct. Orders at the same price are ordered by venue sequence and then ID. A resting client order snapshots the quantity and IDs ahead of it. Venue deletes and size decreases advance that queue; size increases retain the venue order’s position. A trade tick advances only the passive side selected by its aggressor side, consuming queue-ahead quantity before a client maker order receives a fill.</p>
+<h3 id="account-and-margin-behavior">6.3 Account and margin behavior</h3>
+<p><code>AccountLedger</code> is deliberately downstream of execution and upstream of account-state logging:</p>
+<pre class="text"><code>accepted order -&gt; reserve initial margin or cash
+venue fill     -&gt; release proportional reservation
+               -&gt; apply commission and realized PnL
+               -&gt; update position margin
+               -&gt; publish AccountStateEvent
+cancel/expiry/reject -&gt; release reservation</code></pre>
+<p>Margin accounts reserve quote-currency notional multiplied by the instrument’s initial-margin rate and divided by leverage. Open positions report both initial and maintenance margin using <code>InstrumentSpec</code>. Cash accounts reserve buy-side funds, settle buy/sell notional in the quote currency, and reject uncovered sells. Additional currencies can be deposited and converted through explicitly configured FX rates; missing conversion data rejects a reservation rather than silently treating currencies as equal.</p>
+<p>These rules are a deterministic backtest baseline. They do not yet model every Nautilus derivative margin model, liquidation execution policy, or live FX feed.</p>
+<h3 id="numeric-representation">6.4 Numeric representation</h3>
+<p>The current runtime uses primitive <code>double</code> prices and PnL for bridge and hot-path simplicity. Raw source prices are not rounded in the Python data loader. Reconciliation uses shared instrument precision and a numeric tolerance. A future production accounting layer should use fixed-point integers or <code>BigDecimal</code> for money and exact decimal settlement while retaining primitives for routing/indexing where appropriate.</p>
+<h2 id="python-integration">7. Python Integration</h2>
+<p>The Python facade is intentionally thin:</p>
+<pre class="text"><code>abc_trading.backtest.engine.BacktestEngine
+        |
+        +--&gt; starts JVM and loads Java classes
+        +--&gt; converts Python Bars/Snapshots to Java objects
+        +--&gt; installs JProxy StrategyHandler
+        +--&gt; exposes market, limit, stop, trailing, cancel, modify</code></pre>
+<p>Python strategy callbacks receive a Java-owned <code>StrategyContext</code> wrapper. Java increments the global input sequence before publishing each input, so Python-generated signals and Java-generated execution events share the same chronology.</p>
+<h2 id="reconciliation-evidence">8. Reconciliation Evidence</h2>
+<h3 id="existing-bar-workflow">Existing bar workflow</h3>
+<pre class="text"><code>shared immutable OHLCV CSV
+        |
+        +--&gt; Java BacktestEngine
+        |
+        `--&gt; Nautilus BacktestEngine
+                 |
+                 `--&gt; semantic CSV comparator</code></pre>
+<p>Compared semantic events:</p>
+<ul>
+<li><code>SIGNAL</code></li>
+<li><code>ORDER_FILL</code></li>
+<li><code>POSITION_UPDATE</code></li>
+</ul>
+<p>Backend-only transport events and backend-specific identifiers are excluded intentionally. Prices, PnL, and commissions are compared numerically.</p>
+<h3 id="order-book-workflow">Order-book workflow</h3>
+<p>Shared fixture:</p>
+<pre class="text"><code>recon/order_book_market_data.csv</code></pre>
+<p>Both implementations produce:</p>
+<pre class="text"><code>market-buy-1  101.00 x 3  TAKER
+market-buy-1  101.01 x 3  TAKER
+market-sell-1  99.00 x 5  TAKER
+market-sell-1  98.99 x 2  TAKER
+limit-buy-1   100.00 x 2  MAKER</code></pre>
+<p>The order-book comparator checks order, price, quantity, and liquidity side for every fill.</p>
+<h3 id="l3-mbo-workflow">L3 MBO workflow</h3>
+<p>Shared fixture:</p>
+<pre class="text"><code>recon/l3_mbo_market_data.json</code></pre>
+<p>The Java runner and Nautilus runner both load the same individual venue orders, submit the same limit and market orders, process the same seller-aggressor trades, and emit compact fill rows. The comparator verifies client order, price, quantity, liquidity side, and fill order:</p>
+<pre class="text"><code>MATCH L3 fills=2</code></pre>
+<p>Nautilus <code>venue_order_id</code> identifies the client order’s venue assignment. The Java simulator additionally records the passive L3 book order ID when it is known; that diagnostic identity is intentionally not treated as a Rust parity field because it is not present in Nautilus <code>OrderFilled</code>.</p>
+<h3 id="account-workflow">Account workflow</h3>
+<p>Account evidence is emitted through the same Java CSV stream as lifecycle events. <code>ACCOUNT_STATE</code> rows contain the primary currency, total, locked and free balances, initial margin, and maintenance margin. The account tests cover margin reservations, cash notional settlement, commissions, realized PnL, instrument-specific rates, FX conversion, uncovered cash sells, and additional currency balances.</p>
+<h2 id="tests-and-validation">9. Tests and Validation</h2>
+<p>Current Java tests cover:</p>
+<ul>
+<li>message bus routing and ordering</li>
+<li>lifecycle transitions</li>
+<li>kernel sorting and clock behavior</li>
+<li>risk validation</li>
+<li>order API construction</li>
+<li>fee and latency models</li>
+<li>order state transitions</li>
+<li>partial and multiple fills</li>
+<li>cancel, modify, expiry, IOC, FOK, and GTD</li>
+<li>stop and trailing triggers</li>
+<li>emulation release</li>
+<li>tick configuration</li>
+<li>L2 depth traversal and FIFO</li>
+<li>persistent order-book deltas</li>
+<li>individual L3 venue-order identity and queue-ahead changes</li>
+<li>trade-driven queue consumption and aggressor-side behavior</li>
+<li>portfolio position/PnL behavior</li>
+<li>cash/margin account settlement and account-state events</li>
+</ul>
+<p>The Java module currently contains 133 production source files and 15 test files. The test suite is intentionally focused on the current deterministic backtest slice; it is not yet a complete replacement of all Nautilus modules.</p>
+<h2 id="current-gaps-and-recommended-next-work">10. Current Gaps and Recommended Next Work</h2>
+<ol type="1">
+<li><strong>Exact account parity:</strong> the current baseline needs broader Rust account-event fixtures, full derivative margin models, liquidation execution policy, and market-driven FX coverage.</li>
+<li><strong>Persistent event store:</strong> replayable event persistence beyond CSV evidence logs.</li>
+<li><strong>Live adapters:</strong> REST/WebSocket data and execution clients, reconnects, throttling, and external reconciliation.</li>
+<li><strong>Exact accounting:</strong> fixed-point or <code>BigDecimal</code> money model with explicit currency precision.</li>
+<li><strong>Execution algorithms:</strong> actual algorithm scheduling rather than the current interface boundary.</li>
+<li><strong>Disruptor integration:</strong> complete the <code>DisruptorMessageBus</code> publication path only if profiling shows the synchronous bus is insufficient.</li>
+</ol>
+<h2 id="design-conclusion">11. Design Conclusion</h2>
+<p>The Java implementation has moved beyond isolated skeleton classes. It now forms a coherent deterministic backtest runtime with explicit Rust-shaped ownership boundaries and executable cross-backend evidence. L3 queue semantics and a baseline cash/margin ledger are implemented; the next parity work is exact derivative account behavior and richer market-data-driven valuation.</p>
+<h2 id="business-knowledge-and-rust-reference">12. Business Knowledge and Rust Reference</h2>
+<h3 id="why-these-boundaries-matter-to-a-trading-system">12.1 Why these boundaries matter to a trading system</h3>
+<p>The rewrite follows trading-domain ownership rather than treating the application as a generic event processor:</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Business concept</th>
+<th>Operational meaning</th>
+<th>Java owner</th>
+<th>Nautilus/Rust reference</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Market data</td>
+<td>The venue’s observable state and executed trades</td>
+<td><code>DataEngine</code>, <code>OrderBook*</code>, <code>TradeTick</code></td>
+<td><code>crates/data</code>, <code>crates/model/src/data</code></td>
+</tr>
+<tr class="even">
+<td>Price-time priority</td>
+<td>Earlier and better-priced liquidity receives execution first</td>
+<td><code>SimulatedExchange.L3BookState</code></td>
+<td><code>crates/model/src/orderbook</code>, matching engine</td>
+</tr>
+<tr class="odd">
+<td>Queue ahead</td>
+<td>A passive order cannot fill until visible liquidity ahead is consumed or removed</td>
+<td><code>WorkingOrder</code> queue fields and L3 state</td>
+<td><code>crates/execution/src/matching_engine/engine.rs</code> queue methods</td>
+</tr>
+<tr class="even">
+<td>Maker/taker</td>
+<td>Determines execution role and often fee schedule</td>
+<td><code>LiquiditySide</code>, <code>FeeModel</code></td>
+<td><code>LiquiditySide</code>, fill-model paths in matching engine</td>
+</tr>
+<tr class="odd">
+<td>Risk</td>
+<td>Prevents invalid or unaffordable exposure before routing</td>
+<td><code>RiskEngine</code></td>
+<td><code>crates/risk/src/engine</code></td>
+</tr>
+<tr class="even">
+<td>Free versus locked funds</td>
+<td>Separates immediately tradable capital from order/position commitments</td>
+<td><code>AccountLedger</code>, <code>AccountState</code></td>
+<td><code>AccountBalance</code>, <code>CashAccount</code>, <code>MarginAccount</code></td>
+</tr>
+<tr class="odd">
+<td>Initial versus maintenance margin</td>
+<td>Initial margin gates new exposure; maintenance margin measures ongoing safety</td>
+<td><code>InstrumentSpec</code>, <code>AccountLedger</code></td>
+<td><code>MarginBalance</code>, <code>AccountsManager</code></td>
+</tr>
+<tr class="even">
+<td>Realized PnL</td>
+<td>PnL becomes final when a position is reduced or closed</td>
+<td><code>Portfolio</code></td>
+<td><code>AccountsManager::update_balances</code>, position PnL methods</td>
+</tr>
+<tr class="odd">
+<td>Settlement</td>
+<td>A fill changes positions, balances, commissions, and observable state</td>
+<td><code>ExecutionEngine</code> and <code>Portfolio</code></td>
+<td>portfolio event and account-state flow</td>
+</tr>
+</tbody>
+</table>
+<h3 id="rust-source-map">12.2 Rust source map</h3>
+<p>The Java implementation is anchored to these Nautilus areas:</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Java area</th>
+<th>Nautilus reference</th>
+<th>Reason for the mapping</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>MessageBus</code> and topic routing</td>
+<td><code>crates/common/src/message_bus</code> and component messaging</td>
+<td>Preserve synchronous in-process dispatch semantics for deterministic replay</td>
+</tr>
+<tr class="even">
+<td><code>NautilusKernel</code> and lifecycle</td>
+<td><code>crates/system</code>, <code>crates/common/src/actor</code></td>
+<td>Keep composition, clock, lifecycle, and ownership explicit</td>
+</tr>
+<tr class="odd">
+<td>Order models and state machine</td>
+<td><code>crates/model/src/orders</code>, <code>crates/execution/src/engine</code></td>
+<td>Match validated order vocabulary and legal transitions</td>
+</tr>
+<tr class="even">
+<td><code>SimulatedExchange</code></td>
+<td><code>crates/backtest/src/exchange</code>, <code>crates/execution/src/matching_engine</code></td>
+<td>Keep venue matching, triggers, TIF, fills, and queue behavior together</td>
+</tr>
+<tr class="odd">
+<td>L3 queue tracking</td>
+<td><code>engine.rs</code>: <code>snapshot_queue_position</code>, <code>decrement_queue_on_trade</code>, <code>advance_l3_queue_on_delete</code>, <code>adjust_l3_queue_on_update</code></td>
+<td>Preserve quantity-ahead and per-book-order behavior</td>
+</tr>
+<tr class="even">
+<td><code>Portfolio</code> and <code>AccountLedger</code></td>
+<td><code>crates/portfolio/src/portfolio.rs</code>, <code>manager.rs</code>, <code>accounts/cash.rs</code>, <code>accounts/margin.rs</code></td>
+<td>Separate positions, balance settlement, and margin policy</td>
+</tr>
+<tr class="odd">
+<td><code>RiskEngine</code></td>
+<td><code>crates/risk/src/engine/mod.rs</code></td>
+<td>Perform affordability and exposure checks before execution</td>
+</tr>
+<tr class="even">
+<td>CSV reconciliation</td>
+<td><code>crates/model</code> events and Python backtest surfaces</td>
+<td>Compare observable semantics while excluding backend-only IDs</td>
+</tr>
+</tbody>
+</table>
+<h3 id="business-interpretation-of-a-fill">12.3 Business interpretation of a fill</h3>
+<p>For a market buy, the simulator consumes the lowest available asks. For a resting buy, a seller-aggressor trade first consumes the bid queue ahead and only the excess can fill the client. A fill then has four consequences:</p>
+<ol type="1">
+<li>The order state advances by the fill quantity.</li>
+<li>The portfolio position and average price change.</li>
+<li>Commission and realized PnL change account equity.</li>
+<li>Reserved funds and position margin are recalculated and published.</li>
+</ol>
+<p>This sequence is why matching, risk, portfolio, and account settlement are separate classes even though one market event can touch all of them.</p>
+</body>
+</html>

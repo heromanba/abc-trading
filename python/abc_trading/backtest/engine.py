@@ -188,6 +188,10 @@ class BacktestEngine:
             "balance_free": float(state.balanceFree()),
             "margin_initial": float(state.marginInitial()),
             "margin_maintenance": float(state.marginMaintenance()),
+            "unrealized_pnl": float(state.unrealizedPnl()),
+            "equity": float(state.equity()),
+            "margin_call": bool(state.marginCall()),
+            "liquidation_required": bool(state.liquidationRequired()),
             "timestamp": int(state.tsInit()),
         }
 

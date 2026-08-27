@@ -105,3 +105,23 @@ Expected result:
 ```text
 MATCH liquidation rows=4
 ```
+
+## Account parity check
+
+The shared account fixture compares a linear perpetual after an opening fill
+and mark-price move. It checks total, locked, and free balance, initial and
+maintenance margin, unrealized PnL, and equity:
+
+```bash
+PYTHONPATH=python python recon/java_account_parity.py
+python recon/nautilus_account_parity.py
+python recon/compare_account_recon.py \
+	recon/output/nautilus_account_state.csv \
+	recon/output/java_account_state.csv
+```
+
+Expected result:
+
+```text
+MATCH account state fields=8
+```

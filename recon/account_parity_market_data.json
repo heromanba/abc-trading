@@ -1,0 +1,10 @@
+{
+  "symbol": "BTCUSDT-PERP",
+  "venue": "BINANCE",
+  "currency": "USDT",
+  "starting_balance": 10000.0,
+  "leverage": 1.0,
+  "entry_price": 30000.0,
+  "mark_price": 29000.0,
+  "quantity": 1
+}

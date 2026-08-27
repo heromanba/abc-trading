@@ -56,8 +56,9 @@ class AccountLedgerTest {
 
         AccountState open = portfolio.accountState("XNAS", 101);
         assertEquals(999.0, open.balanceTotal(), 1e-9);
-        assertEquals(50.0, open.marginInitial(), 1e-9);
-        assertEquals(949.0, open.balanceFree(), 1e-9);
+        assertEquals(0.0, open.marginInitial(), 1e-9);
+        assertEquals(25.0, open.balanceLocked(), 1e-9);
+        assertEquals(974.0, open.balanceFree(), 1e-9);
 
         portfolio.applyOrderIntent(order("sell", SignalDirection.SELL, 1, 110.0));
         OrderFill sell = fill("sell", SignalDirection.SELL, 1, 110.0, 1.0);
@@ -112,7 +113,7 @@ class AccountLedgerTest {
 
         AccountState state = portfolio.accountState("XNAS", 100);
 
-        assertEquals(10.0, state.marginInitial(), 1e-9);
+        assertEquals(0.0, state.marginInitial(), 1e-9);
         assertEquals(5.0, state.marginMaintenance(), 1e-9);
     }
 
@@ -246,6 +247,26 @@ class AccountLedgerTest {
 
         assertEquals(15.0, state.marginInitial(), 1e-9);
     }
+
+        @Test
+        void standardMarginIgnoresLeverageAndInverseMarginUsesReciprocalPrice() {
+        Cache cache = new Cache();
+        cache.addInstrument("STD", "XNAS", TickScheme.fixed(0.01),
+            "STD", "USD", 0.10, 0.05, MarginModelType.STANDARD_NOTIONAL_RATE, 0.0, 0.0);
+        cache.addInstrument("INV", "XNAS", TickScheme.fixed(0.01),
+            "INV", "USD", 0.10, 0.05, MarginModelType.INVERSE_NOTIONAL_RATE, 0.0, 0.0);
+        Portfolio portfolio = new Portfolio(cache);
+        portfolio.configureAccount("XNAS", 100_000.0, "USD", 2.0);
+        portfolio.setFxRate("INV", "USD", 1.0);
+        portfolio.applyOrderIntent(new OrderIntent("strategy", "STD", 1, 100, "corr", "std",
+            SignalDirection.BUY, 10, 100.0, 0, 0.0));
+        portfolio.applyOrderIntent(new OrderIntent("strategy", "INV", 1, 100, "corr", "inv",
+            SignalDirection.BUY, 10, 100.0, 0, 0.0));
+
+        AccountState state = portfolio.accountState("XNAS", 100);
+
+        assertEquals(100.005, state.balanceLocked(), 1e-9);
+        }
 
     private static Cache cache() {
         Cache cache = new Cache();
