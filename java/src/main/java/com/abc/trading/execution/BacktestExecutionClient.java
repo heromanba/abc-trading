@@ -32,7 +32,17 @@ public final class BacktestExecutionClient implements ExecutionClient {
     }
 
     @Override
+    public int cancelAllOrders(String symbol, long timestampNs) {
+        return exchange.cancelAllOrders(symbol, timestampNs);
+    }
+
+    @Override
     public boolean modifyOrder(ModifyOrder command) {
         return exchange.modifyOrder(command);
+    }
+
+    @Override
+    public void executeLiquidation(OrderIntent order) {
+        exchange.executeLiquidation(order);
     }
 }

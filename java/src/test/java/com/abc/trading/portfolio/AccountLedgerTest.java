@@ -201,6 +201,24 @@ class AccountLedgerTest {
     }
 
     @Test
+    void positiveEquityBelowMaintenanceIsLiquidationRequired() {
+        Cache cache = new Cache();
+        cache.addInstrument("AAPL", "XNAS", TickScheme.fixed(0.01),
+                "AAPL", "USD", 0.10, 2.0);
+        Portfolio portfolio = new Portfolio(cache);
+        portfolio.configureAccount("XNAS", 120.0, "USD", 1.0);
+        portfolio.applyOrderIntent(order("buy", SignalDirection.BUY, 1, 100.0));
+        portfolio.applyFill(fill("buy", SignalDirection.BUY, 1, 100.0, 0.0));
+
+        AccountState state = portfolio.applyMarketData(new MarketDataSnapshot(
+                "AAPL", 101, 51.0, 52.0, 51.0, 51.0, 51.0, 1));
+
+        assertTrue(state.equity() > 0.0);
+        assertTrue(state.marginCall());
+        assertTrue(state.liquidationRequired());
+    }
+
+    @Test
     void shortMarkToMarketUsesSignedPositionQuantity() {
         Cache cache = cache();
         Portfolio portfolio = new Portfolio(cache);

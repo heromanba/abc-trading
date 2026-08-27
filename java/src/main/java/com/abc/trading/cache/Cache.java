@@ -95,6 +95,16 @@ public final class Cache {
         return Map.copyOf(positions);
     }
 
+    public Map<String, Integer> positionsForVenue(String venue) {
+        Map<String, Integer> result = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : instruments.entrySet()) {
+            if (entry.getValue().equals(venue) && positions.getOrDefault(entry.getKey(), 0) != 0) {
+                result.put(entry.getKey(), positions.get(entry.getKey()));
+            }
+        }
+        return Map.copyOf(result);
+    }
+
     public Map<String, OrderIntent> orders() {
         return Map.copyOf(orders);
     }

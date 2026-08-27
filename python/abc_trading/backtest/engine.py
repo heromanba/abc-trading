@@ -201,7 +201,7 @@ class BacktestEngine:
         if base_currency is None and quote_currency is None:
             self._java.addInstrument(symbol, venue, tick_size)
             return
-        self._java.addInstrument(symbol, venue, java_class("com.abc.trading.data.TickScheme").fixed(tick_size),
+        self._java.addInstrument(symbol, venue, tick_size,
                                  base_currency or symbol, quote_currency or "USD",
                      margin_initial_rate, margin_maintenance_rate,
                      java_class("com.abc.trading.data.MarginModelType").valueOf(margin_model_type),

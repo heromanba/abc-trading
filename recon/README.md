@@ -86,3 +86,22 @@ Run the example directly:
 mvn -pl java test
 PYTHONPATH=python .venv/bin/python recon/abc_trading_stock_multi_instrument_example.py
 ```
+
+## Liquidation parity check
+
+The shared liquidation fixture covers a position crash, cancellation of a
+resting order, forced execution at the current bid, and completion:
+
+```bash
+PYTHONPATH=python python recon/java_liquidation_recon.py
+python recon/nautilus_liquidation_recon.py
+python recon/compare_liquidation_recon.py \
+	recon/output/nautilus_liquidation_events.csv \
+	recon/output/java_liquidation_events.csv
+```
+
+Expected result:
+
+```text
+MATCH liquidation rows=4
+```

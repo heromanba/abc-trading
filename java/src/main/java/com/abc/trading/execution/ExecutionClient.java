@@ -13,5 +13,9 @@ public interface ExecutionClient {
 
     boolean cancelOrder(CancelOrder command);
 
+    int cancelAllOrders(String symbol, long timestampNs);
+
     boolean modifyOrder(ModifyOrder command);
+
+    void executeLiquidation(OrderIntent order);
 }

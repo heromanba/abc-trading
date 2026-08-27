@@ -208,6 +208,55 @@ public final class SimulatedExchange {
         return inflightCommands.removeIf(item -> item.orderId().equals(command.clientOrderId()));
     }
 
+    public int cancelAllOrders(String symbol, long timestampNs) {
+        int canceled = 0;
+        List<WorkingOrder> working = new ArrayList<>();
+        for (WorkingOrder order : workingOrders.values()) {
+            if (order.symbol.equals(symbol)) working.add(order);
+        }
+        for (WorkingOrder order : working) {
+            if (workingOrders.remove(order.orderId) != null) {
+                unregisterQueueOrder(order);
+                lifecycleHandler.accept(new OrderCanceled(new CancelOrder(
+                        order.strategyId, order.symbol, order.orderId,
+                        "liquidation-cancel-" + order.orderId, timestampNs)));
+                canceled++;
+            }
+        }
+        List<ScheduledCommand> scheduled = new ArrayList<>();
+        for (ScheduledCommand command : inflightCommands) {
+            if (command.symbol().equals(symbol)) scheduled.add(command);
+        }
+        for (ScheduledCommand command : scheduled) {
+            if (!inflightCommands.remove(command)) continue;
+            lifecycleHandler.accept(new OrderCanceled(new CancelOrder(
+                    command.strategyId(), symbol, command.orderId(),
+                    "liquidation-cancel-" + command.orderId(), timestampNs)));
+            canceled++;
+        }
+        return canceled;
+    }
+
+    public void executeLiquidation(OrderIntent order) {
+        currentTimestamp = order.marketTimestamp();
+        WorkingOrder liquidation = WorkingOrder.from(order);
+        liquidation.insertionSequence = workingOrderSequence++;
+        MarketDataSnapshot snapshot = marketData.get(order.symbol());
+        if (snapshot == null) throw new IllegalStateException("No market data for liquidation symbol " + order.symbol());
+        double executablePrice = order.side() == SignalDirection.SELL ? snapshot.bid() : snapshot.ask();
+        if (!Double.isFinite(executablePrice) || executablePrice <= 0.0) executablePrice = snapshot.mark();
+        if (!Double.isFinite(executablePrice) || executablePrice <= 0.0) executablePrice = snapshot.last();
+        if (!Double.isFinite(executablePrice) || executablePrice <= 0.0) {
+            throw new IllegalStateException("No executable price for liquidation symbol " + order.symbol());
+        }
+
+        workingOrders.put(liquidation.orderId, liquidation);
+        tryMatchOrder(liquidation);
+        int remaining = liquidation.quantity - liquidation.filledQuantity;
+        if (remaining > 0) fill(liquidation, executablePrice, remaining, LiquiditySide.TAKER);
+        if (workingOrders.remove(liquidation.orderId) != null) unregisterQueueOrder(liquidation);
+    }
+
     public boolean modifyOrder(ModifyOrder command) {
         WorkingOrder order = workingOrders.get(command.clientOrderId());
         if (order == null || (!order.limit && !order.trailing)) return false;
@@ -605,6 +654,14 @@ public final class SimulatedExchange {
             implements Comparable<ScheduledCommand> {
         private String orderId() {
             return order instanceof OrderIntent market ? market.orderId() : ((LimitOrderIntent) order).orderId();
+        }
+
+        private String symbol() {
+            return order instanceof OrderIntent market ? market.symbol() : ((LimitOrderIntent) order).symbol();
+        }
+
+        private String strategyId() {
+            return order instanceof OrderIntent market ? market.strategyId() : ((LimitOrderIntent) order).strategyId();
         }
 
         @Override

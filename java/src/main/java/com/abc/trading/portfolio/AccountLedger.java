@@ -183,7 +183,7 @@ public final class AccountLedger {
         double unrealized = account.unrealized(account.currency, this);
         double equity = primary.total() + unrealized;
         boolean marginCall = maintenance > 0.0 && equity < maintenance;
-        boolean liquidationRequired = marginCall && equity <= 0.0;
+        boolean liquidationRequired = marginCall;
         return new AccountState(venue, account.currency, primary.total(), locked, free,
             initial, maintenance, timestamp, balances, unrealized, equity, marginCall, liquidationRequired);
     }

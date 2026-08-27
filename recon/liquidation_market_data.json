@@ -1,0 +1,12 @@
+{
+  "symbol": "XBTUSD",
+  "venue": "BITMEX",
+  "account_currency": "USD",
+  "starting_balance": 1.0,
+  "leverage": 1.0,
+  "tick_size": 0.1,
+  "entry_price": 40000.0,
+  "crash_price": 20000.0,
+  "quantity": 1000000,
+  "open_order_price": 50000.0
+}

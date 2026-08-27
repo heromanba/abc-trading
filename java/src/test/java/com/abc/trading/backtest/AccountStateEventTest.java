@@ -51,4 +51,28 @@ class AccountStateEventTest {
         assertTrue(log.contains(",MARGIN_CALL,"));
         assertTrue(log.contains(",LIQUIDATION_REQUIRED,"));
     }
+
+    @Test
+    void liquidationCancelsOpenOrdersClosesPositionAndLogsLifecycle(@TempDir Path tempDir) throws Exception {
+        Path output = tempDir.resolve("liquidation-events.csv");
+        BacktestEngine engine = new BacktestEngine(output.toString());
+        engine.addVenue("XNAS");
+        engine.configureAccount("XNAS", 60.0, "USD", 1.0);
+        engine.addInstrument("AAPL", "XNAS", 0.01, "AAPL", "USD", 0.10, 0.05);
+        engine.start();
+        engine.runMarketData(new MarketDataSnapshot[] {
+                new MarketDataSnapshot("AAPL", 100, 100.0, 100.0, 100.0, 100.0, 100.0, 1)
+        });
+        engine.submitMarketOrder("liquidation-test", "AAPL", "open-long", SignalDirection.BUY, 1, 100, 100.0);
+        engine.submitLimitOrder("liquidation-test", "AAPL", "resting-sell", SignalDirection.SELL, 1, 100, 102.0);
+        engine.runBars(new Bar[] { new Bar("AAPL", 101, 0.01, 2) });
+        engine.close();
+
+        String log = Files.readString(output);
+        assertTrue(log.contains(",LIQUIDATION_STARTED,"));
+        assertTrue(log.contains(",ORDER_CANCEL,"));
+        assertTrue(log.contains(",LIQUIDATION_FILL,"));
+        assertTrue(log.contains(",LIQUIDATION_COMPLETED,"));
+        assertTrue(log.contains(",0.01000000,1,"));
+    }
 }

@@ -17,9 +17,14 @@ import com.abc.trading.portfolio.AccountStateEvent;
 import com.abc.trading.portfolio.AccountMarginCall;
 import com.abc.trading.portfolio.AccountLiquidationRequired;
 import com.abc.trading.portfolio.AccountState;
+import com.abc.trading.portfolio.LiquidationStarted;
+import com.abc.trading.portfolio.LiquidationFill;
+import com.abc.trading.portfolio.LiquidationCompleted;
 
 import java.util.LinkedHashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /** Minimal deterministic execution boundary composed through typed endpoints. */
 public final class ExecutionEngine {
@@ -33,6 +38,8 @@ public final class ExecutionEngine {
     private final Map<VenueId, ExecutionClient> clients = new LinkedHashMap<>();
     private final OrderStateMachine stateMachine = new OrderStateMachine();
     private final OrderEmulator orderEmulator;
+    private final Map<String, String> liquidationOrders = new LinkedHashMap<>();
+    private final Set<String> liquidatingVenues = new HashSet<>();
 
     public ExecutionEngine(MessageBus bus, RiskEngine riskEngine, Portfolio portfolio, Cache cache) {
         this.bus = bus;
@@ -48,6 +55,7 @@ public final class ExecutionEngine {
             portfolio.applyFxRate(update);
             publishAccountStates(update.tsInit());
         });
+        bus.subscribe(AccountLiquidationRequired.class, this::liquidateAccount);
         bus.subscribe(CancelOrder.class, this::cancel);
         bus.subscribe(ModifyOrder.class, this::modify);
         bus.subscribe(OrderIntent.class, this::submit);
@@ -85,6 +93,7 @@ public final class ExecutionEngine {
         bus.subscribe(OrderFill.class, fill -> {
             stateMachine.fill(fill.orderId(), fill.quantity(), fill.price());
             PositionUpdate positionUpdate = portfolio.applyFill(fill);
+            if (liquidationOrders.containsKey(fill.orderId())) bus.publish(new LiquidationFill(fill));
             bus.publish(new SettledOrderFill(fill, positionUpdate.position(), positionUpdate.realizedPnl()));
             bus.publish(positionUpdate);
             if (cache.hasInstrument(fill.symbol())) {
@@ -115,6 +124,45 @@ public final class ExecutionEngine {
 
     private void publishAccountStates(long timestamp) {
         for (AccountState state : portfolio.accountStates(timestamp).values()) publishAccountState(state);
+    }
+
+    private void liquidateAccount(AccountLiquidationRequired event) {
+        AccountState state = event.state();
+        if (!liquidatingVenues.add(state.venue())) return;
+        try {
+            Map<String, Integer> positions = cache.positionsForVenue(state.venue());
+            for (Map.Entry<String, Integer> entry : positions.entrySet()) {
+                String symbol = entry.getKey();
+                int position = entry.getValue();
+                if (position == 0) continue;
+                String orderId = "LIQ-" + state.venue() + "-" + symbol + "-" + state.tsInit();
+                SignalDirection side = position > 0 ? SignalDirection.SELL : SignalDirection.BUY;
+                bus.publish(new LiquidationStarted(state, symbol, orderId, Math.abs(position)));
+                ExecutionClient client = clientForSymbol(symbol);
+                client.cancelAllOrders(symbol, state.tsInit());
+                stateMachine.initialize(orderId, Math.abs(position), TimeInForce.IOC, 0L);
+                stateMachine.submit(orderId);
+                stateMachine.accept(orderId);
+                liquidationOrders.put(orderId, symbol);
+                client.executeLiquidation(new OrderIntent("SYSTEM_LIQUIDATION", symbol, 0L,
+                        state.tsInit(), orderId + "-CORR", orderId, side, Math.abs(position),
+                        0.0, position, 0.0));
+                liquidationOrders.remove(orderId);
+            }
+            AccountState completedState = portfolio.accountState(state.venue(), state.tsInit());
+            if (completedState != null && cache.positionsForVenue(state.venue()).isEmpty()) {
+                bus.publish(new LiquidationCompleted(completedState));
+            }
+        } finally {
+            liquidatingVenues.remove(state.venue());
+        }
+    }
+
+    private ExecutionClient clientForSymbol(String symbol) {
+        String venue = cache.venue(symbol);
+        ExecutionClient client = clients.get(new VenueId(venue));
+        if (client == null) throw new IllegalStateException("No execution client for " + venue);
+        return client;
     }
 
     public void registerClient(ExecutionClient client) {

@@ -43,6 +43,9 @@ import com.abc.trading.portfolio.PositionUpdate;
 import com.abc.trading.portfolio.AccountStateEvent;
 import com.abc.trading.portfolio.AccountMarginCall;
 import com.abc.trading.portfolio.AccountLiquidationRequired;
+import com.abc.trading.portfolio.LiquidationStarted;
+import com.abc.trading.portfolio.LiquidationFill;
+import com.abc.trading.portfolio.LiquidationCompleted;
 import com.abc.trading.system.ComponentState;
 import com.abc.trading.system.NautilusKernel;
 import com.abc.trading.trading.StrategyHandler;
@@ -77,6 +80,9 @@ public final class BacktestEngine implements AutoCloseable {
         kernel.bus().subscribe(AccountStateEvent.class, this::logAccountState);
         kernel.bus().subscribe(AccountMarginCall.class, event -> logAccountThreshold(event.state(), EventType.MARGIN_CALL));
         kernel.bus().subscribe(AccountLiquidationRequired.class, event -> logAccountThreshold(event.state(), EventType.LIQUIDATION_REQUIRED));
+        kernel.bus().subscribe(LiquidationStarted.class, this::logLiquidationStarted);
+        kernel.bus().subscribe(LiquidationFill.class, event -> logLiquidationFill(event.fill()));
+        kernel.bus().subscribe(LiquidationCompleted.class, event -> logAccountThreshold(event.state(), EventType.LIQUIDATION_COMPLETED));
         kernel.bus().subscribe(OrderCanceled.class, event -> logCancel(event.command(), EventType.ORDER_CANCEL));
         kernel.bus().subscribe(OrderCancelRejected.class, event -> logCancel(event.command(), EventType.ORDER_CANCEL_REJECT));
         kernel.bus().subscribe(OrderModified.class, event -> logModify(event.command(), EventType.ORDER_MODIFY));
@@ -217,6 +223,25 @@ public final class BacktestEngine implements AutoCloseable {
                 state.currency(), null, "", state.currency(), state.balanceTotal(), state.balanceLocked(),
                 state.balanceFree(), state.marginInitial(), state.marginMaintenance(), state.unrealizedPnl(),
                 state.equity(), state.marginCall(), state.liquidationRequired()));
+    }
+
+    private void logLiquidationStarted(LiquidationStarted event) {
+        var state = event.state();
+        log(new Event(0, nextLifecycleSequence(), state.tsInit(), event.symbol(),
+                LiquidationStarted.class.getSimpleName(), EventType.LIQUIDATION_STARTED,
+                "SYSTEM_LIQUIDATION", SignalDirection.HOLD, "", event.liquidationOrderId(),
+                0.0, event.quantity(), 0, 0.0, 0.0, state.currency(), null, "",
+                state.currency(), state.balanceTotal(), state.balanceLocked(), state.balanceFree(),
+                state.marginInitial(), state.marginMaintenance(), state.unrealizedPnl(),
+                state.equity(), state.marginCall(), state.liquidationRequired()));
+    }
+
+    private void logLiquidationFill(OrderFill fill) {
+        log(new Event(fill.inputSequence(), nextLifecycleSequence(), fill.marketTimestamp(), fill.symbol(),
+                LiquidationFill.class.getSimpleName(), EventType.LIQUIDATION_FILL,
+                fill.strategyId(), fill.side(), fill.correlationId(), fill.orderId(), fill.price(), fill.quantity(),
+                fill.position(), fill.realizedPnl(), fill.commission().amount(), fill.commission().currency(),
+                fill.liquiditySide(), fill.venueOrderId()));
     }
 
     private void log(Event event) {
