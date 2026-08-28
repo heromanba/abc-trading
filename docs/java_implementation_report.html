@@ -337,15 +337,21 @@ MATCH L3 fills=2</code></pre>
 </tr>
 <tr class="even">
 <td>Persistence/event store</td>
-<td>Not implemented</td>
-<td>no event-store module</td>
-<td>CSV logging is available</td>
+<td>Implemented</td>
+<td><code>PersistentEventStore</code>, <code>EventReplayer</code>, <code>EventCheckpoint</code></td>
+<td>Versioned append-only JSONL, projections, synchronous replay, and checkpoint resume</td>
 </tr>
 <tr class="odd">
-<td>Live adapters</td>
-<td>Not implemented</td>
-<td>no REST/WebSocket adapter layer</td>
-<td>Current target is deterministic backtest behavior</td>
+<td>Binance USD-M Futures adapter</td>
+<td>Implemented baseline</td>
+<td><code>BinanceFuturesAdapter</code>, <code>BinanceFuturesLiveRuntime</code></td>
+<td>Public streams, signed REST, user data, reconnects, and kernel routing; Testnet credentials remain opt-in</td>
+</tr>
+<tr class="even">
+<td>Live adapter precision</td>
+<td>Implemented boundary</td>
+<td>Binance decimal protocol records</td>
+<td>Decimal Binance quantities are preserved; the current integer core rejects unrepresentable fractional quantities rather than truncating</td>
 </tr>
 </tbody>
 </table>
@@ -537,6 +543,118 @@ MATCH L3 fills=2</code></pre>
 </tr>
 </tbody>
 </table>
+<h3 id="a-binance-adapter-package">5.4a Binance adapter package</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Type</th>
+<th>Usage</th>
+<th>Design rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>BinanceEnvironment</code></td>
+<td>Selects live, Testnet, or demo routes</td>
+<td>Keeps endpoint policy explicit and aligned with Nautilus URL helpers</td>
+</tr>
+<tr class="even">
+<td><code>BinanceFuturesConfig</code></td>
+<td>Symbols, credentials, timeouts, reconnect, GTD, and startup policy</td>
+<td>Mirrors Nautilus <code>BinanceDataClientConfig</code>/<code>BinanceExecClientConfig</code> without embedding secrets</td>
+</tr>
+<tr class="odd">
+<td><code>BinanceHmacSigner</code></td>
+<td>Signs Binance query strings with HMAC-SHA256</td>
+<td>Matches Binance signed REST and Nautilus account-client behavior</td>
+</tr>
+<tr class="even">
+<td><code>BinanceQuery</code></td>
+<td>Encodes ordered REST parameters</td>
+<td>Keeps signature input deterministic and URL-safe</td>
+</tr>
+<tr class="odd">
+<td><code>BinanceHttpTransport</code></td>
+<td>Injectable HTTP boundary</td>
+<td>Enables offline contract tests and alternate transport implementations</td>
+</tr>
+<tr class="even">
+<td><code>JavaBinanceHttpTransport</code></td>
+<td>JDK <code>HttpClient</code> implementation</td>
+<td>Provides a dependency-light production REST transport</td>
+</tr>
+<tr class="odd">
+<td><code>BinanceMessageMapper</code></td>
+<td>Parses public and user WebSocket JSON</td>
+<td>Separates wire schema from runtime behavior and preserves Rust-shaped event semantics</td>
+</tr>
+<tr class="even">
+<td><code>BinancePriceLevel</code></td>
+<td>Decimal price/quantity pair</td>
+<td>Prevents precision loss before a caller chooses a core representation</td>
+</tr>
+<tr class="odd">
+<td><code>BinanceDepthUpdate</code></td>
+<td>Binance <code>depthUpdate</code> record</td>
+<td>Preserves update IDs needed for order-book sequencing and gap detection</td>
+</tr>
+<tr class="even">
+<td><code>BinanceTradeEvent</code></td>
+<td>Binance <code>aggTrade</code> record</td>
+<td>Maps <code>buyerIsMaker</code> into Nautilus buyer/seller aggressor semantics</td>
+</tr>
+<tr class="odd">
+<td><code>BinanceMarkPriceEvent</code></td>
+<td>Binance mark/index price record</td>
+<td>Supplies futures valuation and trigger inputs</td>
+</tr>
+<tr class="even">
+<td><code>BinanceOrderUpdate</code></td>
+<td><code>ORDER_TRADE_UPDATE</code> projection</td>
+<td>Carries execution type, status, fill, commission, and reduce-only state</td>
+</tr>
+<tr class="odd">
+<td><code>BinanceAccountUpdate</code></td>
+<td><code>ACCOUNT_UPDATE</code> projection</td>
+<td>Carries wallet, cross-wallet, and per-position unrealized values</td>
+</tr>
+<tr class="even">
+<td><code>BinanceInstrumentMetadata</code></td>
+<td>Parsed <code>exchangeInfo</code> symbol metadata</td>
+<td>Maps filters, currencies, tick size, and margin percentages to <code>InstrumentSpec</code></td>
+</tr>
+<tr class="odd">
+<td><code>BinanceAccountSnapshot</code></td>
+<td>Parsed signed account response</td>
+<td>Maps wallet, available, margin, and unrealized fields to <code>AccountState</code></td>
+</tr>
+<tr class="even">
+<td><code>BinanceMarketDataHandler</code></td>
+<td>Public event callback contract</td>
+<td>Keeps market data independently testable and routable</td>
+</tr>
+<tr class="odd">
+<td><code>BinanceExecutionHandler</code></td>
+<td>User-data callback contract</td>
+<td>Keeps execution/account events separate from public market data</td>
+</tr>
+<tr class="even">
+<td><code>BinanceFuturesAdapter</code></td>
+<td>REST/WebSocket Binance USD-M client</td>
+<td>Owns endpoint lifecycle, signing, listen-key renewal, reconnect, and order mapping</td>
+</tr>
+<tr class="odd">
+<td><code>BinanceFuturesLiveRuntime</code></td>
+<td>Bridges adapter events into Java core records and bus</td>
+<td>Makes one real adapter exercise the same risk, execution, portfolio, and event paths as backtest</td>
+</tr>
+</tbody>
+</table>
 <h3 id="events-package">5.4 Events package</h3>
 <table>
 <colgroup>
@@ -571,6 +689,51 @@ MATCH L3 fills=2</code></pre>
 <td><code>CsvEventLogger</code></td>
 <td>Writes synchronized CSV rows</td>
 <td>Human-readable evidence and simple reconciliation input</td>
+</tr>
+<tr class="odd">
+<td><code>EventStoreRecord</code></td>
+<td>Versioned JSONL envelope with offset and canonical event</td>
+<td>Makes persistence schema and append position explicit</td>
+</tr>
+<tr class="even">
+<td><code>PersistentEventStore</code></td>
+<td>Append-only JSONL event sink and reader</td>
+<td>Provides durable audit evidence without coupling the runtime to a database</td>
+</tr>
+<tr class="odd">
+<td><code>CompositeEventLogger</code></td>
+<td>Fans one event to CSV and persistent sinks</td>
+<td>Preserves existing CSV output while adding durable storage</td>
+</tr>
+<tr class="even">
+<td><code>EventCheckpoint</code></td>
+<td>Stores next offset and sequence watermarks</td>
+<td>Supports restart/resume without replaying downstream notifications twice</td>
+</tr>
+<tr class="odd">
+<td><code>EventReplayState</code></td>
+<td>Rebuilds orders, positions, PnL, and accounts</td>
+<td>Provides a deterministic projection for recovery and audit</td>
+</tr>
+<tr class="even">
+<td><code>ReplayOrderState</code></td>
+<td>Immutable reconstructed order state</td>
+<td>Keeps replay output independent from mutable live order objects</td>
+</tr>
+<tr class="odd">
+<td><code>ReplayAccountState</code></td>
+<td>Immutable reconstructed account state</td>
+<td>Makes balance and margin recovery queryable</td>
+</tr>
+<tr class="even">
+<td><code>EventReplayResult</code></td>
+<td>Replay counts, offset, and projection</td>
+<td>Separates recovery results from the event-store implementation</td>
+</tr>
+<tr class="odd">
+<td><code>EventReplayer</code></td>
+<td>Delivers persisted events to the synchronous bus</td>
+<td>Reuses the runtime’s existing dispatch semantics during recovery</td>
 </tr>
 </tbody>
 </table>
@@ -1250,6 +1413,20 @@ cancel/expiry/reject -&gt; release reservation</code></pre>
         +--&gt; installs JProxy StrategyHandler
         +--&gt; exposes market, limit, stop, trailing, cancel, modify</code></pre>
 <p>Python strategy callbacks receive a Java-owned <code>StrategyContext</code> wrapper. Java increments the global input sequence before publishing each input, so Python-generated signals and Java-generated execution events share the same chronology.</p>
+<h3 id="live-adapter-flow">7.1 Live adapter flow</h3>
+<pre class="text"><code>Binance public WebSocket
+       |
+       v
+BinanceMessageMapper -&gt; BinanceFuturesLiveRuntime -&gt; MessageBus
+                                                 |
+                      +------------------------------+----------------+
+                      |                                               |
+                      v                                               v
+                Strategy/Portfolio                             ExecutionEngine
+                                                                |
+                                                                v
+                                             Binance signed REST + user stream</code></pre>
+<p><code>NautilusKernel.addBinanceFutures</code> registers the runtime as both a data client and an execution client. Kernel lifecycle starts/stops the adapter; public depth, trades, and mark prices enter the core bus, while user-data fills become <code>OrderFill</code> events and account snapshots remain typed adapter/account events. The adapter uses JDK <code>HttpClient</code> and WebSocket APIs, so no third-party live transport is required.</p>
 <h2 id="reconciliation-evidence">8. Reconciliation Evidence</h2>
 <h3 id="existing-bar-workflow">Existing bar workflow</h3>
 <pre class="text"><code>shared immutable OHLCV CSV
@@ -1276,6 +1453,10 @@ market-sell-1  99.00 x 5  TAKER
 market-sell-1  98.99 x 2  TAKER
 limit-buy-1   100.00 x 2  MAKER</code></pre>
 <p>The order-book comparator checks order, price, quantity, and liquidity side for every fill.</p>
+<h3 id="account-and-persistence-evidence">Account and persistence evidence</h3>
+<p>The account fixture compares eight final fields:</p>
+<pre class="text"><code>MATCH account state fields=8</code></pre>
+<p>The event-store integration writes the same canonical events to CSV and versioned JSONL, then replays them into a synchronous bus and state projection. The Binance adapter contract suite validates URL routing, HMAC signing, wire mapping, decimal preservation, REST order parameters, and the kernel bridge without requiring credentials.</p>
 <h3 id="l3-mbo-workflow">L3 MBO workflow</h3>
 <p>Shared fixture:</p>
 <pre class="text"><code>recon/l3_mbo_market_data.json</code></pre>
@@ -1305,19 +1486,22 @@ limit-buy-1   100.00 x 2  MAKER</code></pre>
 <li>trade-driven queue consumption and aggressor-side behavior</li>
 <li>portfolio position/PnL behavior</li>
 <li>cash/margin account settlement and account-state events</li>
+<li>account-state parity across balance, margin, unrealized PnL, and equity</li>
+<li>persistent JSONL event storage, replay projections, and checkpoint recovery</li>
+<li>Binance adapter URL, signing, market-data, user-data, and kernel integration</li>
 </ul>
-<p>The Java module currently contains 133 production source files and 15 test files. The test suite is intentionally focused on the current deterministic backtest slice; it is not yet a complete replacement of all Nautilus modules.</p>
+<p>The Java module currently contains 168 production source files and 20 test files. The test suite is intentionally focused on the current deterministic backtest and one live-adapter slice; it is not yet a complete replacement of all Nautilus modules.</p>
 <h2 id="current-gaps-and-recommended-next-work">10. Current Gaps and Recommended Next Work</h2>
 <ol type="1">
-<li><strong>Exact account parity:</strong> the current baseline needs broader Rust account-event fixtures, full derivative margin models, liquidation execution policy, and market-driven FX coverage.</li>
-<li><strong>Persistent event store:</strong> replayable event persistence beyond CSV evidence logs.</li>
-<li><strong>Live adapters:</strong> REST/WebSocket data and execution clients, reconnects, throttling, and external reconciliation.</li>
+<li><strong>Exact account parity:</strong> broader Rust account-event fixtures, full derivative margin models, and richer market-driven FX coverage remain.</li>
+<li><strong>Binance live hardening:</strong> authenticated Testnet order-flow smoke tests, exchange-info filter enforcement, WebSocket sequence-gap recovery, and user-stream account reconciliation.</li>
+<li><strong>Additional adapters:</strong> add other venues only after the Binance contract and operational path are stable.</li>
 <li><strong>Exact accounting:</strong> fixed-point or <code>BigDecimal</code> money model with explicit currency precision.</li>
 <li><strong>Execution algorithms:</strong> actual algorithm scheduling rather than the current interface boundary.</li>
 <li><strong>Disruptor integration:</strong> complete the <code>DisruptorMessageBus</code> publication path only if profiling shows the synchronous bus is insufficient.</li>
 </ol>
 <h2 id="design-conclusion">11. Design Conclusion</h2>
-<p>The Java implementation has moved beyond isolated skeleton classes. It now forms a coherent deterministic backtest runtime with explicit Rust-shaped ownership boundaries and executable cross-backend evidence. L3 queue semantics and a baseline cash/margin ledger are implemented; the next parity work is exact derivative account behavior and richer market-data-driven valuation.</p>
+<p>The Java implementation has moved beyond isolated skeleton classes. It now forms a coherent deterministic backtest runtime with explicit Rust-shaped ownership boundaries, durable replay evidence, and one Binance USD-M live-adapter slice. The next work is operational Testnet hardening and deeper account parity, not multiplying adapters before the first one is proven.</p>
 <h2 id="business-knowledge-and-rust-reference">12. Business Knowledge and Rust Reference</h2>
 <h3 id="why-these-boundaries-matter-to-a-trading-system">12.1 Why these boundaries matter to a trading system</h3>
 <p>The rewrite follows trading-domain ownership rather than treating the application as a generic event processor:</p>

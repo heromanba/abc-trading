@@ -11,6 +11,9 @@ import com.abc.trading.data.TradeTick;
 import com.abc.trading.data.FxRateUpdate;
 import com.abc.trading.portfolio.AccountType;
 import com.abc.trading.data.MarginModelType;
+import com.abc.trading.adapters.binance.BinanceFuturesConfig;
+import com.abc.trading.adapters.binance.BinanceFuturesLiveRuntime;
+import com.abc.trading.adapters.binance.BinanceHttpTransport;
 import com.abc.trading.events.CsvEventLogger;
 import com.abc.trading.events.Event;
 import com.abc.trading.events.EventLogger;
@@ -313,6 +316,15 @@ public final class BacktestEngine implements AutoCloseable {
     public void addVenue(String venue) {
         if (venue == null || venue.isBlank()) throw new IllegalArgumentException("venue is required");
         kernel.addVenue(venue);
+    }
+
+    public BinanceFuturesLiveRuntime addBinanceFutures(BinanceFuturesConfig config,
+            BinanceHttpTransport http) {
+        return kernel.addBinanceFutures(config, http);
+    }
+
+    public BinanceFuturesLiveRuntime addBinanceFutures(BinanceFuturesConfig config) {
+        return kernel.addBinanceFutures(config);
     }
 
     public void configureAccount(String venue, double startingBalance, String currency, double leverage) {

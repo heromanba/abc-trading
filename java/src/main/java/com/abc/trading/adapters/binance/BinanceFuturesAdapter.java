@@ -73,6 +73,30 @@ public final class BinanceFuturesAdapter implements DataClient, ExecutionClient 
 
     public BinanceFuturesConfig config() { return config; }
 
+    public String exchangeInfoJson() {
+        return request("GET", "/fapi/v1/exchangeInfo", Map.of(), false);
+    }
+
+    public String accountJson() {
+        if (!config.authenticated()) throw new IllegalStateException("authenticated credentials are required");
+        Map<String, String> params = new LinkedHashMap<>();
+        params.put("timestamp", Long.toString(System.currentTimeMillis()));
+        params.put("recvWindow", Long.toString(config.recvWindowMs()));
+        return request("GET", "/fapi/v2/account", params, true);
+    }
+
+    public String accountSnapshotJson() {
+        return accountJson();
+    }
+
+    public void acceptMarketPayload(String payload) {
+        mapper.dispatchMarket(payload, marketHandler);
+    }
+
+    public void acceptUserPayload(String payload) {
+        mapper.dispatchUser(payload, executionHandler);
+    }
+
     @Override
     public String clientId() { return CLIENT_ID; }
 
@@ -107,6 +131,7 @@ public final class BinanceFuturesAdapter implements DataClient, ExecutionClient 
             started = true;
             stopping = false;
         }
+        if (!config.connectOnStart()) return;
         connectMarketSocket();
         if (config.authenticated()) connectUserStream();
     }

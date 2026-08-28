@@ -12,7 +12,8 @@ public record BinanceFuturesConfig(
         long recvWindowMs,
         Duration requestTimeout,
         Duration reconnectDelay,
-        boolean useGtd) {
+        boolean useGtd,
+        boolean connectOnStart) {
     public BinanceFuturesConfig {
         if (environment == null) throw new IllegalArgumentException("environment is required");
         if (symbols == null || symbols.isEmpty()) throw new IllegalArgumentException("symbols are required");
@@ -28,12 +29,18 @@ public record BinanceFuturesConfig(
     }
 
     public BinanceFuturesConfig(BinanceEnvironment environment, String apiKey, String apiSecret, List<String> symbols) {
-        this(environment, apiKey, apiSecret, symbols, 5_000, Duration.ofSeconds(10), Duration.ofSeconds(2), true);
+        this(environment, apiKey, apiSecret, symbols, 5_000, Duration.ofSeconds(10), Duration.ofSeconds(2), true, true);
     }
 
     public BinanceFuturesConfig(BinanceEnvironment environment, String apiKey, String apiSecret,
             List<String> symbols, long recvWindowMs, Duration requestTimeout, Duration reconnectDelay) {
         this(environment, apiKey, apiSecret, symbols, recvWindowMs, requestTimeout, reconnectDelay, true);
+    }
+
+    public BinanceFuturesConfig(BinanceEnvironment environment, String apiKey, String apiSecret,
+            List<String> symbols, long recvWindowMs, Duration requestTimeout, Duration reconnectDelay,
+            boolean useGtd) {
+        this(environment, apiKey, apiSecret, symbols, recvWindowMs, requestTimeout, reconnectDelay, useGtd, true);
     }
 
     public boolean authenticated() {

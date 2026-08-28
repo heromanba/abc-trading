@@ -12,6 +12,10 @@ import com.abc.trading.data.TradeTick;
 import com.abc.trading.data.FxRateUpdate;
 import com.abc.trading.portfolio.AccountType;
 import com.abc.trading.data.MarginModelType;
+import com.abc.trading.data.DataClient;
+import com.abc.trading.adapters.binance.BinanceFuturesConfig;
+import com.abc.trading.adapters.binance.BinanceFuturesLiveRuntime;
+import com.abc.trading.adapters.binance.BinanceHttpTransport;
 import com.abc.trading.data.DataEngine;
 import com.abc.trading.msgbus.MessageBus;
 import com.abc.trading.portfolio.Portfolio;
@@ -31,6 +35,8 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
 /** Minimal Java runtime composition root modeled after NautilusKernel. */
 public final class NautilusKernel implements AutoCloseable {
@@ -44,6 +50,7 @@ public final class NautilusKernel implements AutoCloseable {
     private final Trader trader;
     private final NautilusKernelConfig config;
     private final Map<VenueId, SimulatedExchange> exchanges = new LinkedHashMap<>();
+    private final List<DataClient> liveClients = new ArrayList<>();
     private final ComponentLifecycle lifecycle = new ComponentLifecycle();
     private long inputSequence;
 
@@ -126,6 +133,23 @@ public final class NautilusKernel implements AutoCloseable {
         bus.subscribe("data.trade.*", TradeTick.class, exchange::processTradeTick, 100);
     }
 
+    public BinanceFuturesLiveRuntime addBinanceFutures(BinanceFuturesConfig config,
+            BinanceHttpTransport http) {
+        if (lifecycle.state() != ComponentState.PRE_INITIALIZED && lifecycle.state() != ComponentState.READY) {
+            throw new IllegalStateException("Cannot add live adapters after initialization");
+        }
+        BinanceFuturesLiveRuntime runtime = new BinanceFuturesLiveRuntime(config, http, bus::publish);
+        executionEngine.registerClient(runtime);
+        liveClients.add(runtime);
+        return runtime;
+    }
+
+    public BinanceFuturesLiveRuntime addBinanceFutures(BinanceFuturesConfig config) {
+        return addBinanceFutures(config,
+                new com.abc.trading.adapters.binance.JavaBinanceHttpTransport(
+                        config.httpBaseUrl(), config.requestTimeout()));
+    }
+
     public void configureAccount(String venue, double startingBalance, String currency, double leverage) {
         configureAccount(venue, startingBalance, currency, leverage, AccountType.MARGIN);
     }
@@ -169,6 +193,7 @@ public final class NautilusKernel implements AutoCloseable {
         }
         lifecycle.start();
         trader.start();
+        for (DataClient client : liveClients) client.start();
         lifecycle.startCompleted();
     }
 
@@ -288,6 +313,7 @@ public final class NautilusKernel implements AutoCloseable {
     public void stop() {
         if (lifecycle.state() != ComponentState.RUNNING) return;
         lifecycle.stop();
+        for (DataClient client : liveClients) client.stop();
         trader.stop();
         lifecycle.stopCompleted();
     }

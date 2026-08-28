@@ -168,6 +168,27 @@ class BacktestEngine:
     def add_venue(self, venue: str) -> None:
         self._java.addVenue(venue)
 
+    def add_binance_futures(
+        self,
+        symbols: list[str],
+        environment: str = "TESTNET",
+        api_key: str | None = None,
+        api_secret: str | None = None,
+        connect_on_start: bool = True,
+    ) -> object:
+        config_type = java_class("com.abc.trading.adapters.binance.BinanceFuturesConfig")
+        symbol_list = java_class("java.util.ArrayList")()
+        for symbol in symbols:
+            symbol_list.add(symbol)
+        config = config_type(
+            java_class("com.abc.trading.adapters.binance.BinanceEnvironment").valueOf(environment),
+            api_key, api_secret, symbol_list, 5_000,
+            java_class("java.time.Duration").ofSeconds(10),
+            java_class("java.time.Duration").ofSeconds(2),
+            True, connect_on_start,
+        )
+        return self._java.addBinanceFutures(config)
+
     def configure_account(
         self, venue: str, starting_balance: float, currency: str = "USD", leverage: float = 1.0,
         account_type: str = "MARGIN"

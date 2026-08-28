@@ -195,8 +195,9 @@ The Python bridge lives under `python/abc_trading`; reconciliation scripts live 
 | Local order emulator | Implemented | `OrderEmulator` | Snapshot-triggered local ownership and release |
 | Disruptor bus | Scaffold only | `DisruptorMessageBus` | Publish method is still a TODO |
 | External ring-buffer backing | Implemented as backing | `RingBufferMessageBusBacking` | Bounded queue; full-buffer policy currently drops and reports |
-| Persistence/event store | Not implemented | no event-store module | CSV logging is available |
-| Live adapters | Not implemented | no REST/WebSocket adapter layer | Current target is deterministic backtest behavior |
+| Persistence/event store | Implemented | `PersistentEventStore`, `EventReplayer`, `EventCheckpoint` | Versioned append-only JSONL, projections, synchronous replay, and checkpoint resume |
+| Binance USD-M Futures adapter | Implemented baseline | `BinanceFuturesAdapter`, `BinanceFuturesLiveRuntime` | Public streams, signed REST, user data, reconnects, and kernel routing; Testnet credentials remain opt-in |
+| Live adapter precision | Implemented boundary | Binance decimal protocol records | Decimal Binance quantities are preserved; the current integer core rejects unrepresentable fractional quantities rather than truncating |
 
 ## 5. Class and Type Catalog
 
@@ -244,6 +245,30 @@ The following catalog covers the Java production types currently under `java/src
 | `DataClient` | Contract for data clients | Extension point for live or external data sources |
 | `DataEngineConfig` | Immutable data-engine options | Configuration boundary for future subscription/replay policies |
 
+### 5.4a Binance adapter package
+
+| Type | Usage | Design rationale |
+|---|---|---|
+| `BinanceEnvironment` | Selects live, Testnet, or demo routes | Keeps endpoint policy explicit and aligned with Nautilus URL helpers |
+| `BinanceFuturesConfig` | Symbols, credentials, timeouts, reconnect, GTD, and startup policy | Mirrors Nautilus `BinanceDataClientConfig`/`BinanceExecClientConfig` without embedding secrets |
+| `BinanceHmacSigner` | Signs Binance query strings with HMAC-SHA256 | Matches Binance signed REST and Nautilus account-client behavior |
+| `BinanceQuery` | Encodes ordered REST parameters | Keeps signature input deterministic and URL-safe |
+| `BinanceHttpTransport` | Injectable HTTP boundary | Enables offline contract tests and alternate transport implementations |
+| `JavaBinanceHttpTransport` | JDK `HttpClient` implementation | Provides a dependency-light production REST transport |
+| `BinanceMessageMapper` | Parses public and user WebSocket JSON | Separates wire schema from runtime behavior and preserves Rust-shaped event semantics |
+| `BinancePriceLevel` | Decimal price/quantity pair | Prevents precision loss before a caller chooses a core representation |
+| `BinanceDepthUpdate` | Binance `depthUpdate` record | Preserves update IDs needed for order-book sequencing and gap detection |
+| `BinanceTradeEvent` | Binance `aggTrade` record | Maps `buyerIsMaker` into Nautilus buyer/seller aggressor semantics |
+| `BinanceMarkPriceEvent` | Binance mark/index price record | Supplies futures valuation and trigger inputs |
+| `BinanceOrderUpdate` | `ORDER_TRADE_UPDATE` projection | Carries execution type, status, fill, commission, and reduce-only state |
+| `BinanceAccountUpdate` | `ACCOUNT_UPDATE` projection | Carries wallet, cross-wallet, and per-position unrealized values |
+| `BinanceInstrumentMetadata` | Parsed `exchangeInfo` symbol metadata | Maps filters, currencies, tick size, and margin percentages to `InstrumentSpec` |
+| `BinanceAccountSnapshot` | Parsed signed account response | Maps wallet, available, margin, and unrealized fields to `AccountState` |
+| `BinanceMarketDataHandler` | Public event callback contract | Keeps market data independently testable and routable |
+| `BinanceExecutionHandler` | User-data callback contract | Keeps execution/account events separate from public market data |
+| `BinanceFuturesAdapter` | REST/WebSocket Binance USD-M client | Owns endpoint lifecycle, signing, listen-key renewal, reconnect, and order mapping |
+| `BinanceFuturesLiveRuntime` | Bridges adapter events into Java core records and bus | Makes one real adapter exercise the same risk, execution, portfolio, and event paths as backtest |
+
 ### 5.4 Events package
 
 | Type | Usage | Design rationale |
@@ -252,6 +277,15 @@ The following catalog covers the Java production types currently under `java/src
 | `EventType` | Semantic event vocabulary | Keeps logger output independent from concrete Java event class names |
 | `EventLogger` | Event logging contract | Allows CSV or another sink later |
 | `CsvEventLogger` | Writes synchronized CSV rows | Human-readable evidence and simple reconciliation input |
+| `EventStoreRecord` | Versioned JSONL envelope with offset and canonical event | Makes persistence schema and append position explicit |
+| `PersistentEventStore` | Append-only JSONL event sink and reader | Provides durable audit evidence without coupling the runtime to a database |
+| `CompositeEventLogger` | Fans one event to CSV and persistent sinks | Preserves existing CSV output while adding durable storage |
+| `EventCheckpoint` | Stores next offset and sequence watermarks | Supports restart/resume without replaying downstream notifications twice |
+| `EventReplayState` | Rebuilds orders, positions, PnL, and accounts | Provides a deterministic projection for recovery and audit |
+| `ReplayOrderState` | Immutable reconstructed order state | Keeps replay output independent from mutable live order objects |
+| `ReplayAccountState` | Immutable reconstructed account state | Makes balance and margin recovery queryable |
+| `EventReplayResult` | Replay counts, offset, and projection | Separates recovery results from the event-store implementation |
+| `EventReplayer` | Delivers persisted events to the synchronous bus | Reuses the runtime’s existing dispatch semantics during recovery |
 
 ### 5.5 Execution commands and order intents
 
@@ -478,6 +512,30 @@ abc_trading.backtest.engine.BacktestEngine
 
 Python strategy callbacks receive a Java-owned `StrategyContext` wrapper. Java increments the global input sequence before publishing each input, so Python-generated signals and Java-generated execution events share the same chronology.
 
+### 7.1 Live adapter flow
+
+```text
+Binance public WebSocket
+       |
+       v
+BinanceMessageMapper -> BinanceFuturesLiveRuntime -> MessageBus
+                                                 |
+                      +------------------------------+----------------+
+                      |                                               |
+                      v                                               v
+                Strategy/Portfolio                             ExecutionEngine
+                                                                |
+                                                                v
+                                             Binance signed REST + user stream
+```
+
+`NautilusKernel.addBinanceFutures` registers the runtime as both a data client
+and an execution client. Kernel lifecycle starts/stops the adapter; public
+depth, trades, and mark prices enter the core bus, while user-data fills become
+`OrderFill` events and account snapshots remain typed adapter/account events.
+The adapter uses JDK `HttpClient` and WebSocket APIs, so no third-party live
+transport is required.
+
 ## 8. Reconciliation Evidence
 
 ### Existing bar workflow
@@ -519,6 +577,20 @@ limit-buy-1   100.00 x 2  MAKER
 ```
 
 The order-book comparator checks order, price, quantity, and liquidity side for every fill.
+
+### Account and persistence evidence
+
+The account fixture compares eight final fields:
+
+```text
+MATCH account state fields=8
+```
+
+The event-store integration writes the same canonical events to CSV and
+versioned JSONL, then replays them into a synchronous bus and state projection.
+The Binance adapter contract suite validates URL routing, HMAC signing, wire
+mapping, decimal preservation, REST order parameters, and the kernel bridge
+without requiring credentials.
 
 ### L3 MBO workflow
 
@@ -573,21 +645,24 @@ Current Java tests cover:
 - trade-driven queue consumption and aggressor-side behavior
 - portfolio position/PnL behavior
 - cash/margin account settlement and account-state events
+- account-state parity across balance, margin, unrealized PnL, and equity
+- persistent JSONL event storage, replay projections, and checkpoint recovery
+- Binance adapter URL, signing, market-data, user-data, and kernel integration
 
-The Java module currently contains 133 production source files and 15 test files. The test suite is intentionally focused on the current deterministic backtest slice; it is not yet a complete replacement of all Nautilus modules.
+The Java module currently contains 168 production source files and 20 test files. The test suite is intentionally focused on the current deterministic backtest and one live-adapter slice; it is not yet a complete replacement of all Nautilus modules.
 
 ## 10. Current Gaps and Recommended Next Work
 
-1. **Exact account parity:** the current baseline needs broader Rust account-event fixtures, full derivative margin models, liquidation execution policy, and market-driven FX coverage.
-2. **Persistent event store:** replayable event persistence beyond CSV evidence logs.
-3. **Live adapters:** REST/WebSocket data and execution clients, reconnects, throttling, and external reconciliation.
+1. **Exact account parity:** broader Rust account-event fixtures, full derivative margin models, and richer market-driven FX coverage remain.
+2. **Binance live hardening:** authenticated Testnet order-flow smoke tests, exchange-info filter enforcement, WebSocket sequence-gap recovery, and user-stream account reconciliation.
+3. **Additional adapters:** add other venues only after the Binance contract and operational path are stable.
 4. **Exact accounting:** fixed-point or `BigDecimal` money model with explicit currency precision.
 5. **Execution algorithms:** actual algorithm scheduling rather than the current interface boundary.
 6. **Disruptor integration:** complete the `DisruptorMessageBus` publication path only if profiling shows the synchronous bus is insufficient.
 
 ## 11. Design Conclusion
 
-The Java implementation has moved beyond isolated skeleton classes. It now forms a coherent deterministic backtest runtime with explicit Rust-shaped ownership boundaries and executable cross-backend evidence. L3 queue semantics and a baseline cash/margin ledger are implemented; the next parity work is exact derivative account behavior and richer market-data-driven valuation.
+The Java implementation has moved beyond isolated skeleton classes. It now forms a coherent deterministic backtest runtime with explicit Rust-shaped ownership boundaries, durable replay evidence, and one Binance USD-M live-adapter slice. The next work is operational Testnet hardening and deeper account parity, not multiplying adapters before the first one is proven.
 
 ## 12. Business Knowledge and Rust Reference
 
