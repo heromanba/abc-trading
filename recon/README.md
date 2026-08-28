@@ -145,3 +145,29 @@ EventReplayResult result = EventReplayer.replay(
 
 The persistent-store tests cover append/reopen offsets, schema validation,
 checkpoint resume, bus delivery, and state projection recovery.
+
+## Binance USD-M Futures adapter
+
+The Java adapter follows the Nautilus Binance split between public market data,
+signed execution REST, and authenticated user-data streams. Testnet uses
+`https://demo-fapi.binance.com` and `wss://stream.binancefuture.com`; live uses
+the `fapi.binance.com` and `fstream.binance.com` routes.
+
+Credentials are optional for public market data and must be provided through
+runtime configuration, never committed to the repository:
+
+```java
+BinanceFuturesConfig config = new BinanceFuturesConfig(
+	BinanceEnvironment.TESTNET,
+	System.getenv("BINANCE_API_KEY"),
+	System.getenv("BINANCE_API_SECRET"),
+	List.of("BTCUSDT"));
+BinanceFuturesAdapter adapter = new BinanceFuturesAdapter(config, marketHandler, executionHandler);
+adapter.start();
+```
+
+The adapter preserves decimal Binance quantities and maps `depthUpdate`,
+`aggTrade`, `markPriceUpdate`, `ORDER_TRADE_UPDATE`, and `ACCOUNT_UPDATE` into
+typed records. It maps market, limit, stop, and trailing-stop-market orders;
+trailing stop-limit is explicitly rejected because the Nautilus Binance
+adapter does not support that Binance Futures order type.
