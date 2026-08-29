@@ -30,7 +30,7 @@ class BinanceFuturesAdapterTest {
         assertTrue(adapter.marketStreamUrl().contains("btcusdt@depth@100ms"));
         assertTrue(adapter.marketStreamUrl().contains("btcusdt@aggTrade"));
         assertTrue(adapter.marketStreamUrl().contains("btcusdt@markPrice@1s"));
-        assertEquals("wss://stream.binancefuture.com/ws/listen-key", adapter.userStreamUrl("listen-key"));
+        assertEquals("wss://stream.binancefuture.com/ws?listenKey=listen-key", adapter.userStreamUrl("listen-key"));
     }
 
     @Test

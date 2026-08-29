@@ -77,6 +77,13 @@ public final class BinanceFuturesAdapter implements DataClient, ExecutionClient 
         return request("GET", "/fapi/v1/exchangeInfo", Map.of(), false);
     }
 
+    public String depthJson(String symbol, int limit) {
+        if (limit <= 0 || limit > 1000) throw new IllegalArgumentException("limit must be in 1..1000");
+        return request("GET", "/fapi/v1/depth", Map.of(
+                "symbol", symbol.toUpperCase(java.util.Locale.ROOT),
+                "limit", Integer.toString(limit)), false);
+    }
+
     public String accountJson() {
         if (!config.authenticated()) throw new IllegalStateException("authenticated credentials are required");
         Map<String, String> params = new LinkedHashMap<>();
@@ -119,8 +126,7 @@ public final class BinanceFuturesAdapter implements DataClient, ExecutionClient 
     }
 
     public String userStreamUrl(String key) {
-        if (key == null || key.isBlank()) throw new IllegalArgumentException("listen key is required");
-        return trim(config.privateWebSocketBaseUrl()) + "/ws/" + key;
+        return config.userStreamUrl(key);
     }
 
     @Override

@@ -21,7 +21,20 @@ def ensure_jvm() -> None:
         raise FileNotFoundError(
             f"Java classes not found at {classes}; run 'mvn -pl java test' first"
         )
-    jpype.startJVM(classpath=[str(classes)], convertStrings=True)
+    configured_classpath = os.environ.get("ABC_TRADING_JAVA_CLASSPATH")
+    classpath = [str(classes)]
+    if configured_classpath:
+        classpath.extend(entry for entry in configured_classpath.split(os.pathsep) if entry)
+    else:
+        dependency_dir = classes.parent / "dependency"
+        classpath.extend(str(path) for path in dependency_dir.glob("*.jar"))
+        jackson_dir = Path.home() / ".m2" / "repository" / "com" / "fasterxml" / "jackson" / "core"
+        jackson_version = os.environ.get("ABC_TRADING_JACKSON_VERSION", "2.15.2")
+        for artifact in ("jackson-annotations", "jackson-core", "jackson-databind"):
+            jar = jackson_dir / artifact / jackson_version / f"{artifact}-{jackson_version}.jar"
+            if jar.exists():
+                classpath.append(str(jar))
+    jpype.startJVM(classpath=classpath, convertStrings=True)
 
 
 def java_class(name: str):

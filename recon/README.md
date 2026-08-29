@@ -166,6 +166,23 @@ BinanceFuturesAdapter adapter = new BinanceFuturesAdapter(config, marketHandler,
 adapter.start();
 ```
 
+An offline-safe Testnet smoke harness is available at
+`recon/binance_testnet_smoke.py`. It reads credentials only from environment
+variables and defaults to public connectivity, exchange-info, account sync,
+stream lifecycle, and JSONL event-store output:
+
+```bash
+PYTHONPATH=python python recon/binance_testnet_smoke.py --seconds 10
+```
+
+To submit one distant limit order and cancel it, require both an explicit CLI
+flag and the environment guard. This is the only smoke mode that trades:
+
+```bash
+BINANCE_SMOKE_ALLOW_ORDER=1 \
+PYTHONPATH=python python recon/binance_testnet_smoke.py --place-test-order
+```
+
 The adapter preserves decimal Binance quantities and maps `depthUpdate`,
 `aggTrade`, `markPriceUpdate`, `ORDER_TRADE_UPDATE`, and `ACCOUNT_UPDATE` into
 typed records. It maps market, limit, stop, and trailing-stop-market orders;

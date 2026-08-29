@@ -19,6 +19,8 @@ import com.abc.trading.execution.LimitOrderRejected;
 import com.abc.trading.execution.commands.CancelOrder;
 import com.abc.trading.execution.commands.ModifyOrder;
 import com.abc.trading.portfolio.AccountStateEvent;
+import com.abc.trading.portfolio.AccountState;
+import com.abc.trading.portfolio.AccountBalance;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -36,16 +38,18 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
     private final Consumer<Object> eventSink;
     private final Consumer<MarketDataSnapshot> marketSink;
     private final Consumer<TradeTick> tradeSink;
-    private final Consumer<BinanceAccountUpdate> accountSink;
     private final Map<String, OrderIntent> marketOrders = new LinkedHashMap<>();
     private final Map<String, LimitOrderIntent> limitOrders = new LinkedHashMap<>();
-    private final Map<String, BigDecimal> bids = new LinkedHashMap<>();
-    private final Map<String, BigDecimal> asks = new LinkedHashMap<>();
+    private final Map<String, Map<String, BigDecimal>> bids = new LinkedHashMap<>();
+    private final Map<String, Map<String, BigDecimal>> asks = new LinkedHashMap<>();
+    private final Map<String, BinanceInstrumentMetadata> instrumentMetadata = new LinkedHashMap<>();
     private final ObjectMapper mapper = new ObjectMapper();
     private long sequence;
+    private final Map<String, Long> lastDepthUpdateIds = new LinkedHashMap<>();
     private double last = 1.0;
     private double mark = 1.0;
     private boolean started;
+    private BinanceAccountSnapshot accountSnapshot;
 
     public BinanceFuturesLiveRuntime(BinanceFuturesConfig config, BinanceHttpTransport http,
             Consumer<Object> eventSink) {
@@ -53,7 +57,6 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
         this.eventSink = eventSink;
         this.marketSink = event -> eventSink.accept(event);
         this.tradeSink = event -> eventSink.accept(event);
-        this.accountSink = event -> eventSink.accept(event);
         this.adapter = new BinanceFuturesAdapter(config, http,
                 new BinanceMarketDataHandler() {
                     @Override public void onDepth(BinanceDepthUpdate update) { handleDepth(update); }
@@ -63,7 +66,7 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
                 },
                 new BinanceExecutionHandler() {
                     @Override public void onOrderUpdate(BinanceOrderUpdate update) { handleOrder(update); }
-                    @Override public void onAccountUpdate(BinanceAccountUpdate update) { accountSink.accept(update); }
+                    @Override public void onAccountUpdate(BinanceAccountUpdate update) { handleAccountUpdate(update); }
                     @Override public void onError(Throwable error) { eventSink.accept(error); }
                 });
     }
@@ -79,10 +82,11 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
     @Override public void start() {
         if (started) return;
         started = true;
+        if (adapter.config().connectOnStart()) refreshInstrumentMetadata();
         if (adapter.config().authenticated()) {
             try {
-                BinanceAccountSnapshot snapshot = synchronizeAccount();
-                eventSink.accept(new AccountStateEvent(snapshot.toAccountState(venue().value())));
+                accountSnapshot = synchronizeAccount();
+                eventSink.accept(new AccountStateEvent(accountSnapshot.toAccountState(venue().value())));
             } catch (RuntimeException error) {
                 eventSink.accept(error);
             }
@@ -94,12 +98,14 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
 
     @Override
     public void submitMarketOrder(OrderIntent order) {
+        validateOrder(order.symbol(), BigDecimal.valueOf(order.quantity()), null);
         marketOrders.put(order.orderId(), order);
         adapter.submitMarketOrder(order);
     }
 
     @Override
     public void submitLimitOrder(LimitOrderIntent order) {
+        validateOrder(order.symbol(), BigDecimal.valueOf(order.quantity()), BigDecimal.valueOf(order.limitPrice()));
         limitOrders.put(order.orderId(), order);
         adapter.submitLimitOrder(order);
     }
@@ -123,11 +129,23 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
         try {
             JsonNode root = mapper.readTree(adapter.exchangeInfoJson());
             List<BinanceInstrumentMetadata> result = new ArrayList<>();
-            for (JsonNode symbol : root.path("symbols")) result.add(parseInstrument(symbol));
+            for (JsonNode symbol : root.path("symbols")) {
+                BinanceInstrumentMetadata metadata = parseInstrument(symbol);
+                instrumentMetadata.put(metadata.symbol(), metadata);
+                result.add(metadata);
+            }
             return List.copyOf(result);
         } catch (Exception error) {
             throw new IllegalStateException("Failed to parse Binance exchangeInfo", error);
         }
+    }
+
+    public BinanceInstrumentMetadata instrumentMetadata(String symbol) {
+        return instrumentMetadata.get(symbol.toUpperCase(java.util.Locale.ROOT));
+    }
+
+    public void refreshInstrumentMetadata() {
+        discoverInstruments();
     }
 
     public BinanceAccountSnapshot synchronizeAccount() {
@@ -148,15 +166,51 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
         }
     }
 
+    private void handleAccountUpdate(BinanceAccountUpdate update) {
+        String currency = accountSnapshot == null ? update.walletBalances().keySet().stream().findFirst().orElse("USDT")
+                : accountSnapshot.currency();
+        BigDecimal total = update.walletBalances().get(currency);
+        BigDecimal free = update.marginBalances().get(currency);
+        if (total == null || free == null) {
+            eventSink.accept(new IllegalArgumentException("Binance account update is missing " + currency));
+            return;
+        }
+        BigDecimal locked = total.subtract(free);
+        if (locked.signum() < 0) {
+            eventSink.accept(new IllegalArgumentException("Binance account update has free balance above wallet balance"));
+            return;
+        }
+        double unrealized = update.unrealizedPnl().values().stream()
+                .mapToDouble(BigDecimal::doubleValue).sum();
+        double initialMargin = accountSnapshot == null ? 0.0 : accountSnapshot.totalInitialMargin().doubleValue();
+        double maintenanceMargin = accountSnapshot == null ? 0.0 : accountSnapshot.totalMaintenanceMargin().doubleValue();
+        AccountBalance balance = new AccountBalance(currency, total.doubleValue(), locked.doubleValue(), free.doubleValue());
+        AccountState state = new AccountState(venue().value(), currency, total.doubleValue(), locked.doubleValue(),
+                free.doubleValue(), initialMargin, maintenanceMargin, update.eventTimeMs() * 1_000_000L,
+                Map.of(currency, balance), unrealized, total.doubleValue() + unrealized, false, false);
+        eventSink.accept(new AccountStateEvent(state));
+    }
+
     private void handleDepth(BinanceDepthUpdate update) {
-        update.bids().forEach(level -> updateLevel(bids, level));
-        update.asks().forEach(level -> updateLevel(asks, level));
+        String symbol = update.symbol().toUpperCase(java.util.Locale.ROOT);
+        long lastDepthUpdateId = lastDepthUpdateIds.getOrDefault(symbol, 0L);
+        if (lastDepthUpdateId != 0 && update.previousUpdateId() != 0
+                && update.previousUpdateId() != lastDepthUpdateId) {
+            eventSink.accept(new IllegalStateException("Binance depth update gap for " + symbol
+                + ": expected pu=" + lastDepthUpdateId + ", received " + update.previousUpdateId()));
+            resyncDepth(update.symbol());
+            return;
+        }
+        Map<String, BigDecimal> symbolBids = bids.computeIfAbsent(symbol, ignored -> new LinkedHashMap<>());
+        Map<String, BigDecimal> symbolAsks = asks.computeIfAbsent(symbol, ignored -> new LinkedHashMap<>());
+        update.bids().forEach(level -> updateLevel(symbolBids, level));
+        update.asks().forEach(level -> updateLevel(symbolAsks, level));
         sequence = Math.max(sequence + 1, update.lastUpdateId());
         try {
-            List<BookLevel> bidLevels = bids.entrySet().stream()
+            List<BookLevel> bidLevels = symbolBids.entrySet().stream()
                 .map(entry -> new BookLevel(Double.parseDouble(entry.getKey()), entry.getValue().intValueExact()))
                 .toList();
-            List<BookLevel> askLevels = asks.entrySet().stream()
+            List<BookLevel> askLevels = symbolAsks.entrySet().stream()
                 .map(entry -> new BookLevel(Double.parseDouble(entry.getKey()), entry.getValue().intValueExact()))
                 .toList();
             eventSink.accept(new OrderBookSnapshot(update.symbol(), update.eventTimeMs() * 1_000_000L,
@@ -165,6 +219,7 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
             eventSink.accept(new IllegalArgumentException("Core book quantity precision cannot represent Binance level", error));
         }
         publishMarket(update.symbol(), update.eventTimeMs(), update.eventTimeMs());
+        lastDepthUpdateIds.put(symbol, update.lastUpdateId());
     }
 
     private void handleTrade(BinanceTradeEvent event) {
@@ -225,8 +280,9 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
     }
 
     private void publishMarket(String symbol, long eventTimeMs, long timestampMs) {
-        double bid = best(bids, false, last);
-        double ask = best(asks, true, last);
+        String normalized = symbol.toUpperCase(java.util.Locale.ROOT);
+        double bid = best(bids.getOrDefault(normalized, Map.of()), false, last);
+        double ask = best(asks.getOrDefault(normalized, Map.of()), true, last);
         marketSink.accept(new MarketDataSnapshot(symbol, timestampMs * 1_000_000L, bid, ask,
                 last, mark, mark, sequence));
     }
@@ -234,6 +290,31 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
     private static void updateLevel(Map<String, BigDecimal> side, BinancePriceLevel level) {
         if (level.quantity().signum() == 0) side.remove(level.price().toPlainString());
         else side.put(level.price().toPlainString(), level.quantity());
+    }
+
+    private void validateOrder(String symbol, BigDecimal quantity, BigDecimal price) {
+        BinanceInstrumentMetadata metadata = instrumentMetadata(symbol);
+        if (metadata != null) BinanceOrderValidator.validate(metadata, quantity, price);
+    }
+
+    private void resyncDepth(String symbol) {
+        try {
+            JsonNode root = mapper.readTree(adapter.depthJson(symbol, 1000));
+            String normalized = symbol.toUpperCase(java.util.Locale.ROOT);
+            Map<String, BigDecimal> symbolBids = new LinkedHashMap<>();
+            Map<String, BigDecimal> symbolAsks = new LinkedHashMap<>();
+            for (JsonNode level : root.path("bids")) {
+                symbolBids.put(level.get(0).asText(), new BigDecimal(level.get(1).asText()));
+            }
+            for (JsonNode level : root.path("asks")) {
+                symbolAsks.put(level.get(0).asText(), new BigDecimal(level.get(1).asText()));
+            }
+            bids.put(normalized, symbolBids);
+            asks.put(normalized, symbolAsks);
+            lastDepthUpdateIds.put(normalized, root.path("lastUpdateId").asLong());
+        } catch (Exception error) {
+            eventSink.accept(new IllegalStateException("Binance depth resynchronization failed", error));
+        }
     }
 
     private static double best(Map<String, BigDecimal> side, boolean lowest, double fallback) {

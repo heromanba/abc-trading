@@ -70,6 +70,14 @@ public record BinanceFuturesConfig(
         };
     }
 
+    public String userStreamUrl(String listenKey) {
+        if (listenKey == null || listenKey.isBlank()) throw new IllegalArgumentException("listenKey is required");
+        String base = privateWebSocketBaseUrl().replaceAll("/+$", "");
+        if (!base.endsWith("/private") && !base.endsWith("/market") && !base.endsWith("/ws")) base += "/ws";
+        if (base.endsWith("/private")) base = base.substring(0, base.length() - "/private".length()) + "/ws";
+        return base + "?listenKey=" + listenKey;
+    }
+
     private static String normalizeSymbol(String symbol) {
         if (symbol == null || symbol.isBlank()) throw new IllegalArgumentException("symbol is required");
         return symbol.trim().toUpperCase(java.util.Locale.ROOT);
