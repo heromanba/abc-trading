@@ -191,11 +191,27 @@ public final class NautilusKernel implements AutoCloseable {
         portfolio.configureAccount(venue, startingBalance, currency, leverage, accountType);
     }
 
+    public void configureAccount(String venue, BigDecimal startingBalance, String currency,
+            BigDecimal leverage, AccountType accountType) {
+        if (lifecycle.state() != ComponentState.PRE_INITIALIZED && lifecycle.state() != ComponentState.READY) {
+            throw new IllegalStateException("Cannot configure accounts after initialization");
+        }
+        portfolio.configureAccount(venue, startingBalance, currency, leverage, accountType);
+    }
+
     public void deposit(String venue, String currency, double amount) {
         portfolio.deposit(venue, currency, amount);
     }
 
+    public void deposit(String venue, String currency, BigDecimal amount) {
+        portfolio.deposit(venue, currency, amount);
+    }
+
     public void setFxRate(String fromCurrency, String toCurrency, double rate) {
+        portfolio.setFxRate(fromCurrency, toCurrency, rate);
+    }
+
+    public void setFxRate(String fromCurrency, String toCurrency, BigDecimal rate) {
         portfolio.setFxRate(fromCurrency, toCurrency, rate);
     }
 

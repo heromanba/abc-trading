@@ -24,16 +24,14 @@ public record BinanceAccountSnapshot(
     }
 
     public AccountState toAccountState(String venue) {
-        double total = walletBalance.doubleValue();
-        double free = availableBalance.doubleValue();
-        double locked = total - free;
-        double unrealized = totalUnrealizedProfit.doubleValue();
-        return new AccountState(venue, currency, total, locked, free,
-                totalInitialMargin.doubleValue(), totalMaintenanceMargin.doubleValue(),
+        BigDecimal locked = walletBalance.subtract(availableBalance);
+        BigDecimal equity = walletBalance.add(totalUnrealizedProfit);
+        return new AccountState(venue, currency, walletBalance, locked, availableBalance,
+            totalInitialMargin, totalMaintenanceMargin,
                 updateTimeMs * 1_000_000L,
-                Map.of(currency, new AccountBalance(currency, total, locked, free)),
-                unrealized, total + unrealized,
-                total + unrealized < totalMaintenanceMargin.doubleValue(),
-                total + unrealized < totalMaintenanceMargin.doubleValue());
+            Map.of(currency, new AccountBalance(currency, walletBalance, locked, availableBalance)),
+            totalUnrealizedProfit, equity,
+            equity.compareTo(totalMaintenanceMargin) < 0,
+            equity.compareTo(totalMaintenanceMargin) < 0);
     }
 }

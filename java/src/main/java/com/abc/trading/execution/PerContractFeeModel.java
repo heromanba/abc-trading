@@ -13,6 +13,7 @@ public record PerContractFeeModel(double commissionPerContract, String currency)
     @Override
     public Commission calculate(Quantity fillQuantity, double fillPrice, LiquiditySide liquiditySide) {
         if (fillQuantity == null || fillQuantity.isZero()) throw new IllegalArgumentException("fillQuantity must be positive");
-        return new Commission(commissionPerContract * fillQuantity.asDouble(), currency);
+        return new Commission(java.math.BigDecimal.valueOf(commissionPerContract)
+            .multiply(fillQuantity.asDecimal(), java.math.MathContext.DECIMAL128), currency);
     }
 }

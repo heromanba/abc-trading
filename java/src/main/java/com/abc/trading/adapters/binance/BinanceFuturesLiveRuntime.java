@@ -180,14 +180,14 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
             eventSink.accept(new IllegalArgumentException("Binance account update has free balance above wallet balance"));
             return;
         }
-        double unrealized = update.unrealizedPnl().values().stream()
-                .mapToDouble(BigDecimal::doubleValue).sum();
-        double initialMargin = accountSnapshot == null ? 0.0 : accountSnapshot.totalInitialMargin().doubleValue();
-        double maintenanceMargin = accountSnapshot == null ? 0.0 : accountSnapshot.totalMaintenanceMargin().doubleValue();
-        AccountBalance balance = new AccountBalance(currency, total.doubleValue(), locked.doubleValue(), free.doubleValue());
-        AccountState state = new AccountState(venue().value(), currency, total.doubleValue(), locked.doubleValue(),
-                free.doubleValue(), initialMargin, maintenanceMargin, update.eventTimeMs() * 1_000_000L,
-                Map.of(currency, balance), unrealized, total.doubleValue() + unrealized, false, false);
+        BigDecimal unrealized = update.unrealizedPnl().values().stream()
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal initialMargin = accountSnapshot == null ? BigDecimal.ZERO : accountSnapshot.totalInitialMargin();
+        BigDecimal maintenanceMargin = accountSnapshot == null ? BigDecimal.ZERO : accountSnapshot.totalMaintenanceMargin();
+        AccountBalance balance = new AccountBalance(currency, total, locked, free);
+        AccountState state = new AccountState(venue().value(), currency, total, locked,
+            free, initialMargin, maintenanceMargin, update.eventTimeMs() * 1_000_000L,
+            Map.of(currency, balance), unrealized, total.add(unrealized), false, false);
         eventSink.accept(new AccountStateEvent(state));
     }
 

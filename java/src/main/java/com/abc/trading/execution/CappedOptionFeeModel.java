@@ -19,6 +19,7 @@ public record CappedOptionFeeModel(
     public Commission calculate(Quantity fillQuantity, double fillPrice, LiquiditySide liquiditySide) {
         double rate = liquiditySide == LiquiditySide.MAKER ? makerRate : takerRate;
         double feePerContract = Math.min(rate, capPerContract * fillPrice) * multiplier;
-        return new Commission(feePerContract * fillQuantity.asDouble(), currency);
+        return new Commission(java.math.BigDecimal.valueOf(feePerContract)
+            .multiply(fillQuantity.asDecimal(), java.math.MathContext.DECIMAL128), currency);
     }
 }

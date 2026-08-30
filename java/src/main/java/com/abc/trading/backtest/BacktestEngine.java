@@ -361,11 +361,24 @@ public final class BacktestEngine implements AutoCloseable {
         kernel.configureAccount(venue, startingBalance, currency, leverage, accountType);
     }
 
+    public void configureAccount(String venue, java.math.BigDecimal startingBalance, String currency,
+            java.math.BigDecimal leverage, AccountType accountType) {
+        kernel.configureAccount(venue, startingBalance, currency, leverage, accountType);
+    }
+
     public void deposit(String venue, String currency, double amount) {
         kernel.deposit(venue, currency, amount);
     }
 
+    public void deposit(String venue, String currency, java.math.BigDecimal amount) {
+        kernel.deposit(venue, currency, amount);
+    }
+
     public void setFxRate(String fromCurrency, String toCurrency, double rate) {
+        kernel.setFxRate(fromCurrency, toCurrency, rate);
+    }
+
+    public void setFxRate(String fromCurrency, String toCurrency, java.math.BigDecimal rate) {
         kernel.setFxRate(fromCurrency, toCurrency, rate);
     }
 

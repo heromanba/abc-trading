@@ -14,7 +14,7 @@ import java.util.Map;
 public final class Portfolio {
     private final Cache cache;
     private final Map<String, Double> averagePrices = new LinkedHashMap<>();
-    private final Map<String, Double> realizedPnl = new LinkedHashMap<>();
+    private final Map<String, BigDecimal> realizedPnl = new LinkedHashMap<>();
     private final AccountLedger accountLedger = new AccountLedger();
 
     public Portfolio(Cache cache) {
@@ -42,12 +42,14 @@ public final class Portfolio {
         BigDecimal signedQuantity = fill.quantity().asDecimal();
         if (fill.side() == com.abc.trading.execution.SignalDirection.SELL) signedQuantity = signedQuantity.negate();
         BigDecimal nextPosition = previousPosition.add(signedQuantity);
-        double realizedPnlDelta = -fill.commission().amount();
+        BigDecimal realizedPnlDelta = fill.commission().amountDecimal().negate();
 
         if (previousPosition.signum() != 0 && previousPosition.signum() != signedQuantity.signum()) {
             BigDecimal closedQuantity = previousPosition.abs().min(signedQuantity.abs());
-            double direction = previousPosition.signum() > 0 ? 1.0 : -1.0;
-            realizedPnlDelta += (fill.price() - previousAverage) * closedQuantity.doubleValue() * direction;
+                BigDecimal direction = previousPosition.signum() > 0 ? BigDecimal.ONE : BigDecimal.ONE.negate();
+                realizedPnlDelta = realizedPnlDelta.add(
+                    BigDecimal.valueOf(fill.price()).subtract(BigDecimal.valueOf(previousAverage))
+                        .multiply(closedQuantity, java.math.MathContext.DECIMAL128).multiply(direction));
         }
 
         if (nextPosition.signum() == 0) {
@@ -61,7 +63,7 @@ public final class Portfolio {
             averagePrices.put(fill.symbol(), fill.price());
         }
 
-        double cumulativeRealizedPnl = realizedPnl.getOrDefault(fill.symbol(), 0.0) + realizedPnlDelta;
+        BigDecimal cumulativeRealizedPnl = realizedPnl.getOrDefault(fill.symbol(), BigDecimal.ZERO).add(realizedPnlDelta);
         realizedPnl.put(fill.symbol(), cumulativeRealizedPnl);
         cache.updatePosition(fill.symbol(), nextPosition);
         if (cache.hasInstrument(fill.symbol())) {
@@ -77,7 +79,7 @@ public final class Portfolio {
                 fill.orderId(),
                 fill.quantity(),
                 nextPosition,
-                realizedPnlDelta);
+                realizedPnlDelta.doubleValue());
     }
 
     public BigDecimal position(String symbol) {
@@ -85,7 +87,11 @@ public final class Portfolio {
     }
 
     public double realizedPnl(String symbol) {
-        return realizedPnl.getOrDefault(symbol, 0.0);
+        return realizedPnl.getOrDefault(symbol, BigDecimal.ZERO).doubleValue();
+    }
+
+    public BigDecimal realizedPnlDecimal(String symbol) {
+        return realizedPnl.getOrDefault(symbol, BigDecimal.ZERO);
     }
 
     public void configureAccount(String venue, double startingBalance, String currency, double leverage) {
@@ -97,11 +103,24 @@ public final class Portfolio {
         accountLedger.configure(venue, startingBalance, currency, leverage, accountType);
     }
 
+    public void configureAccount(String venue, BigDecimal startingBalance, String currency,
+            BigDecimal leverage, AccountType accountType) {
+        accountLedger.configure(venue, startingBalance, currency, leverage, accountType);
+    }
+
     public void deposit(String venue, String currency, double amount) {
         accountLedger.deposit(venue, currency, amount);
     }
 
+    public void deposit(String venue, String currency, BigDecimal amount) {
+        accountLedger.deposit(venue, currency, amount);
+    }
+
     public void setFxRate(String fromCurrency, String toCurrency, double rate) {
+        accountLedger.setFxRate(fromCurrency, toCurrency, rate);
+    }
+
+    public void setFxRate(String fromCurrency, String toCurrency, BigDecimal rate) {
         accountLedger.setFxRate(fromCurrency, toCurrency, rate);
     }
 

@@ -193,30 +193,37 @@ class BacktestEngine:
         return self._java.addBinanceFutures(config)
 
     def configure_account(
-        self, venue: str, starting_balance: float, currency: str = "USD", leverage: float = 1.0,
+        self, venue: str, starting_balance: float | Decimal, currency: str = "USD", leverage: float | Decimal = 1.0,
         account_type: str = "MARGIN"
     ) -> None:
         account_class = java_class("com.abc.trading.portfolio.AccountType")
-        self._java.configureAccount(venue, starting_balance, currency, leverage, account_class.valueOf(account_type))
+        if isinstance(starting_balance, Decimal) or isinstance(leverage, Decimal):
+            decimal_type = java_class("java.math.BigDecimal")
+            self._java.configureAccount(venue, decimal_type(str(starting_balance)), currency,
+                                        decimal_type(str(leverage)), account_class.valueOf(account_type))
+        else:
+            self._java.configureAccount(venue, starting_balance, currency, leverage, account_class.valueOf(account_type))
 
-    def deposit(self, venue: str, currency: str, amount: float) -> None:
-        self._java.deposit(venue, currency, amount)
+    def deposit(self, venue: str, currency: str, amount: float | Decimal) -> None:
+        value = java_class("java.math.BigDecimal")(str(amount)) if isinstance(amount, Decimal) else amount
+        self._java.deposit(venue, currency, value)
 
-    def set_fx_rate(self, from_currency: str, to_currency: str, rate: float) -> None:
-        self._java.setFxRate(from_currency, to_currency, rate)
+    def set_fx_rate(self, from_currency: str, to_currency: str, rate: float | Decimal) -> None:
+        value = java_class("java.math.BigDecimal")(str(rate)) if isinstance(rate, Decimal) else rate
+        self._java.setFxRate(from_currency, to_currency, value)
 
-    def account_state(self, venue: str, timestamp: int) -> dict[str, float | str | int]:
+    def account_state(self, venue: str, timestamp: int) -> dict[str, Decimal | str | int | bool]:
         state = self._java.accountState(venue, timestamp)
         return {
             "venue": str(state.venue()),
             "currency": str(state.currency()),
-            "balance_total": float(state.balanceTotal()),
-            "balance_locked": float(state.balanceLocked()),
-            "balance_free": float(state.balanceFree()),
-            "margin_initial": float(state.marginInitial()),
-            "margin_maintenance": float(state.marginMaintenance()),
-            "unrealized_pnl": float(state.unrealizedPnl()),
-            "equity": float(state.equity()),
+            "balance_total": Decimal(str(state.balanceTotalDecimal())),
+            "balance_locked": Decimal(str(state.balanceLockedDecimal())),
+            "balance_free": Decimal(str(state.balanceFreeDecimal())),
+            "margin_initial": Decimal(str(state.marginInitialDecimal())),
+            "margin_maintenance": Decimal(str(state.marginMaintenanceDecimal())),
+            "unrealized_pnl": Decimal(str(state.unrealizedPnlDecimal())),
+            "equity": Decimal(str(state.equityDecimal())),
             "margin_call": bool(state.marginCall()),
             "liquidation_required": bool(state.liquidationRequired()),
             "timestamp": int(state.tsInit()),

@@ -23,6 +23,8 @@ public record MakerTakerFeeModel(
         if (!Double.isFinite(fillPrice) || fillPrice <= 0.0) throw new IllegalArgumentException("fillPrice must be positive");
         if (liquiditySide == null) throw new IllegalArgumentException("liquiditySide is required");
         double rate = liquiditySide == LiquiditySide.MAKER ? makerRate : takerRate;
-        return new Commission(fillQuantity.asDouble() * fillPrice * rate, currency);
+        return new Commission(fillQuantity.asDecimal()
+            .multiply(java.math.BigDecimal.valueOf(fillPrice), java.math.MathContext.DECIMAL128)
+            .multiply(java.math.BigDecimal.valueOf(rate), java.math.MathContext.DECIMAL128), currency);
     }
 }
