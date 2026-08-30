@@ -39,6 +39,13 @@ public final class RiskEngine {
         if (cache != null && !cache.hasInstrument(order.symbol())) {
             return RiskDecision.rejected("unknown instrument: " + order.symbol());
         }
+        if (cache != null) {
+            try {
+                cache.instrument(order.symbol()).validateQuantity(order.quantity());
+            } catch (IllegalArgumentException error) {
+                return RiskDecision.rejected(error.getMessage());
+            }
+        }
         if (order.side() == null || order.side() == SignalDirection.HOLD) {
             return RiskDecision.rejected("order side must be BUY or SELL");
         }
@@ -70,6 +77,13 @@ public final class RiskEngine {
         if (tradingState == TradingState.HALTED) return RiskDecision.rejected("trading is halted");
         if (cache != null && !cache.hasInstrument(order.symbol())) {
             return RiskDecision.rejected("unknown instrument: " + order.symbol());
+        }
+        if (cache != null) {
+            try {
+                cache.instrument(order.symbol()).validateQuantity(order.quantity());
+            } catch (IllegalArgumentException error) {
+                return RiskDecision.rejected(error.getMessage());
+            }
         }
         if (order.side() == null || order.side() == SignalDirection.HOLD) {
             return RiskDecision.rejected("order side must be BUY or SELL");

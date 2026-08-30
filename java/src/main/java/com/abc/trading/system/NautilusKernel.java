@@ -12,6 +12,7 @@ import com.abc.trading.data.TradeTick;
 import com.abc.trading.data.FxRateUpdate;
 import com.abc.trading.portfolio.AccountType;
 import com.abc.trading.data.MarginModelType;
+import java.math.BigDecimal;
 import com.abc.trading.data.DataClient;
 import com.abc.trading.adapters.binance.BinanceFuturesConfig;
 import com.abc.trading.adapters.binance.BinanceFuturesLiveRuntime;
@@ -105,6 +106,19 @@ public final class NautilusKernel implements AutoCloseable {
         cache.addInstrument(symbol, venue, tickScheme, baseCurrency, quoteCurrency,
                 marginInitialRate, marginMaintenanceRate, marginModelType,
                 initialMarginPerUnit, maintenanceMarginPerUnit);
+    }
+
+    public void addInstrument(String symbol, String venue, TickScheme tickScheme,
+            String baseCurrency, String quoteCurrency, double marginInitialRate,
+            double marginMaintenanceRate, MarginModelType marginModelType,
+            double initialMarginPerUnit, double maintenanceMarginPerUnit,
+            int sizePrecision, BigDecimal sizeIncrement) {
+        if (lifecycle.state() != ComponentState.PRE_INITIALIZED && lifecycle.state() != ComponentState.READY) {
+            throw new IllegalStateException("Cannot add instruments after initialization");
+        }
+        cache.addInstrument(symbol, venue, tickScheme, baseCurrency, quoteCurrency,
+                marginInitialRate, marginMaintenanceRate, marginModelType,
+                initialMarginPerUnit, maintenanceMarginPerUnit, sizePrecision, sizeIncrement);
     }
 
     public void addVenue(String venue) {

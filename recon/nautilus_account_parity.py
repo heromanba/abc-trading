@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -34,10 +35,11 @@ class AccountParityStrategy(Strategy):
         self.fixture = fixture
 
     def on_start(self) -> None:
+        quantity = Decimal(str(self.fixture["quantity"]))
         order = self.order_factory.market(
             instrument_id=self.instrument.id,
             order_side=OrderSide.BUY,
-            quantity=Quantity.from_str(f'{self.fixture["quantity"]:.3f}'),
+            quantity=Quantity.from_str(f"{quantity:.3f}"),
             time_in_force=TimeInForce.GTC,
         )
         self.submit_order(order)
@@ -51,7 +53,7 @@ def zero_fee_instrument() -> Any:
     return CryptoPerpetual.from_dict(values)
 
 
-def quote(instrument: Any, timestamp: int, price: float, quantity: int) -> Any:
+def quote(instrument: Any, timestamp: int, price: float, quantity: Decimal) -> Any:
     return QuoteTick(
         instrument_id=instrument.id,
         bid_price=Price.from_str(f"{price:.1f}"),
@@ -66,6 +68,7 @@ def quote(instrument: Any, timestamp: int, price: float, quantity: int) -> Any:
 def run(input_path: Path, output_path: Path) -> None:
     with input_path.open(encoding="utf-8") as source:
         fixture = json.load(source)
+    quantity = Decimal(str(fixture["quantity"]))
     instrument = zero_fee_instrument()
     strategy = AccountParityStrategy(instrument, fixture)
     engine = BacktestEngine(BacktestEngineConfig(trader_id=TraderId("ACCT-PARITY-001")))
@@ -82,8 +85,8 @@ def run(input_path: Path, output_path: Path) -> None:
     )
     engine.add_instrument(instrument)
     engine.add_data([
-        quote(instrument, 100, fixture["entry_price"], fixture["quantity"]),
-        quote(instrument, 101, fixture["mark_price"], fixture["quantity"]),
+        quote(instrument, 100, fixture["entry_price"], quantity),
+        quote(instrument, 101, fixture["mark_price"], quantity),
     ])
     engine.add_strategy(strategy)
     try:

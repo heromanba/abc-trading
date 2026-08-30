@@ -1,5 +1,7 @@
 package com.abc.trading.data;
 
+import java.math.BigDecimal;
+
 /** Instrument metadata required by account settlement and margin calculation. */
 public record InstrumentSpec(
         String symbol,
@@ -11,12 +13,23 @@ public record InstrumentSpec(
         double marginMaintenanceRate,
         MarginModelType marginModelType,
         double initialMarginPerUnit,
-        double maintenanceMarginPerUnit) {
+        double maintenanceMarginPerUnit,
+        int sizePrecision,
+        BigDecimal sizeIncrement) {
     public InstrumentSpec(String symbol, String venue, TickScheme tickScheme,
             String baseCurrency, String quoteCurrency, double marginInitialRate,
             double marginMaintenanceRate) {
         this(symbol, venue, tickScheme, baseCurrency, quoteCurrency, marginInitialRate,
                 marginMaintenanceRate, MarginModelType.NOTIONAL_RATE, 0.0, 0.0);
+    }
+
+    public InstrumentSpec(String symbol, String venue, TickScheme tickScheme,
+            String baseCurrency, String quoteCurrency, double marginInitialRate,
+            double marginMaintenanceRate, MarginModelType marginModelType,
+            double initialMarginPerUnit, double maintenanceMarginPerUnit) {
+        this(symbol, venue, tickScheme, baseCurrency, quoteCurrency, marginInitialRate,
+                marginMaintenanceRate, marginModelType, initialMarginPerUnit, maintenanceMarginPerUnit,
+                0, BigDecimal.ONE);
     }
 
     public InstrumentSpec {
@@ -38,9 +51,32 @@ public record InstrumentSpec(
         if (!Double.isFinite(maintenanceMarginPerUnit) || maintenanceMarginPerUnit < 0.0) {
             throw new IllegalArgumentException("maintenanceMarginPerUnit must be finite and non-negative");
         }
+        if (sizePrecision < 0 || sizePrecision > 18) {
+            throw new IllegalArgumentException("sizePrecision must be in 0..18");
+        }
+        if (sizeIncrement == null || sizeIncrement.signum() <= 0) {
+            throw new IllegalArgumentException("sizeIncrement must be positive");
+        }
+        if (sizeIncrement.stripTrailingZeros().scale() > sizePrecision) {
+            throw new IllegalArgumentException("sizeIncrement exceeds sizePrecision");
+        }
     }
 
     public static InstrumentSpec defaults(String symbol, String venue, TickScheme tickScheme) {
-        return new InstrumentSpec(symbol, venue, tickScheme, symbol, "USD", 1.0, 0.5);
+        return new InstrumentSpec(symbol, venue, tickScheme, symbol, "USD", 1.0, 0.5,
+                MarginModelType.NOTIONAL_RATE, 0.0, 0.0, 0, BigDecimal.ONE);
+    }
+
+    public void validateQuantity(Quantity quantity) {
+        if (quantity == null || quantity.isZero()) {
+            throw new IllegalArgumentException("quantity must be positive for " + symbol);
+        }
+        BigDecimal value = quantity.asDecimal();
+        if (value.stripTrailingZeros().scale() > sizePrecision) {
+            throw new IllegalArgumentException("quantity exceeds sizePrecision for " + symbol);
+        }
+        if (value.remainder(sizeIncrement).signum() != 0) {
+            throw new IllegalArgumentException("quantity does not match sizeIncrement for " + symbol);
+        }
     }
 }

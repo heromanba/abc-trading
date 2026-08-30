@@ -12,6 +12,9 @@ public final class BinanceOrderValidator {
         if (quantity.compareTo(metadata.minQuantity()) < 0) {
             throw new IllegalArgumentException("quantity is below Binance minQty for " + metadata.symbol());
         }
+        if (quantity.stripTrailingZeros().scale() > metadata.sizePrecision()) {
+            throw new IllegalArgumentException("quantity exceeds Binance size precision for " + metadata.symbol());
+        }
         if (quantity.remainder(metadata.quantityStepSize()).signum() != 0) {
             throw new IllegalArgumentException("quantity does not match Binance stepSize for " + metadata.symbol());
         }

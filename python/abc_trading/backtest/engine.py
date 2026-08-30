@@ -165,6 +165,7 @@ class BacktestEngine:
         )
         self._started = False
         self._strategy_proxies: list[object] = []
+        self._quantity_rules: dict[str, tuple[int, Decimal]] = {}
 
     def add_venue(self, venue: str) -> None:
         self._java.addVenue(venue)
@@ -225,16 +226,35 @@ class BacktestEngine:
         base_currency: str | None = None, quote_currency: str | None = None,
         margin_initial_rate: float = 1.0, margin_maintenance_rate: float = 0.5,
         margin_model_type: str = "NOTIONAL_RATE", initial_margin_per_unit: float = 0.0,
-        maintenance_margin_per_unit: float = 0.0,
+        maintenance_margin_per_unit: float = 0.0, size_precision: int = 0,
+        size_increment: QuantityValue | None = None,
     ) -> None:
-        if base_currency is None and quote_currency is None:
+        if base_currency is None and quote_currency is None and size_increment is None and size_precision == 0:
             self._java.addInstrument(symbol, venue, tick_size)
+            self._quantity_rules[symbol] = (0, Decimal("1"))
             return
+        increment = Decimal("1") if size_increment is None else Decimal(str(size_increment))
+        precision = size_precision if size_precision > 0 else max(0, -increment.as_tuple().exponent)
         self._java.addInstrument(symbol, venue, tick_size,
                                  base_currency or symbol, quote_currency or "USD",
                      margin_initial_rate, margin_maintenance_rate,
                      java_class("com.abc.trading.data.MarginModelType").valueOf(margin_model_type),
-                     initial_margin_per_unit, maintenance_margin_per_unit)
+                     initial_margin_per_unit, maintenance_margin_per_unit,
+                     precision, java_class("java.math.BigDecimal")(str(increment)))
+        self._quantity_rules[symbol] = (precision, increment)
+
+    def _java_order_quantity(self, symbol: str, quantity: QuantityValue) -> object:
+        if isinstance(quantity, bool) or not isinstance(quantity, (int, Decimal, str)):
+            raise TypeError("quantity must be an int, Decimal, or decimal string")
+        decimal_value = Decimal(str(quantity)) if not isinstance(quantity, Decimal) else quantity
+        precision, increment = self._quantity_rules.get(symbol, (None, None))
+        if precision is not None:
+            normalized = decimal_value.normalize()
+            if normalized.as_tuple().exponent < -precision:
+                raise ValueError(f"quantity exceeds size precision for {symbol}")
+            if decimal_value % increment != 0:
+                raise ValueError(f"quantity does not match size increment for {symbol}")
+        return _java_quantity(quantity)
 
     def set_max_fill_quantity(self, venue: str, quantity: int) -> None:
         self._java.setMaxFillQuantity(venue, quantity)
@@ -253,7 +273,7 @@ class BacktestEngine:
         direction = java_class("com.abc.trading.execution.SignalDirection").valueOf(side)
         trigger = java_class("com.abc.trading.execution.TriggerType").valueOf(trigger_type)
         self._java.submitStopMarketOrder(
-            strategy_id, symbol, order_id, direction, _java_quantity(quantity), timestamp_ns, trigger_price, trigger
+            strategy_id, symbol, order_id, direction, self._java_order_quantity(symbol, quantity), timestamp_ns, trigger_price, trigger
         )
 
     def submit_stop_limit_order(
@@ -271,7 +291,7 @@ class BacktestEngine:
         direction = java_class("com.abc.trading.execution.SignalDirection").valueOf(side)
         trigger = java_class("com.abc.trading.execution.TriggerType").valueOf(trigger_type)
         self._java.submitStopLimitOrder(
-            strategy_id, symbol, order_id, direction, _java_quantity(quantity), timestamp_ns,
+            strategy_id, symbol, order_id, direction, self._java_order_quantity(symbol, quantity), timestamp_ns,
             limit_price, trigger_price, trigger
         )
 
@@ -284,7 +304,7 @@ class BacktestEngine:
         offset = java_class("com.abc.trading.execution.TrailingOffsetType").valueOf(offset_type)
         trigger = java_class("com.abc.trading.execution.TriggerType").valueOf(trigger_type)
         self._java.submitTrailingStopMarketOrder(
-            strategy_id, symbol, order_id, direction, _java_quantity(quantity), timestamp_ns,
+            strategy_id, symbol, order_id, direction, self._java_order_quantity(symbol, quantity), timestamp_ns,
             activation_price, trailing_offset, offset, trigger
         )
 
@@ -297,7 +317,7 @@ class BacktestEngine:
         offset = java_class("com.abc.trading.execution.TrailingOffsetType").valueOf(offset_type)
         trigger = java_class("com.abc.trading.execution.TriggerType").valueOf(trigger_type)
         self._java.submitTrailingStopLimitOrder(
-            strategy_id, symbol, order_id, direction, _java_quantity(quantity), timestamp_ns,
+            strategy_id, symbol, order_id, direction, self._java_order_quantity(symbol, quantity), timestamp_ns,
             limit_price, activation_price, limit_offset, trailing_offset, offset, trigger
         )
 
@@ -414,7 +434,7 @@ class BacktestEngine:
             symbol,
             order_id,
             direction,
-            _java_quantity(quantity),
+            self._java_order_quantity(symbol, quantity),
             market_timestamp,
             price,
         )
@@ -436,7 +456,7 @@ class BacktestEngine:
             symbol,
             order_id,
             direction,
-            _java_quantity(quantity),
+            self._java_order_quantity(symbol, quantity),
             market_timestamp,
             limit_price,
         )

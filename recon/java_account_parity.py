@@ -27,7 +27,9 @@ def run(input_path: Path, output_path: Path) -> None:
     venue = fixture["venue"]
     engine.add_venue(venue)
     engine.configure_account(venue, fixture["starting_balance"], fixture["currency"], fixture["leverage"])
-    engine.add_instrument(symbol, venue, 0.1, "BTC", fixture["currency"], 0.05, 0.025)
+    engine.add_instrument(symbol, venue, 0.1, "BTC", fixture["currency"], 0.05, 0.025,
+                          size_precision=fixture["size_precision"],
+                          size_increment=fixture["size_increment"])
     engine.start()
     try:
         engine.run_market_data([MarketDataSnapshot(

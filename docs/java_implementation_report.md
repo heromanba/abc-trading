@@ -10,7 +10,7 @@ title: ABC Trading Java Rewrite
 
 **Purpose:** describe what is implemented in Java so far, how the pieces fit together, how each class is used, and why the boundaries were chosen.
 
-**Status:** implementation snapshot as of 2026-08-23.
+**Status:** implementation snapshot as of 2026-08-30.
 
 ## 1. Executive Summary
 
@@ -24,6 +24,7 @@ The strongest verified feature is cross-backend behavioral reconciliation. The s
 mvn -q clean test
 MATCH rows=228
 MATCH L3 fills=2
+MATCH account state fields=8
 ```
 
 The current Java test suite covers the deterministic runtime, L3 queue behavior,
@@ -139,7 +140,7 @@ BAR / MARKET SNAPSHOT / ORDER BOOK SNAPSHOT OR DELTA
 2. **Explicit boundaries.** Data, risk, execution, portfolio, strategy, and reconciliation are separate Java packages.
 3. **Deterministic ordering.** Input bars are sorted by timestamp and symbol. Bus handlers use priority and registration order. Working orders use price priority and insertion sequence.
 4. **Immutable messages.** Records are used for commands, events, market snapshots, book levels, and order state.
-5. **Primitive hot path.** Prices, quantities, timestamps, and PnL are currently primitive-backed `double`/`int`/`long`. Exact decimal behavior is established through shared precision and tolerance rules rather than `BigDecimal` in the hot path.
+5. **Exact quantities at the contract boundary.** Quantities use immutable fixed-point `Quantity` values backed by `BigDecimal` raw values and explicit precision. Prices and PnL remain primitive-backed `double` values for now.
 6. **Source anchoring.** Rust paths are recorded in capability metadata and the reconciliation harness compares observable behavior rather than only totals.
 
 ## 3. Package Structure
@@ -186,18 +187,18 @@ The Python bridge lives under `python/abc_trading`; reconciliation scripts live 
 | Static latency | Implemented | `LatencyModel`, `StaticLatencyModel` | Operation latency with deterministic timestamp ordering |
 | Position/PnL accounting | Implemented | `Portfolio`, `PositionUpdate`, `Money` | Net position, average price, realized PnL, and commission effects |
 | Cash/margin account | Implemented baseline | `AccountLedger`, `AccountState`, `AccountBalance`, `AccountType` | Reservations, free/locked balances, cash settlement, initial/maintenance margin, and threshold events |
-| Instrument margin metadata | Implemented | `InstrumentSpec`, `Cache` | Quote/base currencies and instrument-specific margin rates |
+| Instrument and size metadata | Implemented | `InstrumentSpec`, `Cache` | Quote/base currencies, margin rates, `sizePrecision`, and `sizeIncrement` |
 | FX conversion | Implemented | `FxRateUpdate`, `AccountLedger`, `Portfolio`, `BacktestEngine` | Replayable market-data rates for cross-currency margin and PnL conversion |
 | Account-state events | Implemented | `AccountStateEvent`, `Event`, `CsvEventLogger` | Balance and margin transitions are observable in canonical logs |
 | Mark-to-market valuation | Implemented baseline | `Portfolio`, `AccountLedger`, `MarketDataSnapshot` | Mark updates recalculate signed unrealized PnL and threshold flags |
 | Margin model | Implemented baseline | `MarginModelType`, `InstrumentSpec`, `AccountLedger` | Notional-rate and fixed-per-unit formulas with leverage |
-| Decimal accounting | Partial | primitive `double` | `BigDecimal`/fixed-point remains a future accounting hardening step |
+| Decimal accounting | Partial | `Quantity`, primitive `double` prices/PnL | Quantity and position precision are exact; price and monetary hardening remains future work |
 | Local order emulator | Implemented | `OrderEmulator` | Snapshot-triggered local ownership and release |
 | Disruptor bus | Scaffold only | `DisruptorMessageBus` | Publish method is still a TODO |
 | External ring-buffer backing | Implemented as backing | `RingBufferMessageBusBacking` | Bounded queue; full-buffer policy currently drops and reports |
 | Persistence/event store | Implemented | `PersistentEventStore`, `EventReplayer`, `EventCheckpoint` | Versioned append-only JSONL, projections, synchronous replay, and checkpoint resume |
 | Binance USD-M Futures adapter | Implemented baseline | `BinanceFuturesAdapter`, `BinanceFuturesLiveRuntime` | Public streams, signed REST, user data, reconnects, and kernel routing; Testnet credentials remain opt-in |
-| Live adapter precision | Implemented boundary | Binance decimal protocol records | Decimal Binance quantities are preserved; the current integer core rejects unrepresentable fractional quantities rather than truncating |
+| Live adapter precision | Implemented | `BinanceInstrumentMetadata`, `BinanceOrderValidator`, `Quantity` | Binance `stepSize` derives `sizePrecision`/`sizeIncrement`; invalid quantities are rejected before REST |
 
 ## 5. Class and Type Catalog
 
@@ -238,7 +239,7 @@ The following catalog covers the Java production types currently under `java/src
 | `AggressorSide` | Buyer, seller, or no-aggressor trade classification | Determines which passive queue can advance |
 | `FxRateUpdate` | Replayable FX conversion-rate input | Makes cross-currency account valuation deterministic and time-ordered |
 | `MarginModelType` | Notional-rate or fixed-per-unit formula selection | Keeps instrument margin policy explicit rather than hidden in risk code |
-| `InstrumentSpec` | Base/quote currencies and initial/maintenance margin rates | Carries the instrument facts needed by accounting and risk |
+| `InstrumentSpec` | Base/quote currencies, margin rates, size precision, and size increment | Carries the instrument facts needed by accounting, risk, and exact quantity validation |
 | `BookAction` | `ADD`, `UPDATE`, `DELETE`, `CLEAR` | Makes book mutation intent explicit |
 | `TickScheme` | Instrument-owned fixed tick increment | Rust currently supports `TICKS` through `price_increment`; Java avoids a hard-coded exchange tick in that path |
 | `DataEngine` | Publishes bars, market snapshots, books, and deltas | Separates data distribution from data ownership |
@@ -293,7 +294,7 @@ The following catalog covers the Java production types currently under `java/src
 |---|---|---|
 | `SubmitOrder` | Rust-shaped command envelope | Carries order model, type, TIF, trigger, trailing, and emulation metadata |
 | `CancelOrder` | Cancel command | Separates command from resulting canceled event |
-| `ModifyOrder` | Quantity, price, and trigger modification command | Mirrors Rust optional modify fields |
+| `ModifyOrder` | Fixed-point quantity, price, and trigger modification command | Mirrors Rust optional modify fields without integer truncation |
 | `OrderType` | Market, limit, stop, and trailing variants | Explicit dispatch rather than implicit model inspection |
 | `OrderIntent` | Market-style internal execution input | Lightweight transport from risk to venue |
 | `LimitOrderIntent` | Limit-style internal execution input | Keeps limit price and trailing-limit data explicit |
@@ -495,7 +496,14 @@ Nautilus derivative margin model, liquidation execution policy, or live FX feed.
 
 ### 6.4 Numeric representation
 
-The current runtime uses primitive `double` prices and PnL for bridge and hot-path simplicity. Raw source prices are not rounded in the Python data loader. Reconciliation uses shared instrument precision and a numeric tolerance. A future production accounting layer should use fixed-point integers or `BigDecimal` for money and exact decimal settlement while retaining primitives for routing/indexing where appropriate.
+Quantities use immutable fixed-point `Quantity` values backed by a `long` raw
+value and explicit decimal precision. `InstrumentSpec` validates both the
+configured `sizePrecision` and `sizeIncrement`; Binance `LOT_SIZE.stepSize`
+and `minQty` are mapped into the same contract and invalid orders are rejected
+before REST or simulated execution. Python accepts integers, `Decimal`, and
+decimal strings, converting them to Java `Quantity` without `double` or
+integer truncation. Prices and PnL remain primitive `double` values for now,
+and reconciliation still applies its numeric tolerance to those fields.
 
 ## 7. Python Integration
 
@@ -505,7 +513,7 @@ The Python facade is intentionally thin:
 abc_trading.backtest.engine.BacktestEngine
         |
         +--> starts JVM and loads Java classes
-        +--> converts Python Bars/Snapshots to Java objects
+       +--> converts Python Bars/Snapshots and exact decimal quantities to Java objects
         +--> installs JProxy StrategyHandler
         +--> exposes market, limit, stop, trailing, cancel, modify
 ```

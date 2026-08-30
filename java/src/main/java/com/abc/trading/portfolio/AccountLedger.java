@@ -78,6 +78,7 @@ public final class AccountLedger {
             SignalDirection side, BigDecimal position) {
         Account account = account(venue);
         if (account == null) return true;
+        if (instrument != null) instrument.validateQuantity(quantity);
         if (account.type == AccountType.CASH && side == SignalDirection.SELL
             && position.compareTo(quantity.asDecimal()) < 0) return false;
         if (account.type == AccountType.MARGIN && increasesExposure(side, position)

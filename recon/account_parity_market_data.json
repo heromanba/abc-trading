@@ -6,5 +6,7 @@
   "leverage": 1.0,
   "entry_price": 30000.0,
   "mark_price": 29000.0,
-  "quantity": 1
+  "quantity": "0.001",
+  "size_precision": 3,
+  "size_increment": "0.001"
 }

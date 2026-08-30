@@ -18,6 +18,12 @@ public record BinanceInstrumentMetadata(
     public InstrumentSpec toInstrumentSpec(String venue) {
         return new InstrumentSpec(symbol, venue, TickScheme.fixed(priceTickSize.doubleValue()),
                 baseAsset, quoteAsset, initialMarginRate.doubleValue(),
-                maintenanceMarginRate.doubleValue());
+                maintenanceMarginRate.doubleValue(),
+                com.abc.trading.data.MarginModelType.NOTIONAL_RATE, 0.0, 0.0,
+                sizePrecision(), quantityStepSize);
+    }
+
+    public int sizePrecision() {
+        return Math.max(0, quantityStepSize.stripTrailingZeros().scale());
     }
 }

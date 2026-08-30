@@ -27,14 +27,15 @@
 <h2 id="implementation-status-report">Implementation Status Report</h2>
 <p><strong>Scope:</strong> <code>java/src/main/java</code>, <code>java/src/test/java</code>, the Python JPype facade, and the Rust-vs-Java reconciliation tools.</p>
 <p><strong>Purpose:</strong> describe what is implemented in Java so far, how the pieces fit together, how each class is used, and why the boundaries were chosen.</p>
-<p><strong>Status:</strong> implementation snapshot as of 2026-08-23.</p>
+<p><strong>Status:</strong> implementation snapshot as of 2026-08-30.</p>
 <h2 id="executive-summary">1. Executive Summary</h2>
 <p>The Java rewrite is a deterministic, synchronous, backtest-oriented trading runtime shaped after Nautilus Trader. Java owns the runtime loop, message routing, order state, risk boundary, simulated execution, portfolio position state, and event logging. Python owns the strategy callback and historical-data loading at the current integration boundary.</p>
 <p>The strongest verified feature is cross-backend behavioral reconciliation. The shared historical-bar workflow currently compares 228 semantic lifecycle rows between Nautilus and Java. The dedicated L3 MBO fixture compares two fills across a named venue order, queue-ahead trades, maker/taker classification, and deterministic fill ordering.</p>
 <h3 id="verified-results">Verified results</h3>
 <pre class="text"><code>mvn -q clean test
 MATCH rows=228
-MATCH L3 fills=2</code></pre>
+MATCH L3 fills=2
+MATCH account state fields=8</code></pre>
 <p>The current Java test suite covers the deterministic runtime, L3 queue behavior, and account settlement. Account-state events expose total, locked, free, initial-margin, maintenance-margin, and currency information.</p>
 <h3 id="main-implemented-feature-groups">Main implemented feature groups</h3>
 <ul>
@@ -136,7 +137,7 @@ MATCH L3 fills=2</code></pre>
 <li><strong>Explicit boundaries.</strong> Data, risk, execution, portfolio, strategy, and reconciliation are separate Java packages.</li>
 <li><strong>Deterministic ordering.</strong> Input bars are sorted by timestamp and symbol. Bus handlers use priority and registration order. Working orders use price priority and insertion sequence.</li>
 <li><strong>Immutable messages.</strong> Records are used for commands, events, market snapshots, book levels, and order state.</li>
-<li><strong>Primitive hot path.</strong> Prices, quantities, timestamps, and PnL are currently primitive-backed <code>double</code>/<code>int</code>/<code>long</code>. Exact decimal behavior is established through shared precision and tolerance rules rather than <code>BigDecimal</code> in the hot path.</li>
+<li><strong>Exact quantities at the contract boundary.</strong> Quantities use immutable fixed-point <code>Quantity</code> values backed by <code>BigDecimal</code> raw values and explicit precision. Prices and PnL remain primitive-backed <code>double</code> values for now.</li>
 <li><strong>Source anchoring.</strong> Rust paths are recorded in capability metadata and the reconciliation harness compares observable behavior rather than only totals.</li>
 </ol>
 <h2 id="package-structure">3. Package Structure</h2>
@@ -282,10 +283,10 @@ MATCH L3 fills=2</code></pre>
 <td>Reservations, free/locked balances, cash settlement, initial/maintenance margin, and threshold events</td>
 </tr>
 <tr class="odd">
-<td>Instrument margin metadata</td>
+<td>Instrument and size metadata</td>
 <td>Implemented</td>
 <td><code>InstrumentSpec</code>, <code>Cache</code></td>
-<td>Quote/base currencies and instrument-specific margin rates</td>
+<td>Quote/base currencies, margin rates, <code>sizePrecision</code>, and <code>sizeIncrement</code></td>
 </tr>
 <tr class="even">
 <td>FX conversion</td>
@@ -314,8 +315,8 @@ MATCH L3 fills=2</code></pre>
 <tr class="even">
 <td>Decimal accounting</td>
 <td>Partial</td>
-<td>primitive <code>double</code></td>
-<td><code>BigDecimal</code>/fixed-point remains a future accounting hardening step</td>
+<td><code>Quantity</code>, primitive <code>double</code> prices/PnL</td>
+<td>Quantity and position precision are exact; price and monetary hardening remains future work</td>
 </tr>
 <tr class="odd">
 <td>Local order emulator</td>
@@ -349,9 +350,9 @@ MATCH L3 fills=2</code></pre>
 </tr>
 <tr class="even">
 <td>Live adapter precision</td>
-<td>Implemented boundary</td>
-<td>Binance decimal protocol records</td>
-<td>Decimal Binance quantities are preserved; the current integer core rejects unrepresentable fractional quantities rather than truncating</td>
+<td>Implemented</td>
+<td><code>BinanceInstrumentMetadata</code>, <code>BinanceOrderValidator</code>, <code>Quantity</code></td>
+<td>Binance <code>stepSize</code> derives <code>sizePrecision</code>/<code>sizeIncrement</code>; invalid quantities are rejected before REST</td>
 </tr>
 </tbody>
 </table>
@@ -513,8 +514,8 @@ MATCH L3 fills=2</code></pre>
 </tr>
 <tr class="odd">
 <td><code>InstrumentSpec</code></td>
-<td>Base/quote currencies and initial/maintenance margin rates</td>
-<td>Carries the instrument facts needed by accounting and risk</td>
+<td>Base/quote currencies, margin rates, size precision, and size increment</td>
+<td>Carries the instrument facts needed by accounting, risk, and exact quantity validation</td>
 </tr>
 <tr class="even">
 <td><code>BookAction</code></td>
@@ -764,8 +765,8 @@ MATCH L3 fills=2</code></pre>
 </tr>
 <tr class="odd">
 <td><code>ModifyOrder</code></td>
-<td>Quantity, price, and trigger modification command</td>
-<td>Mirrors Rust optional modify fields</td>
+<td>Fixed-point quantity, price, and trigger modification command</td>
+<td>Mirrors Rust optional modify fields without integer truncation</td>
 </tr>
 <tr class="even">
 <td><code>OrderType</code></td>
@@ -1403,13 +1404,13 @@ cancel/expiry/reject -&gt; release reservation</code></pre>
 <p>Margin accounts reserve quote-currency notional multiplied by the instrument’s initial-margin rate and divided by leverage. Open positions report both initial and maintenance margin using <code>InstrumentSpec</code>. Cash accounts reserve buy-side funds, settle buy/sell notional in the quote currency, and reject uncovered sells. Additional currencies can be deposited and converted through explicitly configured FX rates; missing conversion data rejects a reservation rather than silently treating currencies as equal.</p>
 <p>These rules are a deterministic backtest baseline. They do not yet model every Nautilus derivative margin model, liquidation execution policy, or live FX feed.</p>
 <h3 id="numeric-representation">6.4 Numeric representation</h3>
-<p>The current runtime uses primitive <code>double</code> prices and PnL for bridge and hot-path simplicity. Raw source prices are not rounded in the Python data loader. Reconciliation uses shared instrument precision and a numeric tolerance. A future production accounting layer should use fixed-point integers or <code>BigDecimal</code> for money and exact decimal settlement while retaining primitives for routing/indexing where appropriate.</p>
+<p>Quantities use immutable fixed-point <code>Quantity</code> values backed by a <code>long</code> raw value and explicit decimal precision. <code>InstrumentSpec</code> validates both the configured <code>sizePrecision</code> and <code>sizeIncrement</code>; Binance <code>LOT_SIZE.stepSize</code> and <code>minQty</code> are mapped into the same contract and invalid orders are rejected before REST or simulated execution. Python accepts integers, <code>Decimal</code>, and decimal strings, converting them to Java <code>Quantity</code> without <code>double</code> or integer truncation. Prices and PnL remain primitive <code>double</code> values for now, and reconciliation still applies its numeric tolerance to those fields.</p>
 <h2 id="python-integration">7. Python Integration</h2>
 <p>The Python facade is intentionally thin:</p>
 <pre class="text"><code>abc_trading.backtest.engine.BacktestEngine
         |
         +--&gt; starts JVM and loads Java classes
-        +--&gt; converts Python Bars/Snapshots to Java objects
+       +--&gt; converts Python Bars/Snapshots and exact decimal quantities to Java objects
         +--&gt; installs JProxy StrategyHandler
         +--&gt; exposes market, limit, stop, trailing, cancel, modify</code></pre>
 <p>Python strategy callbacks receive a Java-owned <code>StrategyContext</code> wrapper. Java increments the global input sequence before publishing each input, so Python-generated signals and Java-generated execution events share the same chronology.</p>

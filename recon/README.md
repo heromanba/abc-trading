@@ -126,6 +126,20 @@ Expected result:
 MATCH account state fields=8
 ```
 
+The account fixture uses Binance-style `quantity: "0.001"`,
+`size_precision: 3`, and `size_increment: "0.001"`. Java rejects a
+quantity such as `0.0015` at the risk boundary, while both backends preserve
+the valid fractional position and produce the same account state.
+
+## Instrument size precision check
+
+The Java unit tests cover `InstrumentSpec.validateQuantity`, Binance
+`stepSize`/`minQty` validation, and metadata conversion:
+
+```bash
+mvn -pl java -Dtest=InstrumentSpecTest,RiskEngineTest test
+```
+
 ## Persistent event replay
 
 `BacktestEngine` accepts an optional second path for an append-only JSONL event
