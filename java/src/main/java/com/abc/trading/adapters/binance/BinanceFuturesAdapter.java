@@ -191,6 +191,30 @@ public final class BinanceFuturesAdapter implements DataClient, ExecutionClient 
                 order.triggerPrice(), 0.0, 0.0);
     }
 
+    public void submitLimitOrderDecimal(String symbol, SignalDirection side, BigDecimal quantity,
+            BigDecimal price, String clientOrderId) {
+        if (quantity == null || price == null || clientOrderId == null || clientOrderId.isBlank()) {
+            throw new IllegalArgumentException("decimal order values are required");
+        }
+        placeOrderDecimal(symbol, side, "LIMIT", quantity, price, TimeInForce.GTC,
+                clientOrderId, false, 0L, 0.0, 0.0, 0.0);
+    }
+
+    public boolean cancelOrder(String symbol, String clientOrderId) {
+        Map<String, String> params = new LinkedHashMap<>();
+        params.put("symbol", symbol.toUpperCase(java.util.Locale.ROOT));
+        params.put("origClientOrderId", clientOrderId);
+        params.put("timestamp", Long.toString(System.currentTimeMillis()));
+        params.put("recvWindow", Long.toString(config.recvWindowMs()));
+        try {
+            request("DELETE", "/fapi/v1/order", params, true);
+            return true;
+        } catch (RuntimeException error) {
+            executionHandler.onError(error);
+            return false;
+        }
+    }
+
     @Override
     public boolean cancelOrder(CancelOrder command) {
         Map<String, String> params = new LinkedHashMap<>();
@@ -251,13 +275,21 @@ public final class BinanceFuturesAdapter implements DataClient, ExecutionClient 
     private void placeOrder(String symbol, SignalDirection side, String type, int quantity,
             Double price, TimeInForce timeInForce, String clientOrderId, boolean reduceOnly,
             long expireTimeNs, double stopPrice, double activationPrice, double callbackRate) {
+            placeOrderDecimal(symbol, side, type, BigDecimal.valueOf(quantity),
+                price == null ? null : BigDecimal.valueOf(price), timeInForce, clientOrderId,
+                reduceOnly, expireTimeNs, stopPrice, activationPrice, callbackRate);
+            }
+
+            private void placeOrderDecimal(String symbol, SignalDirection side, String type, BigDecimal quantity,
+                BigDecimal price, TimeInForce timeInForce, String clientOrderId, boolean reduceOnly,
+                long expireTimeNs, double stopPrice, double activationPrice, double callbackRate) {
         Map<String, String> params = new LinkedHashMap<>();
         params.put("symbol", symbol.toUpperCase(java.util.Locale.ROOT));
         params.put("side", side.name());
         params.put("type", type);
-        params.put("quantity", Integer.toString(quantity));
+        params.put("quantity", quantity.stripTrailingZeros().toPlainString());
         if (price != null) {
-            params.put("price", decimal(price));
+            params.put("price", price.stripTrailingZeros().toPlainString());
             params.put("timeInForce", binanceTimeInForce(timeInForce));
             if (timeInForce == TimeInForce.GTD && config.useGtd()) {
                 params.put("goodTillDate", Long.toString(Math.max(System.currentTimeMillis() + 1_000L,

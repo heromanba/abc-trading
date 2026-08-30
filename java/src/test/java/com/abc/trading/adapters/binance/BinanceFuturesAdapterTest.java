@@ -114,6 +114,21 @@ class BinanceFuturesAdapterTest {
         assertEquals("95", http.parameters.get(1).get("activationPrice"));
         }
 
+    @Test
+    void preservesDecimalQuantityForDirectTestnetSmokeOrders() {
+        FakeHttp http = new FakeHttp();
+        BinanceFuturesAdapter adapter = new BinanceFuturesAdapter(
+                new BinanceFuturesConfig(BinanceEnvironment.TESTNET, "key", "secret", List.of("BTCUSDT")),
+                http, null, null);
+
+        adapter.submitLimitOrderDecimal("BTCUSDT", SignalDirection.BUY,
+                new BigDecimal("0.001"), new BigDecimal("100.10"), "decimal-test");
+
+        assertEquals("0.001", http.parameters.get(0).get("quantity"));
+        assertEquals("100.1", http.parameters.get(0).get("price"));
+        assertEquals("decimal-test", http.parameters.get(0).get("newClientOrderId"));
+    }
+
     private static final class FakeHttp implements BinanceHttpTransport {
         private final List<String> methods = new ArrayList<>();
         private final List<String> paths = new ArrayList<>();

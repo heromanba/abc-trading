@@ -16,6 +16,7 @@ from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR
 from pathlib import Path
 
 from abc_trading.backtest.engine import BacktestEngine, shutdown_jvm
+from abc_trading._java import java_class
 
 
 def main() -> None:
@@ -68,11 +69,15 @@ def main() -> None:
             quantity = args.quantity.quantize(step_size, rounding=ROUND_FLOOR)
             if quantity < minimum_quantity:
                 raise SystemExit(f"quantity {quantity} is below exchange minimum {instrument.minQuantity()}")
-            limit_order = java_limit_order(args.symbol, args.side, int(quantity), float(price))
-            runtime.submitLimitOrder(limit_order)
+            client_order_id = f"smoke-{time.time_ns()}"
+            direction = java_class("com.abc.trading.execution.SignalDirection").valueOf(args.side)
+            decimal_type = java_class("java.math.BigDecimal")
+            runtime.adapter().submitLimitOrderDecimal(
+                args.symbol, direction, decimal_type(quantity.to_eng_string()),
+                decimal_type(price.to_eng_string()), client_order_id
+            )
             time.sleep(min(args.seconds, 3.0))
-            cancel = java_cancel_order(args.symbol, str(limit_order.orderId()))
-            if not runtime.cancelOrder(cancel):
+            if not runtime.adapter().cancelOrder(args.symbol, client_order_id):
                 raise SystemExit("Binance cancel request failed")
             print(f"SMOKE PASS submit-cancel symbol={args.symbol.upper()} side={args.side} quantity={quantity} price={price}")
             return
@@ -81,19 +86,6 @@ def main() -> None:
     finally:
         engine.close()
         shutdown_jvm()
-
-
-def java_limit_order(symbol: str, side: str, quantity: int, price: float) -> object:
-    limit_type = java_class("com.abc.trading.execution.LimitOrderIntent")
-    direction = java_class("com.abc.trading.execution.SignalDirection").valueOf(side)
-    return limit_type("binance-smoke", symbol.upper(), 1, time.time_ns(), "binance-smoke",
-                      f"smoke-{time.time_ns()}", direction, quantity, price, 0, 0.0)
-
-
-def java_cancel_order(symbol: str, client_order_id: str) -> object:
-    cancel_type = java_class("com.abc.trading.execution.commands.CancelOrder")
-    return cancel_type("binance-smoke", symbol.upper(), client_order_id,
-                       f"cancel-{time.time_ns()}", time.time_ns())
 
 
 if __name__ == "__main__":
