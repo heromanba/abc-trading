@@ -253,7 +253,7 @@ public final class BinanceFuturesAdapter implements DataClient, ExecutionClient 
         Map<String, String> params = new LinkedHashMap<>();
         params.put("symbol", command.symbol().toUpperCase(java.util.Locale.ROOT));
         params.put("origClientOrderId", command.clientOrderId());
-        if (command.quantity() != null) params.put("quantity", Integer.toString(command.quantity()));
+        if (command.quantity() != null) params.put("quantity", command.quantity().asDecimal().stripTrailingZeros().toPlainString());
         if (command.price() != null) params.put("price", decimal(command.price()));
         params.put("timestamp", Long.toString(System.currentTimeMillis()));
         params.put("recvWindow", Long.toString(config.recvWindowMs()));

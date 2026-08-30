@@ -170,7 +170,7 @@ public final class BacktestEngine implements AutoCloseable {
         log(new Event(0, nextLifecycleSequence(), command.timestampNs(), command.symbol(),
                 eventType.name(), eventType, command.strategyId(), SignalDirection.HOLD,
                 command.commandId(), command.clientOrderId(), command.price() == null ? 0.0 : command.price(),
-                command.quantity() == null ? 0 : command.quantity(), 0, 0.0));
+                command.quantity() == null ? Quantity.fromInt(0) : command.quantity(), 0, 0.0));
     }
 
     private void logExpired(OrderExpired event) {
@@ -369,11 +369,27 @@ public final class BacktestEngine implements AutoCloseable {
                 0.0, TimeInForce.GTC, 0L, triggerPrice, triggerType));
     }
 
+                public void submitStopMarketOrder(String strategyId, String symbol, String orderId,
+                    SignalDirection side, Quantity quantity, long timestampNs, double triggerPrice,
+                    TriggerType triggerType) {
+                kernel.bus().publish(new OrderIntent(strategyId, symbol, kernel.currentInputSequence(), timestampNs,
+                    orderId + "-corr", orderId, side, quantity, triggerPrice, kernel.portfolio().position(symbol),
+                    0.0, TimeInForce.GTC, 0L, triggerPrice, triggerType));
+                }
+
     public void submitStopLimitOrder(String strategyId, String symbol, String orderId,
             SignalDirection side, int quantity, long timestampNs, double limitPrice,
             double triggerPrice, TriggerType triggerType) {
         kernel.bus().publish(new LimitOrderIntent(strategyId, symbol, kernel.currentInputSequence(), timestampNs,
                 orderId + "-corr", orderId, side, Quantity.fromInt(quantity), limitPrice, kernel.portfolio().position(symbol),
+                0.0, TimeInForce.GTC, 0L, triggerPrice, triggerType));
+    }
+
+    public void submitStopLimitOrder(String strategyId, String symbol, String orderId,
+            SignalDirection side, Quantity quantity, long timestampNs, double limitPrice,
+            double triggerPrice, TriggerType triggerType) {
+        kernel.bus().publish(new LimitOrderIntent(strategyId, symbol, kernel.currentInputSequence(), timestampNs,
+                orderId + "-corr", orderId, side, quantity, limitPrice, kernel.portfolio().position(symbol),
                 0.0, TimeInForce.GTC, 0L, triggerPrice, triggerType));
     }
 
@@ -385,12 +401,30 @@ public final class BacktestEngine implements AutoCloseable {
                 0.0, TimeInForce.GTC, 0L, 0.0, triggerType, activationPrice, trailingOffset, offsetType));
             }
 
+                public void submitTrailingStopMarketOrder(String strategyId, String symbol, String orderId,
+                    SignalDirection side, Quantity quantity, long timestampNs, double activationPrice,
+                    double trailingOffset, TrailingOffsetType offsetType, TriggerType triggerType) {
+                kernel.bus().publish(new OrderIntent(strategyId, symbol, kernel.currentInputSequence(), timestampNs,
+                    orderId + "-corr", orderId, side, quantity, 0.0, kernel.portfolio().position(symbol),
+                    0.0, TimeInForce.GTC, 0L, 0.0, triggerType, activationPrice, trailingOffset, offsetType));
+                }
+
             public void submitTrailingStopLimitOrder(String strategyId, String symbol, String orderId,
                 SignalDirection side, int quantity, long timestampNs, double limitPrice,
                 double activationPrice, double limitOffset, double trailingOffset,
                 TrailingOffsetType offsetType, TriggerType triggerType) {
             kernel.bus().publish(new LimitOrderIntent(strategyId, symbol, kernel.currentInputSequence(), timestampNs,
                 orderId + "-corr", orderId, side, Quantity.fromInt(quantity), limitPrice, kernel.portfolio().position(symbol),
+                0.0, TimeInForce.GTC, 0L, 0.0, triggerType, activationPrice, trailingOffset,
+                offsetType, limitOffset));
+            }
+
+            public void submitTrailingStopLimitOrder(String strategyId, String symbol, String orderId,
+                SignalDirection side, Quantity quantity, long timestampNs, double limitPrice,
+                double activationPrice, double limitOffset, double trailingOffset,
+                TrailingOffsetType offsetType, TriggerType triggerType) {
+            kernel.bus().publish(new LimitOrderIntent(strategyId, symbol, kernel.currentInputSequence(), timestampNs,
+                orderId + "-corr", orderId, side, quantity, limitPrice, kernel.portfolio().position(symbol),
                 0.0, TimeInForce.GTC, 0L, 0.0, triggerType, activationPrice, trailingOffset,
                 offsetType, limitOffset));
             }
@@ -479,11 +513,23 @@ public final class BacktestEngine implements AutoCloseable {
                 orderId + "-corr", orderId, side, quantity, price, kernel.portfolio().position(symbol), 0.0));
     }
 
+        public void submitMarketOrder(String strategyId, String symbol, String orderId,
+            SignalDirection side, Quantity quantity, long timestampNs, double price) {
+        kernel.bus().publish(new OrderIntent(strategyId, symbol, kernel.currentInputSequence(), timestampNs,
+            orderId + "-corr", orderId, side, quantity, price, kernel.portfolio().position(symbol), 0.0));
+        }
+
     public void submitLimitOrder(String strategyId, String symbol, String orderId,
             SignalDirection side, int quantity, long timestampNs, double limitPrice) {
         kernel.bus().publish(new LimitOrderIntent(strategyId, symbol, kernel.currentInputSequence(), timestampNs,
                 orderId + "-corr", orderId, side, quantity, limitPrice, kernel.portfolio().position(symbol), 0.0));
     }
+
+        public void submitLimitOrder(String strategyId, String symbol, String orderId,
+            SignalDirection side, Quantity quantity, long timestampNs, double limitPrice) {
+        kernel.bus().publish(new LimitOrderIntent(strategyId, symbol, kernel.currentInputSequence(), timestampNs,
+            orderId + "-corr", orderId, side, quantity, limitPrice, kernel.portfolio().position(symbol), 0.0));
+        }
 
     public void start() {
         kernel.start();

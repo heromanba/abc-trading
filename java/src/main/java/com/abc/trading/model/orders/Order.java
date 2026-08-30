@@ -3,6 +3,7 @@ package com.abc.trading.model.orders;
 import com.abc.trading.execution.SignalDirection;
 import com.abc.trading.execution.TriggerType;
 import com.abc.trading.execution.TrailingOffsetType;
+import com.abc.trading.data.Quantity;
 
 public sealed interface Order permits MarketOrder, LimitOrder, StopMarketOrder, StopLimitOrder,
     TrailingStopMarketOrder, TrailingStopLimitOrder {
@@ -10,7 +11,7 @@ public sealed interface Order permits MarketOrder, LimitOrder, StopMarketOrder, 
     String strategyId();
     String symbol();
     SignalDirection side();
-    int quantity();
+    Quantity quantity();
     double price();
     long timestampNs();
 

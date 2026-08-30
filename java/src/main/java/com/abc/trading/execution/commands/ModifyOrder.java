@@ -1,16 +1,24 @@
 package com.abc.trading.execution.commands;
 
+import com.abc.trading.data.Quantity;
+
 public record ModifyOrder(
         String strategyId,
         String symbol,
         String clientOrderId,
         String commandId,
         long timestampNs,
-        Integer quantity,
+        Quantity quantity,
         Double price,
         Double triggerPrice) {
     public ModifyOrder(String strategyId, String symbol, String clientOrderId, String commandId,
             long timestampNs, Integer quantity, Double price) {
+        this(strategyId, symbol, clientOrderId, commandId, timestampNs,
+                quantity == null ? null : Quantity.fromInt(quantity), price, null);
+    }
+
+    public ModifyOrder(String strategyId, String symbol, String clientOrderId, String commandId,
+            long timestampNs, Quantity quantity, Double price) {
         this(strategyId, symbol, clientOrderId, commandId, timestampNs, quantity, price, null);
     }
     public ModifyOrder {
@@ -21,7 +29,7 @@ public record ModifyOrder(
         if (quantity == null && price == null && triggerPrice == null) {
             throw new IllegalArgumentException("quantity, price, or triggerPrice is required");
         }
-        if (quantity != null && quantity <= 0) throw new IllegalArgumentException("quantity must be positive");
+        if (quantity != null && quantity.isZero()) throw new IllegalArgumentException("quantity must be positive");
         if (price != null && (!Double.isFinite(price) || price <= 0.0)) {
             throw new IllegalArgumentException("price must be finite and positive");
         }

@@ -273,7 +273,7 @@ public final class ExecutionEngine {
             if (!current.status().isOpen()) throw new IllegalStateException("order is not open");
             stateMachine.pendingUpdate(command.clientOrderId());
             if (clientFor(command.symbol()).modifyOrder(command)) {
-                Quantity quantity = command.quantity() == null ? current.submittedQuantity() : Quantity.fromInt(command.quantity());
+                Quantity quantity = command.quantity() == null ? current.submittedQuantity() : command.quantity();
                 stateMachine.update(command.clientOrderId(), quantity);
                 bus.publish(new OrderModified(command));
             } else {

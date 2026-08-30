@@ -1,8 +1,26 @@
-"""Market data value objects backed by Java primitives."""
+"""Market data value objects backed by Java value types."""
 
 from dataclasses import dataclass
+from decimal import Decimal
+from typing import TypeAlias
 
 from abc_trading._java import java_class
+
+
+QuantityValue: TypeAlias = int | Decimal | str
+
+
+def _java_quantity(value: QuantityValue) -> object:
+    quantity_type = java_class("com.abc.trading.data.Quantity")
+    if isinstance(value, bool):
+        raise TypeError("quantity must be an int, Decimal, or decimal string")
+    if isinstance(value, int):
+        return quantity_type.fromInt(value)
+    if isinstance(value, Decimal | str):
+        decimal_value = value if isinstance(value, Decimal) else Decimal(value)
+        precision = max(0, -decimal_value.as_tuple().exponent)
+        return quantity_type.fromString(str(decimal_value), precision)
+    raise TypeError("quantity must be an int, Decimal, or decimal string")
 
 
 class Bar:
@@ -76,8 +94,8 @@ class MarketDataSnapshot:
 
 
 class BookLevel:
-    def __init__(self, price: float, quantity: int) -> None:
-        self._java = java_class("com.abc.trading.data.BookLevel")(price, quantity)
+    def __init__(self, price: float, quantity: QuantityValue) -> None:
+        self._java = java_class("com.abc.trading.data.BookLevel")(price, _java_quantity(quantity))
 
 
 class OrderBookSnapshot:
@@ -85,8 +103,8 @@ class OrderBookSnapshot:
         self,
         symbol: str,
         timestamp: int,
-        bids: list[tuple[float, int]],
-        asks: list[tuple[float, int]],
+        bids: list[tuple[float, QuantityValue]],
+        asks: list[tuple[float, QuantityValue]],
         sequence: int = 0,
     ) -> None:
         level_type = java_class("com.abc.trading.data.BookLevel")
@@ -94,9 +112,9 @@ class OrderBookSnapshot:
         java_bids = list_type()
         java_asks = list_type()
         for price, quantity in bids:
-            java_bids.add(level_type(price, quantity))
+            java_bids.add(level_type(price, _java_quantity(quantity)))
         for price, quantity in asks:
-            java_asks.add(level_type(price, quantity))
+            java_asks.add(level_type(price, _java_quantity(quantity)))
         self._java = java_class("com.abc.trading.data.OrderBookSnapshot")(
             symbol, timestamp, java_bids, java_asks, sequence
         )
@@ -114,13 +132,13 @@ class OrderBookDelta:
         side: str,
         action: str,
         price: float,
-        quantity: int,
+        quantity: QuantityValue,
         sequence: int = 0,
     ) -> None:
         direction = java_class("com.abc.trading.execution.SignalDirection").valueOf(side)
         book_action = java_class("com.abc.trading.data.BookAction").valueOf(action)
         self._java = java_class("com.abc.trading.data.OrderBookDelta")(
-            symbol, timestamp, direction, book_action, price, quantity, sequence
+            symbol, timestamp, direction, book_action, price, _java_quantity(quantity), sequence
         )
 
     @property
@@ -129,9 +147,9 @@ class OrderBookDelta:
 
 
 class VenueOrder:
-    def __init__(self, order_id: str, side: str, price: float, quantity: int, sequence: int) -> None:
+    def __init__(self, order_id: str, side: str, price: float, quantity: QuantityValue, sequence: int) -> None:
         direction = java_class("com.abc.trading.execution.SignalDirection").valueOf(side)
-        self._java = java_class("com.abc.trading.data.VenueOrder")(order_id, direction, price, quantity, sequence)
+        self._java = java_class("com.abc.trading.data.VenueOrder")(order_id, direction, price, _java_quantity(quantity), sequence)
 
     @property
     def java(self) -> object:
@@ -140,8 +158,8 @@ class VenueOrder:
 
 class OrderBookL3Snapshot:
     def __init__(self, symbol: str, timestamp: int,
-                 bids: list[VenueOrder | tuple[str, str, float, int, int]],
-                 asks: list[VenueOrder | tuple[str, str, float, int, int]], sequence: int = 0) -> None:
+                 bids: list[VenueOrder | tuple[str, str, float, QuantityValue, int]],
+                 asks: list[VenueOrder | tuple[str, str, float, QuantityValue, int]], sequence: int = 0) -> None:
         order_type = java_class("com.abc.trading.data.VenueOrder")
         array_list = java_class("java.util.ArrayList")
         java_bids = array_list()
@@ -149,11 +167,11 @@ class OrderBookL3Snapshot:
         for order in bids:
             java_bids.add(order.java if isinstance(order, VenueOrder) else order_type(
                 order[0], java_class("com.abc.trading.execution.SignalDirection").valueOf(order[1]),
-                order[2], order[3], order[4]))
+                order[2], _java_quantity(order[3]), order[4]))
         for order in asks:
             java_asks.add(order.java if isinstance(order, VenueOrder) else order_type(
                 order[0], java_class("com.abc.trading.execution.SignalDirection").valueOf(order[1]),
-                order[2], order[3], order[4]))
+                order[2], _java_quantity(order[3]), order[4]))
         self._java = java_class("com.abc.trading.data.OrderBookL3Snapshot")(symbol, timestamp, java_bids, java_asks, sequence)
 
     @property
@@ -163,12 +181,12 @@ class OrderBookL3Snapshot:
 
 class OrderBookL3Delta:
     def __init__(self, symbol: str, timestamp: int, side: str, action: str, order_id: str,
-                 price: float, quantity: int, sequence: int = 0) -> None:
+                 price: float, quantity: QuantityValue, sequence: int = 0) -> None:
         self._java = java_class("com.abc.trading.data.OrderBookL3Delta")(
             symbol, timestamp,
             java_class("com.abc.trading.execution.SignalDirection").valueOf(side),
             java_class("com.abc.trading.data.BookAction").valueOf(action),
-            order_id, price, quantity, sequence
+            order_id, price, _java_quantity(quantity), sequence
         )
 
     @property
@@ -177,10 +195,10 @@ class OrderBookL3Delta:
 
 
 class TradeTick:
-    def __init__(self, symbol: str, timestamp: int, price: float, quantity: int,
+    def __init__(self, symbol: str, timestamp: int, price: float, quantity: QuantityValue,
                  aggressor_side: str, sequence: int = 0) -> None:
         self._java = java_class("com.abc.trading.data.TradeTick")(
-            symbol, timestamp, price, quantity,
+            symbol, timestamp, price, _java_quantity(quantity),
             java_class("com.abc.trading.data.AggressorSide").valueOf(aggressor_side),
             sequence
         )

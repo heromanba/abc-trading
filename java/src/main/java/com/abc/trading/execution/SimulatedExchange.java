@@ -262,7 +262,7 @@ public final class SimulatedExchange {
     public boolean modifyOrder(ModifyOrder command) {
         WorkingOrder order = workingOrders.get(command.clientOrderId());
         if (order == null || (!order.limit && !order.trailing)) return false;
-        Quantity nextQuantity = command.quantity() == null ? order.quantity : Quantity.fromInt(command.quantity());
+        Quantity nextQuantity = command.quantity() == null ? order.quantity : command.quantity();
         if (nextQuantity.compareTo(order.filledQuantity) < 0 || nextQuantity.isZero()) return false;
         double nextPrice = command.price() == null ? order.price : command.price();
         if (order.limit) validatePrice(nextPrice);

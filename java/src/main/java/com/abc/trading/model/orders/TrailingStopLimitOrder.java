@@ -3,9 +3,10 @@ package com.abc.trading.model.orders;
 import com.abc.trading.execution.SignalDirection;
 import com.abc.trading.execution.TrailingOffsetType;
 import com.abc.trading.execution.TriggerType;
+import com.abc.trading.data.Quantity;
 
 public record TrailingStopLimitOrder(
-        String clientOrderId, String strategyId, String symbol, SignalDirection side, int quantity,
+        String clientOrderId, String strategyId, String symbol, SignalDirection side, Quantity quantity,
         double limitPrice, double activationPrice, double triggerPrice, TriggerType triggerType,
         double limitOffset, double trailingOffset, TrailingOffsetType trailingOffsetType, long timestampNs)
         implements Order {
@@ -16,6 +17,13 @@ public record TrailingStopLimitOrder(
         if (activationPrice < 0.0 || !Double.isFinite(activationPrice)) throw new IllegalArgumentException("activationPrice must be non-negative");
         if (triggerPrice < 0.0 || !Double.isFinite(triggerPrice)) throw new IllegalArgumentException("triggerPrice must be non-negative");
         if (!Double.isFinite(limitOffset)) throw new IllegalArgumentException("limitOffset must be finite");
+    }
+
+    public TrailingStopLimitOrder(String clientOrderId, String strategyId, String symbol, SignalDirection side,
+            int quantity, double limitPrice, double activationPrice, double triggerPrice, TriggerType triggerType,
+            double limitOffset, double trailingOffset, TrailingOffsetType trailingOffsetType, long timestampNs) {
+        this(clientOrderId, strategyId, symbol, side, Quantity.fromInt(quantity), limitPrice, activationPrice,
+                triggerPrice, triggerType, limitOffset, trailingOffset, trailingOffsetType, timestampNs);
     }
 
     @Override public double price() { return limitPrice; }

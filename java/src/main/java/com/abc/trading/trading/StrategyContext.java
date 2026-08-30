@@ -1,6 +1,7 @@
 package com.abc.trading.trading;
 
 import com.abc.trading.data.Bar;
+import com.abc.trading.data.Quantity;
 import com.abc.trading.msgbus.MessageBus;
 import com.abc.trading.execution.SignalDirection;
 import com.abc.trading.execution.TimeInForce;
@@ -34,7 +35,16 @@ public final class StrategyContext {
         return orders.limit(symbol, side, quantity, limitPrice);
     }
 
+    public String limit(String symbol, SignalDirection side, Quantity quantity, double limitPrice) {
+        return orders.limit(symbol, side, quantity, limitPrice);
+    }
+
     public String limit(String symbol, SignalDirection side, int quantity, double limitPrice,
+            TimeInForce timeInForce, long expireTimeNs) {
+        return orders.limit(symbol, side, quantity, limitPrice, timeInForce, expireTimeNs);
+    }
+
+    public String limit(String symbol, SignalDirection side, Quantity quantity, double limitPrice,
             TimeInForce timeInForce, long expireTimeNs) {
         return orders.limit(symbol, side, quantity, limitPrice, timeInForce, expireTimeNs);
     }
@@ -43,7 +53,16 @@ public final class StrategyContext {
         return orders.market(symbol, side, quantity, price);
     }
 
+    public String market(String symbol, SignalDirection side, Quantity quantity, double price) {
+        return orders.market(symbol, side, quantity, price);
+    }
+
     public String market(String symbol, SignalDirection side, int quantity, double price,
+            TimeInForce timeInForce, long expireTimeNs) {
+        return orders.market(symbol, side, quantity, price, timeInForce, expireTimeNs);
+    }
+
+    public String market(String symbol, SignalDirection side, Quantity quantity, double price,
             TimeInForce timeInForce, long expireTimeNs) {
         return orders.market(symbol, side, quantity, price, timeInForce, expireTimeNs);
     }
@@ -53,7 +72,17 @@ public final class StrategyContext {
         return orders.emulatedMarket(symbol, side, quantity, price, emulationTrigger);
     }
 
+    public String emulatedMarket(String symbol, SignalDirection side, Quantity quantity, double price,
+            TriggerType emulationTrigger) {
+        return orders.emulatedMarket(symbol, side, quantity, price, emulationTrigger);
+    }
+
     public String emulatedLimit(String symbol, SignalDirection side, int quantity, double limitPrice,
+            TriggerType emulationTrigger) {
+        return orders.emulatedLimit(symbol, side, quantity, limitPrice, emulationTrigger);
+    }
+
+    public String emulatedLimit(String symbol, SignalDirection side, Quantity quantity, double limitPrice,
             TriggerType emulationTrigger) {
         return orders.emulatedLimit(symbol, side, quantity, limitPrice, emulationTrigger);
     }
@@ -67,9 +96,19 @@ public final class StrategyContext {
         return orders.stopMarket(symbol, side, quantity, triggerPrice, timeInForce, expireTimeNs);
     }
 
+    public String stopMarket(String symbol, SignalDirection side, Quantity quantity, double triggerPrice,
+            TimeInForce timeInForce, long expireTimeNs) {
+        return orders.stopMarket(symbol, side, quantity, triggerPrice, timeInForce, expireTimeNs);
+    }
+
     public String stopLimit(String symbol, SignalDirection side, int quantity, double limitPrice,
             double triggerPrice) {
         return orders.stopLimit(symbol, side, quantity, limitPrice, triggerPrice);
+    }
+
+    public String stopLimit(String symbol, SignalDirection side, Quantity quantity, double limitPrice,
+            double triggerPrice, TimeInForce timeInForce, long expireTimeNs) {
+        return orders.stopLimit(symbol, side, quantity, limitPrice, triggerPrice, timeInForce, expireTimeNs);
     }
 
     public String stopLimit(String symbol, SignalDirection side, int quantity, double limitPrice,
@@ -84,7 +123,22 @@ public final class StrategyContext {
                 offsetType, triggerType, timeInForce, expireTimeNs);
     }
 
+    public String trailingStopMarket(String symbol, SignalDirection side, Quantity quantity,
+            double activationPrice, double trailingOffset, TrailingOffsetType offsetType,
+            TriggerType triggerType, TimeInForce timeInForce, long expireTimeNs) {
+        return orders.trailingStopMarket(symbol, side, quantity, activationPrice, trailingOffset,
+                offsetType, triggerType, timeInForce, expireTimeNs);
+    }
+
     public String trailingStopLimit(String symbol, SignalDirection side, int quantity,
+            double limitPrice, double activationPrice, double limitOffset, double trailingOffset,
+            TrailingOffsetType offsetType, TriggerType triggerType, TimeInForce timeInForce,
+            long expireTimeNs) {
+        return orders.trailingStopLimit(symbol, side, quantity, limitPrice, activationPrice,
+                limitOffset, trailingOffset, offsetType, triggerType, timeInForce, expireTimeNs);
+    }
+
+    public String trailingStopLimit(String symbol, SignalDirection side, Quantity quantity,
             double limitPrice, double activationPrice, double limitOffset, double trailingOffset,
             TrailingOffsetType offsetType, TriggerType triggerType, TimeInForce timeInForce,
             long expireTimeNs) {
@@ -98,7 +152,15 @@ public final class StrategyContext {
         orders.modify(clientOrderId, quantity, price);
     }
 
+    public void modify(String clientOrderId, Quantity quantity, Double price) {
+        orders.modify(clientOrderId, quantity, price);
+    }
+
     public void modify(String clientOrderId, Integer quantity, Double price, Double triggerPrice) {
+        orders.modify(clientOrderId, quantity, price, triggerPrice);
+    }
+
+    public void modify(String clientOrderId, Quantity quantity, Double price, Double triggerPrice) {
         orders.modify(clientOrderId, quantity, price, triggerPrice);
     }
 

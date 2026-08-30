@@ -40,6 +40,10 @@ public final class OrderApi {
         return limit(symbol, side, quantity, limitPrice, TimeInForce.GTC, 0L);
     }
 
+    public String limit(String symbol, SignalDirection side, Quantity quantity, double limitPrice) {
+        return limit(symbol, side, quantity, limitPrice, TimeInForce.GTC, 0L);
+    }
+
     public String limit(String symbol, SignalDirection side, int quantity, double limitPrice,
             TimeInForce timeInForce, long expireTimeNs) {
         SubmitOrder order = createSubmitOrder(orderFactory.limit(
@@ -48,7 +52,19 @@ public final class OrderApi {
         return order.clientOrderId();
     }
 
+    public String limit(String symbol, SignalDirection side, Quantity quantity, double limitPrice,
+            TimeInForce timeInForce, long expireTimeNs) {
+        SubmitOrder order = createSubmitOrder(orderFactory.limit(
+                symbol, side, quantity, limitPrice, context.marketTimestamp()), timeInForce, expireTimeNs);
+        bus.publish(order);
+        return order.clientOrderId();
+    }
+
     public String market(String symbol, SignalDirection side, int quantity, double price) {
+        return market(symbol, side, quantity, price, TimeInForce.GTC, 0L);
+    }
+
+    public String market(String symbol, SignalDirection side, Quantity quantity, double price) {
         return market(symbol, side, quantity, price, TimeInForce.GTC, 0L);
     }
 
@@ -61,7 +77,25 @@ public final class OrderApi {
         return order.clientOrderId();
         }
 
+        public String emulatedMarket(String symbol, SignalDirection side, Quantity quantity, double price,
+            TriggerType emulationTrigger) {
+        SubmitOrder order = createSubmitOrder(orderFactory.market(
+            symbol, side, quantity, price, context.marketTimestamp()), TimeInForce.GTC, 0L,
+            emulationTrigger);
+        bus.publish(order);
+        return order.clientOrderId();
+        }
+
         public String emulatedLimit(String symbol, SignalDirection side, int quantity, double limitPrice,
+            TriggerType emulationTrigger) {
+        SubmitOrder order = createSubmitOrder(orderFactory.limit(
+            symbol, side, quantity, limitPrice, context.marketTimestamp()), TimeInForce.GTC, 0L,
+            emulationTrigger);
+        bus.publish(order);
+        return order.clientOrderId();
+        }
+
+        public String emulatedLimit(String symbol, SignalDirection side, Quantity quantity, double limitPrice,
             TriggerType emulationTrigger) {
         SubmitOrder order = createSubmitOrder(orderFactory.limit(
             symbol, side, quantity, limitPrice, context.marketTimestamp()), TimeInForce.GTC, 0L,
@@ -87,6 +121,17 @@ public final class OrderApi {
         return order.clientOrderId();
     }
 
+        public String market(String symbol, SignalDirection side, Quantity quantity, double price,
+            TimeInForce timeInForce, long expireTimeNs) {
+        SubmitOrder order = createSubmitOrder(orderFactory.market(
+            symbol, side, quantity, price, context.marketTimestamp()), timeInForce, expireTimeNs);
+        bus.publish(new StrategySignal(
+            strategyId, symbol, context.inputSequence(), context.marketTimestamp(),
+            order.correlationId(), side, price, context.position(symbol)));
+        bus.publish(order);
+        return order.clientOrderId();
+        }
+
     public String stopMarket(String symbol, SignalDirection side, int quantity, double triggerPrice) {
         return stopMarket(symbol, side, quantity, triggerPrice, TimeInForce.GTC, 0L);
     }
@@ -99,9 +144,27 @@ public final class OrderApi {
         return order.clientOrderId();
     }
 
+    public String stopMarket(String symbol, SignalDirection side, Quantity quantity, double triggerPrice,
+            TimeInForce timeInForce, long expireTimeNs) {
+        SubmitOrder order = createSubmitOrder(orderFactory.stopMarket(
+                symbol, side, quantity, triggerPrice, TriggerType.LAST_PRICE, context.marketTimestamp()),
+                timeInForce, expireTimeNs);
+        bus.publish(order);
+        return order.clientOrderId();
+    }
+
     public String stopLimit(String symbol, SignalDirection side, int quantity, double limitPrice,
             double triggerPrice) {
         return stopLimit(symbol, side, quantity, limitPrice, triggerPrice, TimeInForce.GTC, 0L);
+    }
+
+    public String stopLimit(String symbol, SignalDirection side, Quantity quantity, double limitPrice,
+            double triggerPrice, TimeInForce timeInForce, long expireTimeNs) {
+        SubmitOrder order = createSubmitOrder(orderFactory.stopLimit(
+                symbol, side, quantity, limitPrice, triggerPrice, TriggerType.LAST_PRICE, context.marketTimestamp()),
+                timeInForce, expireTimeNs);
+        bus.publish(order);
+        return order.clientOrderId();
     }
 
     public String stopLimit(String symbol, SignalDirection side, int quantity, double limitPrice,
@@ -122,7 +185,28 @@ public final class OrderApi {
         return order.clientOrderId();
     }
 
+    public String trailingStopMarket(String symbol, SignalDirection side, Quantity quantity,
+            double activationPrice, double trailingOffset, TrailingOffsetType offsetType,
+            TriggerType triggerType, TimeInForce timeInForce, long expireTimeNs) {
+        SubmitOrder order = createSubmitOrder(orderFactory.trailingStopMarket(symbol, side, quantity,
+                activationPrice, 0.0, triggerType, trailingOffset, offsetType, context.marketTimestamp()),
+                timeInForce, expireTimeNs);
+        bus.publish(order);
+        return order.clientOrderId();
+    }
+
     public String trailingStopLimit(String symbol, SignalDirection side, int quantity,
+            double limitPrice, double activationPrice, double limitOffset, double trailingOffset,
+            TrailingOffsetType offsetType, TriggerType triggerType, TimeInForce timeInForce,
+            long expireTimeNs) {
+        SubmitOrder order = createSubmitOrder(orderFactory.trailingStopLimit(symbol, side, quantity,
+                limitPrice, activationPrice, 0.0, triggerType, limitOffset, trailingOffset,
+                offsetType, context.marketTimestamp()), timeInForce, expireTimeNs);
+        bus.publish(order);
+        return order.clientOrderId();
+    }
+
+    public String trailingStopLimit(String symbol, SignalDirection side, Quantity quantity,
             double limitPrice, double activationPrice, double limitOffset, double trailingOffset,
             TrailingOffsetType offsetType, TriggerType triggerType, TimeInForce timeInForce,
             long expireTimeNs) {
@@ -144,7 +228,19 @@ public final class OrderApi {
         modify(clientOrderId, quantity, price, null);
     }
 
+    public void modify(String clientOrderId, Quantity quantity, Double price) {
+        modify(clientOrderId, quantity, price, null);
+    }
+
     public void modify(String clientOrderId, Integer quantity, Double price, Double triggerPrice) {
+        String symbol = orderSymbols.get(clientOrderId);
+        if (symbol == null) throw new IllegalArgumentException("Unknown client order: " + clientOrderId);
+        bus.publish(new ModifyOrder(strategyId, symbol, clientOrderId,
+            strategyId + "-modify-" + context.sequence(), context.marketTimestamp(),
+            quantity == null ? null : Quantity.fromInt(quantity), price, triggerPrice));
+    }
+
+    public void modify(String clientOrderId, Quantity quantity, Double price, Double triggerPrice) {
         String symbol = orderSymbols.get(clientOrderId);
         if (symbol == null) throw new IllegalArgumentException("Unknown client order: " + clientOrderId);
         bus.publish(new ModifyOrder(strategyId, symbol, clientOrderId,
@@ -170,7 +266,7 @@ public final class OrderApi {
                 correlationId,
                 order.side(),
                 orderType(order),
-                Quantity.fromInt(order.quantity()),
+                order.quantity(),
                 order.price(),
                 targetPosition(position, order.side(), order.quantity()),
                 0.0,
@@ -188,8 +284,8 @@ public final class OrderApi {
             return submitOrder;
     }
 
-    private static BigDecimal targetPosition(BigDecimal position, SignalDirection side, int quantity) {
-        BigDecimal signedQuantity = BigDecimal.valueOf(quantity);
+    private static BigDecimal targetPosition(BigDecimal position, SignalDirection side, Quantity quantity) {
+        BigDecimal signedQuantity = quantity.asDecimal();
         return side == SignalDirection.BUY ? position.add(signedQuantity) : position.subtract(signedQuantity);
     }
 

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import jpype
 from pathlib import Path
+from decimal import Decimal
 
 from abc_trading._java import ensure_jvm, java_class
-from abc_trading.model.data import Bar, MarketDataSnapshot, OrderBookSnapshot, OrderBookDelta, OrderBookL3Snapshot, OrderBookL3Delta, TradeTick, FxRateUpdate
+from abc_trading.model.data import Bar, MarketDataSnapshot, OrderBookSnapshot, OrderBookDelta, OrderBookL3Snapshot, OrderBookL3Delta, TradeTick, FxRateUpdate, QuantityValue, _java_quantity
 
 
 class StrategyContext:
@@ -15,14 +16,14 @@ class StrategyContext:
     def __init__(self, java_context: object) -> None:
         self._java = java_context
 
-    def position(self, symbol: str) -> int:
-        return int(self._java.position(symbol))
+    def position(self, symbol: str) -> Decimal:
+        return Decimal(str(self._java.position(symbol)))
 
     def market(
         self,
         symbol: str,
         side: str,
-        quantity: int,
+        quantity: QuantityValue,
         price: float,
         time_in_force: str = "GTC",
         expire_time_ns: int = 0,
@@ -30,26 +31,26 @@ class StrategyContext:
         signal_direction = java_class("com.abc.trading.execution.SignalDirection")
         tif = java_class("com.abc.trading.execution.TimeInForce").valueOf(time_in_force)
         return str(self._java.market(
-            symbol, signal_direction.valueOf(side), quantity, price, tif, expire_time_ns
+            symbol, signal_direction.valueOf(side), _java_quantity(quantity), price, tif, expire_time_ns
         ))
 
-    def emulated_market(self, symbol: str, side: str, quantity: int, price: float,
+    def emulated_market(self, symbol: str, side: str, quantity: QuantityValue, price: float,
                         emulation_trigger: str = "LAST_PRICE") -> str:
         direction = java_class("com.abc.trading.execution.SignalDirection").valueOf(side)
         trigger = java_class("com.abc.trading.execution.TriggerType").valueOf(emulation_trigger)
-        return str(self._java.emulatedMarket(symbol, direction, quantity, price, trigger))
+        return str(self._java.emulatedMarket(symbol, direction, _java_quantity(quantity), price, trigger))
 
-    def emulated_limit(self, symbol: str, side: str, quantity: int, limit_price: float,
+    def emulated_limit(self, symbol: str, side: str, quantity: QuantityValue, limit_price: float,
                        emulation_trigger: str = "LAST_PRICE") -> str:
         direction = java_class("com.abc.trading.execution.SignalDirection").valueOf(side)
         trigger = java_class("com.abc.trading.execution.TriggerType").valueOf(emulation_trigger)
-        return str(self._java.emulatedLimit(symbol, direction, quantity, limit_price, trigger))
+        return str(self._java.emulatedLimit(symbol, direction, _java_quantity(quantity), limit_price, trigger))
 
     def limit(
         self,
         symbol: str,
         side: str,
-        quantity: int,
+        quantity: QuantityValue,
         limit_price: float,
         time_in_force: str = "GTC",
         expire_time_ns: int = 0,
@@ -57,14 +58,14 @@ class StrategyContext:
         signal_direction = java_class("com.abc.trading.execution.SignalDirection")
         tif = java_class("com.abc.trading.execution.TimeInForce").valueOf(time_in_force)
         return str(self._java.limit(
-            symbol, signal_direction.valueOf(side), quantity, limit_price, tif, expire_time_ns
+            symbol, signal_direction.valueOf(side), _java_quantity(quantity), limit_price, tif, expire_time_ns
         ))
 
     def stop_market(
         self,
         symbol: str,
         side: str,
-        quantity: int,
+        quantity: QuantityValue,
         trigger_price: float,
         time_in_force: str = "GTC",
         expire_time_ns: int = 0,
@@ -72,14 +73,14 @@ class StrategyContext:
         signal_direction = java_class("com.abc.trading.execution.SignalDirection")
         tif = java_class("com.abc.trading.execution.TimeInForce").valueOf(time_in_force)
         return str(self._java.stopMarket(
-            symbol, signal_direction.valueOf(side), quantity, trigger_price, tif, expire_time_ns
+            symbol, signal_direction.valueOf(side), _java_quantity(quantity), trigger_price, tif, expire_time_ns
         ))
 
     def stop_limit(
         self,
         symbol: str,
         side: str,
-        quantity: int,
+        quantity: QuantityValue,
         limit_price: float,
         trigger_price: float,
         time_in_force: str = "GTC",
@@ -88,7 +89,7 @@ class StrategyContext:
         signal_direction = java_class("com.abc.trading.execution.SignalDirection")
         tif = java_class("com.abc.trading.execution.TimeInForce").valueOf(time_in_force)
         return str(self._java.stopLimit(
-            symbol, signal_direction.valueOf(side), quantity, limit_price, trigger_price,
+            symbol, signal_direction.valueOf(side), _java_quantity(quantity), limit_price, trigger_price,
             tif, expire_time_ns
         ))
 
@@ -96,7 +97,7 @@ class StrategyContext:
         self,
         symbol: str,
         side: str,
-        quantity: int,
+        quantity: QuantityValue,
         activation_price: float,
         trailing_offset: float,
         offset_type: str = "PRICE",
@@ -109,7 +110,7 @@ class StrategyContext:
         trigger = java_class("com.abc.trading.execution.TriggerType").valueOf(trigger_type)
         tif = java_class("com.abc.trading.execution.TimeInForce").valueOf(time_in_force)
         return str(self._java.trailingStopMarket(
-            symbol, direction, quantity, activation_price, trailing_offset,
+            symbol, direction, _java_quantity(quantity), activation_price, trailing_offset,
             offset, trigger, tif, expire_time_ns
         ))
 
@@ -117,7 +118,7 @@ class StrategyContext:
         self,
         symbol: str,
         side: str,
-        quantity: int,
+        quantity: QuantityValue,
         limit_price: float,
         activation_price: float,
         limit_offset: float,
@@ -132,7 +133,7 @@ class StrategyContext:
         trigger = java_class("com.abc.trading.execution.TriggerType").valueOf(trigger_type)
         tif = java_class("com.abc.trading.execution.TimeInForce").valueOf(time_in_force)
         return str(self._java.trailingStopLimit(
-            symbol, direction, quantity, limit_price, activation_price, limit_offset,
+            symbol, direction, _java_quantity(quantity), limit_price, activation_price, limit_offset,
             trailing_offset, offset, trigger, tif, expire_time_ns
         ))
 
@@ -142,11 +143,11 @@ class StrategyContext:
     def modify(
         self,
         client_order_id: str,
-        quantity: int | None = None,
+        quantity: QuantityValue | None = None,
         price: float | None = None,
         trigger_price: float | None = None,
     ) -> None:
-        java_quantity = jpype.JObject(quantity, jpype.JClass("java.lang.Integer")) if quantity is not None else None
+        java_quantity = _java_quantity(quantity) if quantity is not None else None
         java_price = jpype.JObject(price, jpype.JClass("java.lang.Double")) if price is not None else None
         java_trigger_price = jpype.JObject(trigger_price, jpype.JClass("java.lang.Double")) if trigger_price is not None else None
         self._java.modify(client_order_id, java_quantity, java_price, java_trigger_price)
@@ -244,7 +245,7 @@ class BacktestEngine:
         symbol: str,
         order_id: str,
         side: str,
-        quantity: int,
+        quantity: QuantityValue,
         timestamp_ns: int,
         trigger_price: float,
         trigger_type: str = "LAST_PRICE",
@@ -252,7 +253,7 @@ class BacktestEngine:
         direction = java_class("com.abc.trading.execution.SignalDirection").valueOf(side)
         trigger = java_class("com.abc.trading.execution.TriggerType").valueOf(trigger_type)
         self._java.submitStopMarketOrder(
-            strategy_id, symbol, order_id, direction, quantity, timestamp_ns, trigger_price, trigger
+            strategy_id, symbol, order_id, direction, _java_quantity(quantity), timestamp_ns, trigger_price, trigger
         )
 
     def submit_stop_limit_order(
@@ -261,7 +262,7 @@ class BacktestEngine:
         symbol: str,
         order_id: str,
         side: str,
-        quantity: int,
+        quantity: QuantityValue,
         timestamp_ns: int,
         limit_price: float,
         trigger_price: float,
@@ -270,12 +271,12 @@ class BacktestEngine:
         direction = java_class("com.abc.trading.execution.SignalDirection").valueOf(side)
         trigger = java_class("com.abc.trading.execution.TriggerType").valueOf(trigger_type)
         self._java.submitStopLimitOrder(
-            strategy_id, symbol, order_id, direction, quantity, timestamp_ns,
+            strategy_id, symbol, order_id, direction, _java_quantity(quantity), timestamp_ns,
             limit_price, trigger_price, trigger
         )
 
     def submit_trailing_stop_market_order(
-        self, strategy_id: str, symbol: str, order_id: str, side: str, quantity: int,
+        self, strategy_id: str, symbol: str, order_id: str, side: str, quantity: QuantityValue,
         timestamp_ns: int, activation_price: float, trailing_offset: float,
         offset_type: str = "PRICE", trigger_type: str = "LAST_PRICE",
     ) -> None:
@@ -283,12 +284,12 @@ class BacktestEngine:
         offset = java_class("com.abc.trading.execution.TrailingOffsetType").valueOf(offset_type)
         trigger = java_class("com.abc.trading.execution.TriggerType").valueOf(trigger_type)
         self._java.submitTrailingStopMarketOrder(
-            strategy_id, symbol, order_id, direction, quantity, timestamp_ns,
+            strategy_id, symbol, order_id, direction, _java_quantity(quantity), timestamp_ns,
             activation_price, trailing_offset, offset, trigger
         )
 
     def submit_trailing_stop_limit_order(
-        self, strategy_id: str, symbol: str, order_id: str, side: str, quantity: int,
+        self, strategy_id: str, symbol: str, order_id: str, side: str, quantity: QuantityValue,
         timestamp_ns: int, limit_price: float, activation_price: float, limit_offset: float,
         trailing_offset: float, offset_type: str = "PRICE", trigger_type: str = "LAST_PRICE",
     ) -> None:
@@ -296,7 +297,7 @@ class BacktestEngine:
         offset = java_class("com.abc.trading.execution.TrailingOffsetType").valueOf(offset_type)
         trigger = java_class("com.abc.trading.execution.TriggerType").valueOf(trigger_type)
         self._java.submitTrailingStopLimitOrder(
-            strategy_id, symbol, order_id, direction, quantity, timestamp_ns,
+            strategy_id, symbol, order_id, direction, _java_quantity(quantity), timestamp_ns,
             limit_price, activation_price, limit_offset, trailing_offset, offset, trigger
         )
 
@@ -393,8 +394,8 @@ class BacktestEngine:
     def started(self) -> bool:
         return self._started
 
-    def position(self, symbol: str) -> int:
-        return int(self._java.position(symbol))
+    def position(self, symbol: str) -> Decimal:
+        return Decimal(str(self._java.position(symbol)))
 
     def submit_market_order(
         self,
@@ -404,7 +405,7 @@ class BacktestEngine:
         market_timestamp: int,
         sequence: int,
         side: str,
-        quantity: int,
+        quantity: QuantityValue,
         price: float,
     ) -> None:
         direction = java_class("com.abc.trading.execution.SignalDirection").valueOf(side)
@@ -413,7 +414,7 @@ class BacktestEngine:
             symbol,
             order_id,
             direction,
-            quantity,
+            _java_quantity(quantity),
             market_timestamp,
             price,
         )
@@ -426,7 +427,7 @@ class BacktestEngine:
         market_timestamp: int,
         sequence: int,
         side: str,
-        quantity: int,
+        quantity: QuantityValue,
         limit_price: float,
     ) -> None:
         direction = java_class("com.abc.trading.execution.SignalDirection").valueOf(side)
@@ -435,7 +436,7 @@ class BacktestEngine:
             symbol,
             order_id,
             direction,
-            quantity,
+            _java_quantity(quantity),
             market_timestamp,
             limit_price,
         )
