@@ -15,12 +15,16 @@ public record InstrumentSpec(
         double initialMarginPerUnit,
         double maintenanceMarginPerUnit,
         int sizePrecision,
-        BigDecimal sizeIncrement) {
+        BigDecimal sizeIncrement,
+        int pricePrecision,
+        BigDecimal priceTickSize) {
     public InstrumentSpec(String symbol, String venue, TickScheme tickScheme,
             String baseCurrency, String quoteCurrency, double marginInitialRate,
             double marginMaintenanceRate) {
         this(symbol, venue, tickScheme, baseCurrency, quoteCurrency, marginInitialRate,
-                marginMaintenanceRate, MarginModelType.NOTIONAL_RATE, 0.0, 0.0);
+            marginMaintenanceRate, MarginModelType.NOTIONAL_RATE, 0.0, 0.0,
+            0, BigDecimal.ONE, precisionOf(tickScheme.tickSize(0.0)),
+            BigDecimal.valueOf(tickScheme.tickSize(0.0)));
     }
 
     public InstrumentSpec(String symbol, String venue, TickScheme tickScheme,
@@ -29,7 +33,7 @@ public record InstrumentSpec(
             double initialMarginPerUnit, double maintenanceMarginPerUnit) {
         this(symbol, venue, tickScheme, baseCurrency, quoteCurrency, marginInitialRate,
                 marginMaintenanceRate, marginModelType, initialMarginPerUnit, maintenanceMarginPerUnit,
-                0, BigDecimal.ONE);
+                0, BigDecimal.ONE, precisionOf(tickScheme.tickSize(0.0)), BigDecimal.valueOf(tickScheme.tickSize(0.0)));
     }
 
     public InstrumentSpec {
@@ -60,11 +64,25 @@ public record InstrumentSpec(
         if (sizeIncrement.stripTrailingZeros().scale() > sizePrecision) {
             throw new IllegalArgumentException("sizeIncrement exceeds sizePrecision");
         }
+        if (pricePrecision < 0 || pricePrecision > 18) {
+            throw new IllegalArgumentException("pricePrecision must be in 0..18");
+        }
+        if (priceTickSize == null || priceTickSize.signum() <= 0) {
+            throw new IllegalArgumentException("priceTickSize must be positive");
+        }
+        if (priceTickSize.stripTrailingZeros().scale() > pricePrecision) {
+            throw new IllegalArgumentException("priceTickSize exceeds pricePrecision");
+        }
     }
 
     public static InstrumentSpec defaults(String symbol, String venue, TickScheme tickScheme) {
         return new InstrumentSpec(symbol, venue, tickScheme, symbol, "USD", 1.0, 0.5,
-                MarginModelType.NOTIONAL_RATE, 0.0, 0.0, 0, BigDecimal.ONE);
+            MarginModelType.NOTIONAL_RATE, 0.0, 0.0, 0, BigDecimal.ONE,
+            precisionOf(tickScheme.tickSize(0.0)), BigDecimal.valueOf(tickScheme.tickSize(0.0)));
+    }
+
+    private static int precisionOf(double value) {
+        return Math.max(0, BigDecimal.valueOf(value).stripTrailingZeros().scale());
     }
 
     public void validateQuantity(Quantity quantity) {
@@ -77,6 +95,19 @@ public record InstrumentSpec(
         }
         if (value.remainder(sizeIncrement).signum() != 0) {
             throw new IllegalArgumentException("quantity does not match sizeIncrement for " + symbol);
+        }
+    }
+
+    public void validatePrice(double price) {
+        if (!Double.isFinite(price) || price <= 0.0) {
+            throw new IllegalArgumentException("price must be finite and positive for " + symbol);
+        }
+        BigDecimal value = BigDecimal.valueOf(price);
+        if (value.stripTrailingZeros().scale() > pricePrecision) {
+            throw new IllegalArgumentException("price exceeds pricePrecision for " + symbol);
+        }
+        if (value.remainder(priceTickSize).signum() != 0) {
+            throw new IllegalArgumentException("price does not match priceTickSize for " + symbol);
         }
     }
 }

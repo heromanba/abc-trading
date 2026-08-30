@@ -310,6 +310,19 @@ public final class BacktestEngine implements AutoCloseable {
                 initialMarginPerUnit, maintenanceMarginPerUnit, sizePrecision, sizeIncrement);
     }
 
+    public void addInstrument(String symbol, String venue, double tickSize,
+            String baseCurrency, String quoteCurrency, double marginInitialRate,
+            double marginMaintenanceRate, MarginModelType marginModelType,
+            double initialMarginPerUnit, double maintenanceMarginPerUnit,
+            int sizePrecision, java.math.BigDecimal sizeIncrement, int pricePrecision,
+            java.math.BigDecimal priceTickSize) {
+        if (started) throw new IllegalStateException("Cannot add instruments after start");
+        kernel.addInstrument(symbol, venue, TickScheme.fixed(tickSize), baseCurrency, quoteCurrency,
+                marginInitialRate, marginMaintenanceRate, marginModelType,
+                initialMarginPerUnit, maintenanceMarginPerUnit, sizePrecision,
+                sizeIncrement, pricePrecision, priceTickSize);
+    }
+
     public void addInstrument(String symbol, String venue, TickScheme tickScheme) {
         if (started) throw new IllegalStateException("Cannot add instruments after start");
         if (symbol == null || symbol.isBlank()) throw new IllegalArgumentException("symbol is required");

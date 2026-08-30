@@ -127,8 +127,9 @@ MATCH account state fields=8
 ```
 
 The account fixture uses Binance-style `quantity: "0.001"`,
-`size_precision: 3`, and `size_increment: "0.001"`. Java rejects a
-quantity such as `0.0015` at the risk boundary, while both backends preserve
+`size_precision: 3`, `size_increment: "0.001"`, `price_precision: 1`,
+and `price_tick_size: "0.1"`. Java rejects quantities such as `0.0015`
+and prices such as `100.05` at the risk boundary, while both backends preserve
 the valid fractional position and produce the same account state.
 
 ## Instrument size precision check

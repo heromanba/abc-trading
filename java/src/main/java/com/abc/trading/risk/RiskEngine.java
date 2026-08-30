@@ -56,6 +56,13 @@ public final class RiskEngine {
         if (order.trailingOffsetType() == null && (!Double.isFinite(order.price()) || order.price() <= 0.0)) {
             return RiskDecision.rejected("price must be finite and positive");
         }
+        if (cache != null && order.trailingOffsetType() == null) {
+            try {
+                cache.instrument(order.symbol()).validatePrice(order.price());
+            } catch (IllegalArgumentException error) {
+                return RiskDecision.rejected(error.getMessage());
+            }
+        }
         Double maxNotional = maxNotionalPerOrder.get(order.symbol());
         if (maxNotional != null && order.quantity().asDouble() * order.price() > maxNotional) {
             return RiskDecision.rejected("notional exceeds maxNotionalPerOrder");
@@ -94,6 +101,13 @@ public final class RiskEngine {
         }
         if (order.trailingOffsetType() == null && (!Double.isFinite(order.limitPrice()) || order.limitPrice() <= 0.0)) {
             return RiskDecision.rejected("limitPrice must be finite and positive");
+        }
+        if (cache != null && order.trailingOffsetType() == null) {
+            try {
+                cache.instrument(order.symbol()).validatePrice(order.limitPrice());
+            } catch (IllegalArgumentException error) {
+                return RiskDecision.rejected(error.getMessage());
+            }
         }
         Double maxNotional = maxNotionalPerOrder.get(order.symbol());
         if (maxNotional != null && order.quantity().asDouble() * order.limitPrice() > maxNotional) {

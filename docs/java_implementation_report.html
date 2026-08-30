@@ -283,10 +283,10 @@ MATCH account state fields=8</code></pre>
 <td>Reservations, free/locked balances, cash settlement, initial/maintenance margin, and threshold events</td>
 </tr>
 <tr class="odd">
-<td>Instrument and size metadata</td>
+<td>Instrument price and size metadata</td>
 <td>Implemented</td>
 <td><code>InstrumentSpec</code>, <code>Cache</code></td>
-<td>Quote/base currencies, margin rates, <code>sizePrecision</code>, and <code>sizeIncrement</code></td>
+<td>Quote/base currencies, margin rates, <code>sizePrecision</code>, <code>sizeIncrement</code>, <code>pricePrecision</code>, and <code>priceTickSize</code></td>
 </tr>
 <tr class="even">
 <td>FX conversion</td>
@@ -352,7 +352,7 @@ MATCH account state fields=8</code></pre>
 <td>Live adapter precision</td>
 <td>Implemented</td>
 <td><code>BinanceInstrumentMetadata</code>, <code>BinanceOrderValidator</code>, <code>Quantity</code></td>
-<td>Binance <code>stepSize</code> derives <code>sizePrecision</code>/<code>sizeIncrement</code>; invalid quantities are rejected before REST</td>
+<td>Binance <code>stepSize</code> and <code>tickSize</code> derive exact size/price rules; invalid values are rejected before REST</td>
 </tr>
 </tbody>
 </table>
@@ -514,8 +514,8 @@ MATCH account state fields=8</code></pre>
 </tr>
 <tr class="odd">
 <td><code>InstrumentSpec</code></td>
-<td>Base/quote currencies, margin rates, size precision, and size increment</td>
-<td>Carries the instrument facts needed by accounting, risk, and exact quantity validation</td>
+<td>Base/quote currencies, margin rates, size precision/increment, and price precision/tick size</td>
+<td>Carries the instrument facts needed by accounting, risk, and exact order validation</td>
 </tr>
 <tr class="even">
 <td><code>BookAction</code></td>
@@ -1404,7 +1404,7 @@ cancel/expiry/reject -&gt; release reservation</code></pre>
 <p>Margin accounts reserve quote-currency notional multiplied by the instrument’s initial-margin rate and divided by leverage. Open positions report both initial and maintenance margin using <code>InstrumentSpec</code>. Cash accounts reserve buy-side funds, settle buy/sell notional in the quote currency, and reject uncovered sells. Additional currencies can be deposited and converted through explicitly configured FX rates; missing conversion data rejects a reservation rather than silently treating currencies as equal.</p>
 <p>These rules are a deterministic backtest baseline. They do not yet model every Nautilus derivative margin model, liquidation execution policy, or live FX feed.</p>
 <h3 id="numeric-representation">6.4 Numeric representation</h3>
-<p>Quantities use immutable fixed-point <code>Quantity</code> values backed by a <code>long</code> raw value and explicit decimal precision. <code>InstrumentSpec</code> validates both the configured <code>sizePrecision</code> and <code>sizeIncrement</code>; Binance <code>LOT_SIZE.stepSize</code> and <code>minQty</code> are mapped into the same contract and invalid orders are rejected before REST or simulated execution. Python accepts integers, <code>Decimal</code>, and decimal strings, converting them to Java <code>Quantity</code> without <code>double</code> or integer truncation. Prices and PnL remain primitive <code>double</code> values for now, and reconciliation still applies its numeric tolerance to those fields.</p>
+<p>Quantities use immutable fixed-point <code>Quantity</code> values backed by a <code>long</code> raw value and explicit decimal precision. <code>InstrumentSpec</code> validates both the configured <code>sizePrecision</code>/<code>sizeIncrement</code> and <code>pricePrecision</code>/<code>priceTickSize</code>. Binance <code>LOT_SIZE.stepSize</code>, <code>minQty</code>, and <code>PRICE_FILTER.tickSize</code> are mapped into the same contract and invalid orders are rejected before REST or simulated execution. Python accepts integers, <code>Decimal</code>, and decimal strings for exact quantities and tick metadata. Prices and PnL remain primitive <code>double</code> values at the execution boundary, but all configured order-price validation uses exact <code>Decimal</code>/<code>BigDecimal</code> conversion before dispatch.</p>
 <h2 id="python-integration">7. Python Integration</h2>
 <p>The Python facade is intentionally thin:</p>
 <pre class="text"><code>abc_trading.backtest.engine.BacktestEngine

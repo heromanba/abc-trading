@@ -121,6 +121,21 @@ public final class NautilusKernel implements AutoCloseable {
                 initialMarginPerUnit, maintenanceMarginPerUnit, sizePrecision, sizeIncrement);
     }
 
+    public void addInstrument(String symbol, String venue, TickScheme tickScheme,
+            String baseCurrency, String quoteCurrency, double marginInitialRate,
+            double marginMaintenanceRate, MarginModelType marginModelType,
+            double initialMarginPerUnit, double maintenanceMarginPerUnit,
+            int sizePrecision, BigDecimal sizeIncrement, int pricePrecision,
+            BigDecimal priceTickSize) {
+        if (lifecycle.state() != ComponentState.PRE_INITIALIZED && lifecycle.state() != ComponentState.READY) {
+            throw new IllegalStateException("Cannot add instruments after initialization");
+        }
+        cache.addInstrument(symbol, venue, tickScheme, baseCurrency, quoteCurrency,
+                marginInitialRate, marginMaintenanceRate, marginModelType,
+                initialMarginPerUnit, maintenanceMarginPerUnit, sizePrecision,
+                sizeIncrement, pricePrecision, priceTickSize);
+    }
+
     public void addVenue(String venue) {
         addVenue(SimulatedVenueConfig.defaults(new VenueId(venue)));
     }

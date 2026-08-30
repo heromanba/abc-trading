@@ -20,10 +20,14 @@ public record BinanceInstrumentMetadata(
                 baseAsset, quoteAsset, initialMarginRate.doubleValue(),
                 maintenanceMarginRate.doubleValue(),
                 com.abc.trading.data.MarginModelType.NOTIONAL_RATE, 0.0, 0.0,
-                sizePrecision(), quantityStepSize);
+                sizePrecision(), quantityStepSize, pricePrecision(), priceTickSize);
     }
 
     public int sizePrecision() {
         return Math.max(0, quantityStepSize.stripTrailingZeros().scale());
+    }
+
+    public int pricePrecision() {
+        return Math.max(0, priceTickSize.stripTrailingZeros().scale());
     }
 }

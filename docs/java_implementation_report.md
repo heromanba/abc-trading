@@ -187,7 +187,7 @@ The Python bridge lives under `python/abc_trading`; reconciliation scripts live 
 | Static latency | Implemented | `LatencyModel`, `StaticLatencyModel` | Operation latency with deterministic timestamp ordering |
 | Position/PnL accounting | Implemented | `Portfolio`, `PositionUpdate`, `Money` | Net position, average price, realized PnL, and commission effects |
 | Cash/margin account | Implemented baseline | `AccountLedger`, `AccountState`, `AccountBalance`, `AccountType` | Reservations, free/locked balances, cash settlement, initial/maintenance margin, and threshold events |
-| Instrument and size metadata | Implemented | `InstrumentSpec`, `Cache` | Quote/base currencies, margin rates, `sizePrecision`, and `sizeIncrement` |
+| Instrument price and size metadata | Implemented | `InstrumentSpec`, `Cache` | Quote/base currencies, margin rates, `sizePrecision`, `sizeIncrement`, `pricePrecision`, and `priceTickSize` |
 | FX conversion | Implemented | `FxRateUpdate`, `AccountLedger`, `Portfolio`, `BacktestEngine` | Replayable market-data rates for cross-currency margin and PnL conversion |
 | Account-state events | Implemented | `AccountStateEvent`, `Event`, `CsvEventLogger` | Balance and margin transitions are observable in canonical logs |
 | Mark-to-market valuation | Implemented baseline | `Portfolio`, `AccountLedger`, `MarketDataSnapshot` | Mark updates recalculate signed unrealized PnL and threshold flags |
@@ -198,7 +198,7 @@ The Python bridge lives under `python/abc_trading`; reconciliation scripts live 
 | External ring-buffer backing | Implemented as backing | `RingBufferMessageBusBacking` | Bounded queue; full-buffer policy currently drops and reports |
 | Persistence/event store | Implemented | `PersistentEventStore`, `EventReplayer`, `EventCheckpoint` | Versioned append-only JSONL, projections, synchronous replay, and checkpoint resume |
 | Binance USD-M Futures adapter | Implemented baseline | `BinanceFuturesAdapter`, `BinanceFuturesLiveRuntime` | Public streams, signed REST, user data, reconnects, and kernel routing; Testnet credentials remain opt-in |
-| Live adapter precision | Implemented | `BinanceInstrumentMetadata`, `BinanceOrderValidator`, `Quantity` | Binance `stepSize` derives `sizePrecision`/`sizeIncrement`; invalid quantities are rejected before REST |
+| Live adapter precision | Implemented | `BinanceInstrumentMetadata`, `BinanceOrderValidator`, `Quantity` | Binance `stepSize` and `tickSize` derive exact size/price rules; invalid values are rejected before REST |
 
 ## 5. Class and Type Catalog
 
@@ -239,7 +239,7 @@ The following catalog covers the Java production types currently under `java/src
 | `AggressorSide` | Buyer, seller, or no-aggressor trade classification | Determines which passive queue can advance |
 | `FxRateUpdate` | Replayable FX conversion-rate input | Makes cross-currency account valuation deterministic and time-ordered |
 | `MarginModelType` | Notional-rate or fixed-per-unit formula selection | Keeps instrument margin policy explicit rather than hidden in risk code |
-| `InstrumentSpec` | Base/quote currencies, margin rates, size precision, and size increment | Carries the instrument facts needed by accounting, risk, and exact quantity validation |
+| `InstrumentSpec` | Base/quote currencies, margin rates, size precision/increment, and price precision/tick size | Carries the instrument facts needed by accounting, risk, and exact order validation |
 | `BookAction` | `ADD`, `UPDATE`, `DELETE`, `CLEAR` | Makes book mutation intent explicit |
 | `TickScheme` | Instrument-owned fixed tick increment | Rust currently supports `TICKS` through `price_increment`; Java avoids a hard-coded exchange tick in that path |
 | `DataEngine` | Publishes bars, market snapshots, books, and deltas | Separates data distribution from data ownership |
@@ -498,12 +498,13 @@ Nautilus derivative margin model, liquidation execution policy, or live FX feed.
 
 Quantities use immutable fixed-point `Quantity` values backed by a `long` raw
 value and explicit decimal precision. `InstrumentSpec` validates both the
-configured `sizePrecision` and `sizeIncrement`; Binance `LOT_SIZE.stepSize`
-and `minQty` are mapped into the same contract and invalid orders are rejected
-before REST or simulated execution. Python accepts integers, `Decimal`, and
-decimal strings, converting them to Java `Quantity` without `double` or
-integer truncation. Prices and PnL remain primitive `double` values for now,
-and reconciliation still applies its numeric tolerance to those fields.
+configured `sizePrecision`/`sizeIncrement` and `pricePrecision`/`priceTickSize`.
+Binance `LOT_SIZE.stepSize`, `minQty`, and `PRICE_FILTER.tickSize` are mapped
+into the same contract and invalid orders are rejected before REST or simulated
+execution. Python accepts integers, `Decimal`, and decimal strings for exact
+quantities and tick metadata. Prices and PnL remain primitive `double` values
+at the execution boundary, but all configured order-price validation uses exact
+`Decimal`/`BigDecimal` conversion before dispatch.
 
 ## 7. Python Integration
 

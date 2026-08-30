@@ -20,6 +20,9 @@ public final class BinanceOrderValidator {
         }
         if (price != null) {
             if (price.signum() <= 0) throw new IllegalArgumentException("price must be positive");
+            if (price.stripTrailingZeros().scale() > metadata.pricePrecision()) {
+                throw new IllegalArgumentException("price exceeds Binance price precision for " + metadata.symbol());
+            }
             if (price.remainder(metadata.priceTickSize()).signum() != 0) {
                 throw new IllegalArgumentException("price does not match Binance tickSize for " + metadata.symbol());
             }

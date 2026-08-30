@@ -79,6 +79,7 @@ public final class AccountLedger {
         Account account = account(venue);
         if (account == null) return true;
         if (instrument != null) instrument.validateQuantity(quantity);
+        if (instrument != null && price > 0.0) instrument.validatePrice(price);
         if (account.type == AccountType.CASH && side == SignalDirection.SELL
             && position.compareTo(quantity.asDecimal()) < 0) return false;
         if (account.type == AccountType.MARGIN && increasesExposure(side, position)
