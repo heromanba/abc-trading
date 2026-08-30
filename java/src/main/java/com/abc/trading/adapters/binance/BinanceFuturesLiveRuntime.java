@@ -98,14 +98,14 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
 
     @Override
     public void submitMarketOrder(OrderIntent order) {
-        validateOrder(order.symbol(), BigDecimal.valueOf(order.quantity()), null);
+        validateOrder(order.symbol(), order.quantity().asDecimal(), null);
         marketOrders.put(order.orderId(), order);
         adapter.submitMarketOrder(order);
     }
 
     @Override
     public void submitLimitOrder(LimitOrderIntent order) {
-        validateOrder(order.symbol(), BigDecimal.valueOf(order.quantity()), BigDecimal.valueOf(order.limitPrice()));
+        validateOrder(order.symbol(), order.quantity().asDecimal(), BigDecimal.valueOf(order.limitPrice()));
         limitOrders.put(order.orderId(), order);
         adapter.submitLimitOrder(order);
     }

@@ -1,5 +1,7 @@
 package com.abc.trading.execution;
 
+import com.abc.trading.data.Quantity;
+
 import com.abc.trading.msgbus.MessageBus;
 import com.abc.trading.cache.Cache;
 import com.abc.trading.portfolio.Portfolio;
@@ -270,7 +272,7 @@ public final class ExecutionEngine {
             if (!current.status().isOpen()) throw new IllegalStateException("order is not open");
             stateMachine.pendingUpdate(command.clientOrderId());
             if (clientFor(command.symbol()).modifyOrder(command)) {
-                int quantity = command.quantity() == null ? current.submittedQuantity() : command.quantity();
+                Quantity quantity = command.quantity() == null ? current.submittedQuantity() : Quantity.fromInt(command.quantity());
                 stateMachine.update(command.clientOrderId(), quantity);
                 bus.publish(new OrderModified(command));
             } else {

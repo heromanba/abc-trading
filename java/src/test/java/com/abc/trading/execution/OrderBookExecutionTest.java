@@ -9,6 +9,7 @@ import com.abc.trading.data.OrderBookL3Delta;
 import com.abc.trading.data.VenueOrder;
 import com.abc.trading.data.TradeTick;
 import com.abc.trading.data.AggressorSide;
+import com.abc.trading.data.Quantity;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -27,7 +28,7 @@ class OrderBookExecutionTest {
         exchange.submitMarketOrder(order("buy-1", SignalDirection.BUY, 6));
 
         assertEquals(List.of(101.0, 102.0), fills.stream().map(OrderFill::price).toList());
-        assertEquals(List.of(3, 3), fills.stream().map(OrderFill::quantity).toList());
+        assertEquals(List.of(Quantity.fromInt(3), Quantity.fromInt(3)), fills.stream().map(OrderFill::quantity).toList());
         assertEquals(List.of(LiquiditySide.TAKER, LiquiditySide.TAKER),
                 fills.stream().map(OrderFill::liquiditySide).toList());
     }
@@ -42,7 +43,7 @@ class OrderBookExecutionTest {
         exchange.submitMarketOrder(order("sell-1", SignalDirection.SELL, 12));
 
         assertEquals(List.of(99.0, 98.0), fills.stream().map(OrderFill::price).toList());
-        assertEquals(List.of(5, 4), fills.stream().map(OrderFill::quantity).toList());
+        assertEquals(List.of(Quantity.fromInt(5), Quantity.fromInt(4)), fills.stream().map(OrderFill::quantity).toList());
     }
 
     @Test
@@ -70,7 +71,7 @@ class OrderBookExecutionTest {
         exchange.processOrderBook(book(101, List.of(level(99, 10)), List.of(level(100, 3), level(101, 10))));
 
         assertEquals(List.of("first", "second"), fills.stream().map(OrderFill::orderId).toList());
-        assertEquals(List.of(2, 1), fills.stream().map(OrderFill::quantity).toList());
+        assertEquals(List.of(Quantity.fromInt(2), Quantity.fromInt(1)), fills.stream().map(OrderFill::quantity).toList());
     }
 
     @Test
@@ -97,7 +98,7 @@ class OrderBookExecutionTest {
         exchange.submitMarketOrder(order("delta-buy", SignalDirection.BUY, 6));
 
         assertEquals(List.of(101.0, 102.0), fills.stream().map(OrderFill::price).toList());
-        assertEquals(List.of(1, 5), fills.stream().map(OrderFill::quantity).toList());
+        assertEquals(List.of(Quantity.fromInt(1), Quantity.fromInt(5)), fills.stream().map(OrderFill::quantity).toList());
     }
 
     @Test
@@ -113,7 +114,7 @@ class OrderBookExecutionTest {
         exchange.submitMarketOrder(order("l3-buy", SignalDirection.BUY, 4));
 
         assertEquals(List.of("ask-1", "ask-2"), fills.stream().map(OrderFill::venueOrderId).toList());
-        assertEquals(List.of(2, 2), fills.stream().map(OrderFill::quantity).toList());
+        assertEquals(List.of(Quantity.fromInt(2), Quantity.fromInt(2)), fills.stream().map(OrderFill::quantity).toList());
         assertEquals(List.of(101.0, 101.0), fills.stream().map(OrderFill::price).toList());
     }
 
@@ -205,7 +206,7 @@ class OrderBookExecutionTest {
 
         exchange.processTradeTick(new TradeTick("AAPL", 102, 100.0, 4, AggressorSide.SELLER, 3));
 
-        assertEquals(List.of(2), fills.stream().map(OrderFill::quantity).toList());
+        assertEquals(List.of(Quantity.fromInt(2)), fills.stream().map(OrderFill::quantity).toList());
         assertEquals(List.of(100.0), fills.stream().map(OrderFill::price).toList());
         assertEquals(List.of(LiquiditySide.MAKER), fills.stream().map(OrderFill::liquiditySide).toList());
         assertEquals(List.of(""), fills.stream().map(OrderFill::venueOrderId).toList());
@@ -227,5 +228,18 @@ class OrderBookExecutionTest {
     private static LimitOrderIntent limit(String id, SignalDirection side, int quantity, double price) {
         return new LimitOrderIntent("strategy", "AAPL", 1, 100, "corr", id, side,
                 quantity, price, 0, 0.0);
+    }
+
+    @Test
+    void marketOrderAndBookPreserveFractionalQuantity() {
+        List<OrderFill> fills = new ArrayList<>();
+        SimulatedExchange exchange = new SimulatedExchange(new VenueId("XNAS"), fills::add);
+        exchange.processOrderBook(new OrderBookSnapshot("BTCUSDT", 100,
+                List.of(new BookLevel(100.0, Quantity.fromString("0.005", 3))),
+                List.of(new BookLevel(101.0, Quantity.fromString("0.005", 3))), 1));
+        exchange.submitMarketOrder(new OrderIntent("strategy", "BTCUSDT", 1, 100, "corr", "fractional",
+                SignalDirection.BUY, Quantity.fromString("0.001", 3), 101.0, 0, 0.0));
+
+        assertEquals(List.of(Quantity.fromString("0.001", 3)), fills.stream().map(OrderFill::quantity).toList());
     }
 }

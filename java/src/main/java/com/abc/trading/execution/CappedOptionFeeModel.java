@@ -1,5 +1,7 @@
 package com.abc.trading.execution;
 
+import com.abc.trading.data.Quantity;
+
 public record CappedOptionFeeModel(
         double makerRate,
         double takerRate,
@@ -14,9 +16,9 @@ public record CappedOptionFeeModel(
     }
 
     @Override
-    public Commission calculate(int fillQuantity, double fillPrice, LiquiditySide liquiditySide) {
+    public Commission calculate(Quantity fillQuantity, double fillPrice, LiquiditySide liquiditySide) {
         double rate = liquiditySide == LiquiditySide.MAKER ? makerRate : takerRate;
         double feePerContract = Math.min(rate, capPerContract * fillPrice) * multiplier;
-        return new Commission(feePerContract * fillQuantity, currency);
+        return new Commission(feePerContract * fillQuantity.asDouble(), currency);
     }
 }

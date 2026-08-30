@@ -41,15 +41,15 @@ public final class RiskEngine {
         if (order.side() == null || order.side() == SignalDirection.HOLD) {
             return RiskDecision.rejected("order side must be BUY or SELL");
         }
-        if (order.quantity() <= 0) return RiskDecision.rejected("quantity must be positive");
-        if (order.quantity() > maxQuantity) {
+        if (order.quantity() == null || order.quantity().isZero()) return RiskDecision.rejected("quantity must be positive");
+        if (order.quantity().asDouble() > maxQuantity) {
             return RiskDecision.rejected("quantity exceeds maxQuantity");
         }
         if (order.trailingOffsetType() == null && (!Double.isFinite(order.price()) || order.price() <= 0.0)) {
             return RiskDecision.rejected("price must be finite and positive");
         }
         Double maxNotional = maxNotionalPerOrder.get(order.symbol());
-        if (maxNotional != null && order.quantity() * order.price() > maxNotional) {
+        if (maxNotional != null && order.quantity().asDouble() * order.price() > maxNotional) {
             return RiskDecision.rejected("notional exceeds maxNotionalPerOrder");
         }
         if (tradingState == TradingState.REDUCING && cache != null) {
@@ -73,15 +73,15 @@ public final class RiskEngine {
         if (order.side() == null || order.side() == SignalDirection.HOLD) {
             return RiskDecision.rejected("order side must be BUY or SELL");
         }
-        if (order.quantity() <= 0) return RiskDecision.rejected("quantity must be positive");
-        if (order.quantity() > maxQuantity) {
+        if (order.quantity() == null || order.quantity().isZero()) return RiskDecision.rejected("quantity must be positive");
+        if (order.quantity().asDouble() > maxQuantity) {
             return RiskDecision.rejected("quantity exceeds maxQuantity");
         }
         if (order.trailingOffsetType() == null && (!Double.isFinite(order.limitPrice()) || order.limitPrice() <= 0.0)) {
             return RiskDecision.rejected("limitPrice must be finite and positive");
         }
         Double maxNotional = maxNotionalPerOrder.get(order.symbol());
-        if (maxNotional != null && order.quantity() * order.limitPrice() > maxNotional) {
+        if (maxNotional != null && order.quantity().asDouble() * order.limitPrice() > maxNotional) {
             return RiskDecision.rejected("notional exceeds maxNotionalPerOrder");
         }
         if (tradingState == TradingState.REDUCING && cache != null) {

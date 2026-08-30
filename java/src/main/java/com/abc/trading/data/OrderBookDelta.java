@@ -9,14 +9,19 @@ public record OrderBookDelta(
         SignalDirection side,
         BookAction action,
         double price,
-        int quantity,
+        Quantity quantity,
         long sequence) {
+    public OrderBookDelta(String symbol, long tsInit, SignalDirection side, BookAction action,
+            double price, int quantity, long sequence) {
+        this(symbol, tsInit, side, action, price, Quantity.fromInt(quantity), sequence);
+    }
+
     public OrderBookDelta {
         if (symbol == null || symbol.isBlank()) throw new IllegalArgumentException("symbol is required");
         if (side == null || side == SignalDirection.HOLD) throw new IllegalArgumentException("side is required");
         if (action == null) throw new IllegalArgumentException("action is required");
         if (!Double.isFinite(price) || price <= 0.0) throw new IllegalArgumentException("price must be positive");
-        if (action != BookAction.CLEAR && quantity <= 0) {
+        if (action != BookAction.CLEAR && (quantity == null || quantity.isZero())) {
             throw new IllegalArgumentException("quantity must be positive unless clearing");
         }
     }

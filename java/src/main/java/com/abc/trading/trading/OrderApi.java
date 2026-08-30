@@ -16,6 +16,7 @@ import com.abc.trading.model.orders.TrailingStopLimitOrder;
 import com.abc.trading.execution.TrailingOffsetType;
 import com.abc.trading.execution.TriggerType;
 import com.abc.trading.msgbus.MessageBus;
+import com.abc.trading.data.Quantity;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -168,7 +169,7 @@ public final class OrderApi {
                 correlationId,
                 order.side(),
                 orderType(order),
-                order.quantity(),
+                Quantity.fromInt(order.quantity()),
                 order.price(),
                 targetPosition(position, order.side(), order.quantity()),
                 0.0,

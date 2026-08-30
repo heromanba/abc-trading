@@ -10,6 +10,7 @@ import com.abc.trading.data.OrderBookL3Snapshot;
 import com.abc.trading.data.OrderBookL3Delta;
 import com.abc.trading.data.VenueOrder;
 import com.abc.trading.data.TradeTick;
+import com.abc.trading.data.Quantity;
 import com.abc.trading.execution.commands.CancelOrder;
 import com.abc.trading.execution.commands.ModifyOrder;
 
@@ -41,7 +42,7 @@ public final class SimulatedExchange {
     private long commandSequence;
     private long workingOrderSequence;
     private long currentTimestamp;
-    private int maxFillQuantity = Integer.MAX_VALUE;
+    private Quantity maxFillQuantity = Quantity.fromInt(Integer.MAX_VALUE);
 
     public SimulatedExchange(VenueId venue) {
         this(venue, fill -> { }, event -> { }, StaticLatencyModel.zero(), MakerTakerFeeModel.zero());
@@ -122,7 +123,7 @@ public final class SimulatedExchange {
         for (WorkingOrder order : workingOrders.values()) {
             if (order.symbol.equals(snapshot.symbol()) && order.limit && order.resting) {
                 order.queueInitialized = true;
-                order.queueAhead = 0;
+                order.queueAhead = Quantity.fromInt(0);
                 order.queueAheadOrders.clear();
                 book.registerQueueOrder(order);
             }
@@ -252,16 +253,16 @@ public final class SimulatedExchange {
 
         workingOrders.put(liquidation.orderId, liquidation);
         tryMatchOrder(liquidation);
-        int remaining = liquidation.quantity - liquidation.filledQuantity;
-        if (remaining > 0) fill(liquidation, executablePrice, remaining, LiquiditySide.TAKER);
+        Quantity remaining = liquidation.quantity.subtract(liquidation.filledQuantity);
+        if (!remaining.isZero()) fill(liquidation, executablePrice, remaining, LiquiditySide.TAKER);
         if (workingOrders.remove(liquidation.orderId) != null) unregisterQueueOrder(liquidation);
     }
 
     public boolean modifyOrder(ModifyOrder command) {
         WorkingOrder order = workingOrders.get(command.clientOrderId());
         if (order == null || (!order.limit && !order.trailing)) return false;
-        int nextQuantity = command.quantity() == null ? order.quantity : command.quantity();
-        if (nextQuantity < order.filledQuantity || nextQuantity <= 0) return false;
+        Quantity nextQuantity = command.quantity() == null ? order.quantity : Quantity.fromInt(command.quantity());
+        if (nextQuantity.compareTo(order.filledQuantity) < 0 || nextQuantity.isZero()) return false;
         double nextPrice = command.price() == null ? order.price : command.price();
         if (order.limit) validatePrice(nextPrice);
         if (command.triggerPrice() != null) {
@@ -272,7 +273,7 @@ public final class SimulatedExchange {
         order.price = nextPrice;
         if (order.resting) {
             order.queueInitialized = false;
-            order.queueAhead = 0;
+            order.queueAhead = Quantity.fromInt(0);
             order.queueAheadOrders.clear();
         }
         return true;
@@ -280,7 +281,7 @@ public final class SimulatedExchange {
 
     public void setMaxFillQuantity(int maxFillQuantity) {
         if (maxFillQuantity <= 0) throw new IllegalArgumentException("maxFillQuantity must be positive");
-        this.maxFillQuantity = maxFillQuantity;
+        this.maxFillQuantity = Quantity.fromInt(maxFillQuantity);
     }
 
     public int pendingLimitOrderCount() {
@@ -327,7 +328,7 @@ public final class SimulatedExchange {
         if (workingOrder.stop || workingOrder.trailing) validateTriggerType(workingOrder.triggerType);
         if (workingOrder.trailing) validateTrailingOffsetType(workingOrder.trailingOffsetType);
         if (workingOrder.stop && workingOrder.timeInForce == TimeInForce.FOK
-                && maxFillQuantity < workingOrder.quantity) {
+                && maxFillQuantity.compareTo(workingOrder.quantity) < 0) {
             emitCanceled(workingOrder, currentTimestamp);
             return;
         }
@@ -341,7 +342,7 @@ public final class SimulatedExchange {
             ? currentPrice(workingOrder.symbol) <= workingOrder.price
             : currentPrice(workingOrder.symbol) >= workingOrder.price);
         if (workingOrder.timeInForce == TimeInForce.FOK
-            && (maxFillQuantity < workingOrder.quantity || !crossed)) {
+            && (maxFillQuantity.compareTo(workingOrder.quantity) < 0 || !crossed)) {
             emitCanceled(workingOrder, currentTimestamp);
             return;
         }
@@ -454,22 +455,22 @@ public final class SimulatedExchange {
         return result;
     }
 
-    private void fill(WorkingOrder order, double price, int fillQuantity, LiquiditySide liquiditySide) {
+    private void fill(WorkingOrder order, double price, Quantity fillQuantity, LiquiditySide liquiditySide) {
         fill(order, price, fillQuantity, liquiditySide, "");
-        }
+    }
 
-        private void fill(WorkingOrder order, double price, int fillQuantity,
+        private void fill(WorkingOrder order, double price, Quantity fillQuantity,
             LiquiditySide liquiditySide, String venueOrderId) {
-        if (fillQuantity <= 0) return;
+        if (fillQuantity == null || fillQuantity.isZero()) return;
         OrderFill fill = new OrderFill(order.strategyId, order.symbol, order.inputSequence,
                 currentTimestamp, order.correlationId, order.orderId, order.side, fillQuantity,
                 price, order.currentPosition, order.realizedPnl)
                 .withLiquiditySide(liquiditySide)
                 .withVenueOrderId(venueOrderId)
                 .withCommission(feeModel.calculate(fillQuantity, price, liquiditySide));
-        order.filledQuantity += fillQuantity;
+            order.filledQuantity = order.filledQuantity.add(fillQuantity);
         fillHandler.accept(fill);
-        if (order.filledQuantity == order.quantity) {
+        if (order.filledQuantity.equals(order.quantity)) {
             workingOrders.remove(order.orderId);
             unregisterQueueOrder(order);
         }
@@ -497,19 +498,19 @@ public final class SimulatedExchange {
             return;
         }
         LiquiditySide liquiditySide = order.resting ? LiquiditySide.MAKER : LiquiditySide.TAKER;
-        int budget = maxFillQuantity;
-        while (budget > 0 && order.quantity > order.filledQuantity) {
+        Quantity budget = maxFillQuantity;
+        while (!budget.isZero() && order.quantity.compareTo(order.filledQuantity) > 0) {
             BookLevel level = book.bestLevel(order.side == SignalDirection.BUY);
             if (level == null) break;
             boolean eligible = !order.limit || (order.side == SignalDirection.BUY
                     ? level.price() <= order.price : level.price() >= order.price);
             if (!eligible) break;
-            int fillQuantity = Math.min(Math.min(level.quantity(), order.quantity - order.filledQuantity), budget);
+            Quantity fillQuantity = level.quantity().min(order.quantity.subtract(order.filledQuantity)).min(budget);
             fill(order, level.price(), fillQuantity, liquiditySide);
             book.consume(order.side == SignalDirection.BUY, fillQuantity);
-            budget -= fillQuantity;
+            budget = budget.subtract(fillQuantity);
         }
-        if (order.quantity > order.filledQuantity) {
+        if (order.quantity.compareTo(order.filledQuantity) > 0) {
             order.resting = order.limit;
         }
     }
@@ -524,22 +525,22 @@ public final class SimulatedExchange {
                 book.registerQueueOrder(order);
                 return;
             }
-            if (order.resting && order.queueInitialized && order.queueAhead > 0) return;
+            if (order.resting && order.queueInitialized && !order.queueAhead.isZero()) return;
         }
         LiquiditySide liquiditySide = order.resting ? LiquiditySide.MAKER : LiquiditySide.TAKER;
-        int budget = maxFillQuantity;
-        while (budget > 0 && order.quantity > order.filledQuantity) {
+        Quantity budget = maxFillQuantity;
+        while (!budget.isZero() && order.quantity.compareTo(order.filledQuantity) > 0) {
             VenueOrder venueOrder = book.bestOrder(order.side == SignalDirection.BUY);
             if (venueOrder == null) break;
             boolean eligible = !order.limit || (order.side == SignalDirection.BUY
                     ? venueOrder.price() <= order.price : venueOrder.price() >= order.price);
             if (!eligible) break;
-            int fillQuantity = Math.min(Math.min(venueOrder.quantity(), order.quantity - order.filledQuantity), budget);
+            Quantity fillQuantity = venueOrder.quantity().min(order.quantity.subtract(order.filledQuantity)).min(budget);
             fill(order, venueOrder.price(), fillQuantity, liquiditySide, venueOrder.orderId());
             book.consume(order.side == SignalDirection.BUY, fillQuantity);
-            budget -= fillQuantity;
+            budget = budget.subtract(fillQuantity);
         }
-        if (order.quantity > order.filledQuantity) {
+        if (order.quantity.compareTo(order.filledQuantity) > 0) {
             order.resting = order.limit;
             if (order.resting && !order.queueInitialized) book.snapshotQueue(order);
             if (order.resting) book.registerQueueOrder(order);
@@ -566,7 +567,7 @@ public final class SimulatedExchange {
         if (workingOrders.remove(order.orderId) != null) {
             unregisterQueueOrder(order);
             lifecycleHandler.accept(new OrderExpired(order.strategyId, order.symbol, order.orderId,
-                    order.side, order.quantity - order.filledQuantity, order.price, timestamp));
+                    order.side, order.quantity.subtract(order.filledQuantity), order.price, timestamp));
         }
     }
 
@@ -592,8 +593,8 @@ public final class SimulatedExchange {
                 timestampNs % 1_000_000_000L).atZone(ZoneOffset.UTC).toLocalDate();
     }
 
-    private static void validateQuantity(int quantity) {
-        if (quantity <= 0) throw new IllegalArgumentException("quantity must be positive");
+    private static void validateQuantity(Quantity quantity) {
+        if (quantity == null || quantity.isZero()) throw new IllegalArgumentException("quantity must be positive");
     }
 
     private static void validatePrice(double price) {
@@ -692,20 +693,20 @@ public final class SimulatedExchange {
         private final double trailingOffset;
         private final TrailingOffsetType trailingOffsetType;
         private final double limitOffset;
-        private int quantity;
-        private int filledQuantity;
+        private Quantity quantity;
+        private Quantity filledQuantity = Quantity.fromInt(0);
         private double price;
         private boolean triggered;
         private boolean activated;
         private boolean previousTriggerMatch;
         private boolean resting;
         private boolean queueInitialized;
-        private int queueAhead;
-        private final LinkedHashMap<String, Integer> queueAheadOrders = new LinkedHashMap<>();
+        private Quantity queueAhead = Quantity.fromInt(0);
+        private final LinkedHashMap<String, Quantity> queueAheadOrders = new LinkedHashMap<>();
         private long insertionSequence;
 
         private WorkingOrder(String strategyId, String symbol, long inputSequence, long marketTimestamp,
-                String correlationId, String orderId, SignalDirection side, int quantity, double price,
+                String correlationId, String orderId, SignalDirection side, Quantity quantity, double price,
                 int currentPosition, double realizedPnl, TimeInForce timeInForce, long expireTimeNs,
                 boolean limit, boolean stop, double triggerPrice, TriggerType triggerType,
                 double activationPrice, double trailingOffset, TrailingOffsetType trailingOffsetType,
@@ -790,7 +791,7 @@ public final class SimulatedExchange {
                     if (existing == null) throw new IllegalStateException("unknown venue order: " + delta.orderId());
                     existing.price = delta.price();
                     existing.quantity = delta.quantity();
-                    if (existing.quantity == 0) levels.remove(existing);
+                    if (existing.quantity.isZero()) levels.remove(existing);
                 }
                 case DELETE -> {
                     if (existing != null) levels.remove(existing);
@@ -802,11 +803,11 @@ public final class SimulatedExchange {
 
         private void snapshotQueue(WorkingOrder clientOrder) {
             List<MutableVenueOrder> levels = levels(clientOrder.side);
-            clientOrder.queueAhead = 0;
+            clientOrder.queueAhead = Quantity.fromInt(0);
             clientOrder.queueAheadOrders.clear();
             for (MutableVenueOrder venueOrder : levels) {
                 if (Double.compare(venueOrder.price, clientOrder.price) != 0) continue;
-                clientOrder.queueAhead += venueOrder.quantity;
+                clientOrder.queueAhead = clientOrder.queueAhead.add(venueOrder.quantity);
                 clientOrder.queueAheadOrders.put(venueOrder.orderId, venueOrder.quantity);
             }
             clientOrder.queueInitialized = true;
@@ -821,28 +822,28 @@ public final class SimulatedExchange {
                 if (!clientOrder.queueInitialized || clientOrder.side != delta.side()
                         || Double.compare(clientOrder.price, delta.price()) != 0
                         && !clientOrder.queueAheadOrders.containsKey(delta.orderId())) continue;
-                Integer previous = clientOrder.queueAheadOrders.get(delta.orderId());
+                Quantity previous = clientOrder.queueAheadOrders.get(delta.orderId());
                 switch (delta.action()) {
                     case DELETE -> {
                         if (previous != null) {
-                            clientOrder.queueAhead -= previous;
+                            clientOrder.queueAhead = clientOrder.queueAhead.subtract(previous);
                             clientOrder.queueAheadOrders.remove(delta.orderId());
                         }
                     }
                     case UPDATE -> {
                         if (previous != null) {
                             if (Double.compare(clientOrder.price, delta.price()) != 0) {
-                                clientOrder.queueAhead -= previous;
+                                clientOrder.queueAhead = clientOrder.queueAhead.subtract(previous);
                                 clientOrder.queueAheadOrders.remove(delta.orderId());
                             } else {
-                                clientOrder.queueAhead += delta.quantity() - previous;
+                                clientOrder.queueAhead = clientOrder.queueAhead.subtract(previous).add(delta.quantity());
                                 clientOrder.queueAheadOrders.put(delta.orderId(), delta.quantity());
                             }
                         }
                     }
                     case ADD, CLEAR -> { }
                 }
-                if (clientOrder.queueAhead < 0) clientOrder.queueAhead = 0;
+                if (clientOrder.queueAhead.compareTo(Quantity.fromInt(0)) < 0) clientOrder.queueAhead = Quantity.fromInt(0);
             }
         }
 
@@ -858,7 +859,7 @@ public final class SimulatedExchange {
 
         private void clearQueues() {
             for (WorkingOrder order : currentQueueOrders) {
-                order.queueAhead = 0;
+                order.queueAhead = Quantity.fromInt(0);
                 order.queueAheadOrders.clear();
             }
         }
@@ -866,42 +867,42 @@ public final class SimulatedExchange {
         private void advanceQueuesOnTrade(TradeTick trade, SimulatedExchange exchange) {
             List<WorkingOrder> candidates = new ArrayList<>();
             for (WorkingOrder order : currentQueueOrders) {
-                if (!order.queueInitialized || order.queueAhead <= 0
+                if (!order.queueInitialized || order.queueAhead.isZero()
                         || Double.compare(order.price, trade.price()) != 0) continue;
                 boolean passiveSide = switch (trade.aggressorSide()) {
                     case BUYER -> order.side == SignalDirection.SELL;
                     case SELLER -> order.side == SignalDirection.BUY;
                     case NO_AGGRESSOR -> true;
                 };
-                if (passiveSide && order.quantity > order.filledQuantity) candidates.add(order);
+                if (passiveSide && order.quantity.compareTo(order.filledQuantity) > 0) candidates.add(order);
             }
             candidates.sort((left, right) -> Long.compare(left.insertionSequence, right.insertionSequence));
 
-            int remaining = trade.quantity();
+            Quantity remaining = trade.quantity();
             for (WorkingOrder order : candidates) {
-                if (remaining <= 0) break;
-                int consumedAhead = Math.min(remaining, order.queueAhead);
+                if (remaining.isZero()) break;
+                Quantity consumedAhead = remaining.min(order.queueAhead);
                 consumeQueueAhead(order, consumedAhead);
-                remaining -= consumedAhead;
-                if (remaining <= 0) continue;
-                int fillQuantity = Math.min(Math.min(remaining, order.quantity - order.filledQuantity), exchange.maxFillQuantity);
+                remaining = remaining.subtract(consumedAhead);
+                if (remaining.isZero()) continue;
+                Quantity fillQuantity = remaining.min(order.quantity.subtract(order.filledQuantity)).min(exchange.maxFillQuantity);
                 exchange.fill(order, trade.price(), fillQuantity, LiquiditySide.MAKER);
-                remaining -= fillQuantity;
+                remaining = remaining.subtract(fillQuantity);
             }
         }
 
-        private static void consumeQueueAhead(WorkingOrder order, int quantity) {
-            int remaining = quantity;
-            order.queueAhead -= quantity;
-            while (remaining > 0 && !order.queueAheadOrders.isEmpty()) {
+        private static void consumeQueueAhead(WorkingOrder order, Quantity quantity) {
+            Quantity remaining = quantity;
+            order.queueAhead = order.queueAhead.subtract(quantity);
+            while (!remaining.isZero() && !order.queueAheadOrders.isEmpty()) {
                 String venueOrderId = order.queueAheadOrders.keySet().iterator().next();
-                int aheadQuantity = order.queueAheadOrders.get(venueOrderId);
-                if (aheadQuantity <= remaining) {
+                Quantity aheadQuantity = order.queueAheadOrders.get(venueOrderId);
+                if (aheadQuantity.compareTo(remaining) <= 0) {
                     order.queueAheadOrders.remove(venueOrderId);
-                    remaining -= aheadQuantity;
+                    remaining = remaining.subtract(aheadQuantity);
                 } else {
-                    order.queueAheadOrders.put(venueOrderId, aheadQuantity - remaining);
-                    remaining = 0;
+                    order.queueAheadOrders.put(venueOrderId, aheadQuantity.subtract(remaining));
+                    remaining = Quantity.fromInt(0);
                 }
             }
         }
@@ -936,11 +937,11 @@ public final class SimulatedExchange {
         private double bestBid() { return bids.isEmpty() ? 0.0 : bids.get(0).price; }
         private double bestAsk() { return asks.isEmpty() ? Double.POSITIVE_INFINITY : asks.get(0).price; }
 
-        private void consume(boolean buying, int quantity) {
+        private void consume(boolean buying, Quantity quantity) {
             List<MutableVenueOrder> levels = buying ? asks : bids;
             MutableVenueOrder order = levels.get(0);
-            order.quantity -= quantity;
-            if (order.quantity == 0) levels.remove(0);
+            order.quantity = order.quantity.subtract(quantity);
+            if (order.quantity.isZero()) levels.remove(0);
         }
     }
 
@@ -949,7 +950,7 @@ public final class SimulatedExchange {
         private final SignalDirection side;
         private final long sequence;
         private double price;
-        private int quantity;
+        private Quantity quantity;
 
         private MutableVenueOrder(VenueOrder order) {
             this.orderId = order.orderId();
@@ -997,7 +998,7 @@ public final class SimulatedExchange {
             switch (delta.action()) {
                 case ADD -> {
                     if (existing == null) levels.add(new MutableLevel(new BookLevel(delta.price(), delta.quantity())));
-                    else existing.quantity += delta.quantity();
+                    else existing.quantity = existing.quantity.add(delta.quantity());
                 }
                 case UPDATE -> {
                     if (existing == null) levels.add(new MutableLevel(new BookLevel(delta.price(), delta.quantity())));
@@ -1032,17 +1033,17 @@ public final class SimulatedExchange {
             return bids.get(0).price;
         }
 
-        private void consume(boolean buying, int quantity) {
+        private void consume(boolean buying, Quantity quantity) {
             List<MutableLevel> levels = buying ? asks : bids;
             MutableLevel level = levels.get(0);
-            level.quantity -= quantity;
-            if (level.quantity == 0) levels.remove(0);
+            level.quantity = level.quantity.subtract(quantity);
+            if (level.quantity.isZero()) levels.remove(0);
         }
     }
 
     private static final class MutableLevel {
         private final double price;
-        private int quantity;
+        private Quantity quantity;
 
         private MutableLevel(BookLevel level) {
             this.price = level.price();

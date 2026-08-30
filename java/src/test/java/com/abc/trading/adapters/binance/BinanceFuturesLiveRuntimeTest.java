@@ -34,7 +34,7 @@ class BinanceFuturesLiveRuntimeTest {
                 .map(OrderFill.class::cast).findFirst().orElseThrow();
         assertEquals("client-1", fill.orderId());
         assertEquals(100.20, fill.price());
-        assertEquals(1, fill.quantity());
+        assertEquals(com.abc.trading.data.Quantity.fromString("1", 0), fill.quantity());
         AccountStateEvent account = events.stream().filter(AccountStateEvent.class::isInstance)
             .map(AccountStateEvent.class::cast).findFirst().orElseThrow();
         assertEquals(900.25, account.state().balanceFree(), 1e-9);
@@ -51,7 +51,7 @@ class BinanceFuturesLiveRuntimeTest {
         runtime.acceptMarketPayload("{\"e\":\"aggTrade\",\"E\":1000,\"s\":\"BTCUSDT\",\"a\":7,\"p\":\"100.20\",\"q\":\"1.000\",\"T\":1000,\"m\":true}");
 
         assertEquals(1, events.stream().filter(com.abc.trading.data.TradeTick.class::isInstance).count());
-        assertEquals(1, events.stream().filter(com.abc.trading.data.TradeTick.class::isInstance)
+        assertEquals(com.abc.trading.data.Quantity.fromString("1.000", 3), events.stream().filter(com.abc.trading.data.TradeTick.class::isInstance)
                 .map(com.abc.trading.data.TradeTick.class::cast).findFirst().orElseThrow().quantity());
     }
 

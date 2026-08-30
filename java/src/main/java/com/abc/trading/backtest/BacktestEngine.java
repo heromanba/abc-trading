@@ -8,6 +8,7 @@ import com.abc.trading.data.OrderBookDelta;
 import com.abc.trading.data.OrderBookL3Snapshot;
 import com.abc.trading.data.OrderBookL3Delta;
 import com.abc.trading.data.TradeTick;
+import com.abc.trading.data.Quantity;
 import com.abc.trading.data.FxRateUpdate;
 import com.abc.trading.portfolio.AccountType;
 import com.abc.trading.data.MarginModelType;
@@ -231,7 +232,7 @@ public final class BacktestEngine implements AutoCloseable {
         var state = event.state();
         log(new Event(0, nextLifecycleSequence(), state.tsInit(), "",
                 AccountStateEvent.class.getSimpleName(), EventType.ACCOUNT_STATE,
-                "", SignalDirection.HOLD, "", "", 0.0, 0, 0, 0.0, 0.0, state.currency(), null, "",
+                "", SignalDirection.HOLD, "", "", 0.0, Quantity.fromInt(0), 0, 0.0, 0.0, state.currency(), null, "",
                 state.currency(), state.balanceTotal(), state.balanceLocked(), state.balanceFree(),
                 state.marginInitial(), state.marginMaintenance(), state.unrealizedPnl(), state.equity(),
                 state.marginCall(), state.liquidationRequired()));
@@ -239,7 +240,7 @@ public final class BacktestEngine implements AutoCloseable {
 
     private void logAccountThreshold(com.abc.trading.portfolio.AccountState state, EventType type) {
         log(new Event(0, nextLifecycleSequence(), state.tsInit(), "",
-                type.name(), type, "", SignalDirection.HOLD, "", "", 0.0, 0, 0, 0.0, 0.0,
+                type.name(), type, "", SignalDirection.HOLD, "", "", 0.0, Quantity.fromInt(0), 0, 0.0, 0.0,
                 state.currency(), null, "", state.currency(), state.balanceTotal(), state.balanceLocked(),
                 state.balanceFree(), state.marginInitial(), state.marginMaintenance(), state.unrealizedPnl(),
                 state.equity(), state.marginCall(), state.liquidationRequired()));
@@ -250,7 +251,7 @@ public final class BacktestEngine implements AutoCloseable {
         log(new Event(0, nextLifecycleSequence(), state.tsInit(), event.symbol(),
                 LiquidationStarted.class.getSimpleName(), EventType.LIQUIDATION_STARTED,
                 "SYSTEM_LIQUIDATION", SignalDirection.HOLD, "", event.liquidationOrderId(),
-                0.0, event.quantity(), 0, 0.0, 0.0, state.currency(), null, "",
+                0.0, Quantity.fromInt(event.quantity()), 0, 0.0, 0.0, state.currency(), null, "",
                 state.currency(), state.balanceTotal(), state.balanceLocked(), state.balanceFree(),
                 state.marginInitial(), state.marginMaintenance(), state.unrealizedPnl(),
                 state.equity(), state.marginCall(), state.liquidationRequired()));
@@ -380,7 +381,7 @@ public final class BacktestEngine implements AutoCloseable {
                 SignalDirection side, int quantity, long timestampNs, double activationPrice,
                 double trailingOffset, TrailingOffsetType offsetType, TriggerType triggerType) {
             kernel.bus().publish(new OrderIntent(strategyId, symbol, kernel.currentInputSequence(), timestampNs,
-                orderId + "-corr", orderId, side, quantity, 0.0, kernel.portfolio().position(symbol),
+                orderId + "-corr", orderId, side, Quantity.fromInt(quantity), 0.0, kernel.portfolio().position(symbol),
                 0.0, TimeInForce.GTC, 0L, 0.0, triggerType, activationPrice, trailingOffset, offsetType));
             }
 
@@ -389,7 +390,7 @@ public final class BacktestEngine implements AutoCloseable {
                 double activationPrice, double limitOffset, double trailingOffset,
                 TrailingOffsetType offsetType, TriggerType triggerType) {
             kernel.bus().publish(new LimitOrderIntent(strategyId, symbol, kernel.currentInputSequence(), timestampNs,
-                orderId + "-corr", orderId, side, quantity, limitPrice, kernel.portfolio().position(symbol),
+                orderId + "-corr", orderId, side, Quantity.fromInt(quantity), limitPrice, kernel.portfolio().position(symbol),
                 0.0, TimeInForce.GTC, 0L, 0.0, triggerType, activationPrice, trailingOffset,
                 offsetType, limitOffset));
             }

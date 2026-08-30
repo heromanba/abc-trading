@@ -7,6 +7,7 @@ import com.abc.trading.execution.SignalDirection;
 import com.abc.trading.execution.TimeInForce;
 import com.abc.trading.execution.TriggerType;
 import com.abc.trading.execution.TrailingOffsetType;
+import com.abc.trading.data.Quantity;
 
 /** Trading command analogous to Nautilus SubmitOrder. */
 public record SubmitOrder(
@@ -20,7 +21,7 @@ public record SubmitOrder(
         String correlationId,
         SignalDirection side,
         OrderType orderType,
-        int quantity,
+        Quantity quantity,
         double price,
         int currentPosition,
         double realizedPnl,
@@ -40,7 +41,7 @@ public record SubmitOrder(
             SignalDirection side, OrderType orderType, int quantity, double price,
             int currentPosition, double realizedPnl, Order order) {
         this(traderId, strategyId, symbol, inputSequence, timestampNs, clientOrderId, commandId,
-            correlationId, side, orderType, quantity, price, currentPosition, realizedPnl,
+            correlationId, side, orderType, Quantity.fromInt(quantity), price, currentPosition, realizedPnl,
             order, TimeInForce.GTC, 0L, order.triggerPrice(), order.triggerType(),
             order.activationPrice(), order.trailingOffset(), order.trailingOffsetType(), order.limitOffset(),
             order.emulationTrigger());
@@ -53,7 +54,7 @@ public record SubmitOrder(
         if (commandId == null || commandId.isBlank()) throw new IllegalArgumentException("commandId is required");
         if (side == null || side == SignalDirection.HOLD) throw new IllegalArgumentException("side must be BUY or SELL");
         if (orderType == null) throw new IllegalArgumentException("orderType is required");
-        if (quantity <= 0) throw new IllegalArgumentException("quantity must be positive");
+        if (quantity == null || quantity.isZero()) throw new IllegalArgumentException("quantity must be positive");
         boolean trailingOrder = orderType == OrderType.TRAILING_STOP_MARKET || orderType == OrderType.TRAILING_STOP_LIMIT;
         if (!Double.isFinite(price) || (!trailingOrder && price <= 0.0)) {
             throw new IllegalArgumentException("price must be finite and positive");

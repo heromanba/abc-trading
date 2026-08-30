@@ -1,5 +1,7 @@
 package com.abc.trading.execution;
 
+import com.abc.trading.data.Quantity;
+
 public final class FixedFeeModel implements FeeModel {
     private final Commission commission;
     private final boolean chargeOnce;
@@ -11,7 +13,7 @@ public final class FixedFeeModel implements FeeModel {
     }
 
     @Override
-    public Commission calculate(int fillQuantity, double fillPrice, LiquiditySide liquiditySide) {
+    public Commission calculate(Quantity fillQuantity, double fillPrice, LiquiditySide liquiditySide) {
         if (chargeOnce && charged) return Commission.zero(commission.currency());
         charged = true;
         return commission;

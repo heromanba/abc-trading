@@ -1,5 +1,6 @@
 package com.abc.trading.events;
 
+import com.abc.trading.data.Quantity;
 import com.abc.trading.execution.LiquiditySide;
 import com.abc.trading.execution.SignalDirection;
 import com.abc.trading.msgbus.MessageBus;
@@ -43,7 +44,7 @@ class PersistentEventStoreTest {
         assertEquals(2, result.eventsReplayed());
         assertEquals(3, result.nextOffset());
         assertEquals(2, delivered.get());
-        assertEquals(2, result.state().orders().get("order-1").filledQuantity());
+        assertEquals(Quantity.fromInt(2), result.state().orders().get("order-1").filledQuantity());
         assertEquals(2, result.state().positions().get("AAPL"));
         assertEquals(900.0, result.state().accounts().get("USD").free(), 1e-9);
         assertEquals(3, EventCheckpoint.load(checkpointPath).nextOffset());

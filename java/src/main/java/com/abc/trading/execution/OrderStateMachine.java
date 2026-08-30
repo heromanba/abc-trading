@@ -1,5 +1,7 @@
 package com.abc.trading.execution;
 
+import com.abc.trading.data.Quantity;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -8,8 +10,12 @@ public final class OrderStateMachine {
     private final Map<String, OrderStatus> pendingPreviousStatuses = new LinkedHashMap<>();
 
     public OrderState initialize(String orderId, int quantity, TimeInForce timeInForce, long expireTimeNs) {
+        return initialize(orderId, Quantity.fromInt(quantity), timeInForce, expireTimeNs);
+    }
+
+    public OrderState initialize(String orderId, Quantity quantity, TimeInForce timeInForce, long expireTimeNs) {
         if (states.containsKey(orderId)) throw new IllegalStateException("Duplicate order: " + orderId);
-        OrderState state = new OrderState(orderId, OrderStatus.INITIALIZED, quantity, 0, quantity,
+        OrderState state = new OrderState(orderId, OrderStatus.INITIALIZED, quantity, Quantity.fromInt(0), quantity,
                 0.0, timeInForce, expireTimeNs);
         states.put(orderId, state);
         return state;
@@ -79,19 +85,23 @@ public final class OrderStateMachine {
     }
 
     public OrderState update(String orderId, int quantity) {
+        return update(orderId, Quantity.fromInt(quantity));
+    }
+
+    public OrderState update(String orderId, Quantity quantity) {
         OrderState current = state(orderId);
         if (current.status() != OrderStatus.PENDING_UPDATE) {
             throw new IllegalStateException("Cannot update order from " + current.status());
         }
-        if (quantity < current.filledQuantity() || quantity <= 0) {
+        if (quantity.compareTo(current.filledQuantity()) < 0 || quantity.isZero()) {
             throw new IllegalArgumentException("updated quantity must cover existing fills");
         }
         OrderStatus previousStatus = pendingPreviousStatuses.remove(orderId);
         OrderStatus updatedStatus = previousStatus == OrderStatus.TRIGGERED
             ? OrderStatus.TRIGGERED
-            : current.filledQuantity() == 0 ? OrderStatus.ACCEPTED : OrderStatus.PARTIALLY_FILLED;
+            : current.filledQuantity().isZero() ? OrderStatus.ACCEPTED : OrderStatus.PARTIALLY_FILLED;
         OrderState updated = new OrderState(orderId, updatedStatus, quantity,
-                current.filledQuantity(), quantity - current.filledQuantity(), current.averageFillPrice(),
+                current.filledQuantity(), quantity.subtract(current.filledQuantity()), current.averageFillPrice(),
                 current.timeInForce(), current.expireTimeNs());
         states.put(orderId, updated);
         return updated;
@@ -106,21 +116,25 @@ public final class OrderStateMachine {
     }
 
     public OrderState fill(String orderId, int quantity, double price) {
+        return fill(orderId, Quantity.fromInt(quantity), price);
+    }
+
+    public OrderState fill(String orderId, Quantity quantity, double price) {
         OrderState current = state(orderId);
-        if (current.status() == OrderStatus.TRIGGERED && quantity != current.remainingQuantity()) {
+        if (current.status() == OrderStatus.TRIGGERED && !quantity.equals(current.remainingQuantity())) {
             throw new IllegalArgumentException("triggered order must fill completely");
         }
-        if (quantity <= 0 || quantity > current.remainingQuantity()) {
+        if (quantity.isZero() || quantity.compareTo(current.remainingQuantity()) > 0) {
             throw new IllegalArgumentException("fill quantity exceeds remaining quantity");
         }
         if (!current.status().isOpen() && current.status() != OrderStatus.SUBMITTED) {
             throw new IllegalStateException("Cannot fill order from " + current.status());
         }
-        int filledQuantity = current.filledQuantity() + quantity;
-        int remainingQuantity = current.submittedQuantity() - filledQuantity;
-        double averagePrice = (current.averageFillPrice() * current.filledQuantity() + price * quantity)
-                / filledQuantity;
-        OrderStatus status = remainingQuantity == 0 ? OrderStatus.FILLED : OrderStatus.PARTIALLY_FILLED;
+        Quantity filledQuantity = current.filledQuantity().add(quantity);
+        Quantity remainingQuantity = current.submittedQuantity().subtract(filledQuantity);
+        double averagePrice = (current.averageFillPrice() * current.filledQuantity().asDouble() + price * quantity.asDouble())
+            / filledQuantity.asDouble();
+        OrderStatus status = remainingQuantity.isZero() ? OrderStatus.FILLED : OrderStatus.PARTIALLY_FILLED;
         OrderState updated = new OrderState(orderId, status, current.submittedQuantity(), filledQuantity,
                 remainingQuantity, averagePrice, current.timeInForce(), current.expireTimeNs());
         states.put(orderId, updated);
@@ -165,7 +179,7 @@ public final class OrderStateMachine {
         OrderStatus previousStatus = pendingPreviousStatuses.remove(current.orderId());
         OrderStatus restoredStatus = previousStatus == OrderStatus.TRIGGERED
             ? OrderStatus.TRIGGERED
-            : current.filledQuantity() == 0 ? OrderStatus.ACCEPTED : OrderStatus.PARTIALLY_FILLED;
+            : current.filledQuantity().isZero() ? OrderStatus.ACCEPTED : OrderStatus.PARTIALLY_FILLED;
         OrderState restored = new OrderState(current.orderId(), restoredStatus, current.submittedQuantity(),
                 current.filledQuantity(), current.remainingQuantity(), current.averageFillPrice(),
                 current.timeInForce(), current.expireTimeNs());

@@ -1,6 +1,7 @@
 package com.abc.trading.adapters.binance;
 
 import com.abc.trading.data.DataClient;
+import com.abc.trading.data.Quantity;
 import com.abc.trading.execution.ExecutionClient;
 import com.abc.trading.execution.LimitOrderIntent;
 import com.abc.trading.execution.OrderIntent;
@@ -272,10 +273,10 @@ public final class BinanceFuturesAdapter implements DataClient, ExecutionClient 
                 TimeInForce.IOC, order.orderId(), true, 0L, 0.0, 0.0, 0.0);
     }
 
-    private void placeOrder(String symbol, SignalDirection side, String type, int quantity,
+    private void placeOrder(String symbol, SignalDirection side, String type, Quantity quantity,
             Double price, TimeInForce timeInForce, String clientOrderId, boolean reduceOnly,
             long expireTimeNs, double stopPrice, double activationPrice, double callbackRate) {
-            placeOrderDecimal(symbol, side, type, BigDecimal.valueOf(quantity),
+            placeOrderDecimal(symbol, side, type, quantity.asDecimal(),
                 price == null ? null : BigDecimal.valueOf(price), timeInForce, clientOrderId,
                 reduceOnly, expireTimeNs, stopPrice, activationPrice, callbackRate);
             }

@@ -4,6 +4,7 @@ import com.abc.trading.data.InstrumentSpec;
 import com.abc.trading.data.FxRateUpdate;
 import com.abc.trading.execution.OrderFill;
 import com.abc.trading.execution.SignalDirection;
+import com.abc.trading.data.Quantity;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -64,14 +65,19 @@ public final class AccountLedger {
     }
 
     public boolean canReserve(String venue, int quantity, double price) {
-        return canReserve(venue, quantity, price, null, SignalDirection.BUY, Integer.MAX_VALUE);
+        return canReserve(venue, Quantity.fromInt(quantity), price, null, SignalDirection.BUY, Integer.MAX_VALUE);
     }
 
     public boolean canReserve(String venue, int quantity, double price, InstrumentSpec instrument,
             SignalDirection side, int position) {
+        return canReserve(venue, Quantity.fromInt(quantity), price, instrument, side, position);
+        }
+
+        public boolean canReserve(String venue, Quantity quantity, double price, InstrumentSpec instrument,
+            SignalDirection side, int position) {
         Account account = account(venue);
         if (account == null) return true;
-        if (account.type == AccountType.CASH && side == SignalDirection.SELL && position < quantity) return false;
+        if (account.type == AccountType.CASH && side == SignalDirection.SELL && position < quantity.asDouble()) return false;
         if (account.type == AccountType.MARGIN && increasesExposure(side, position)
             && isMaintenanceBreached(account)) return false;
         double required = requiredMargin(quantity, price, account, instrument, side, position);
@@ -84,10 +90,15 @@ public final class AccountLedger {
     }
 
     public void reserve(String venue, String orderId, int quantity, double price) {
-        reserve(venue, orderId, quantity, price, null, SignalDirection.BUY, Integer.MAX_VALUE);
+        reserve(venue, orderId, Quantity.fromInt(quantity), price, null, SignalDirection.BUY, Integer.MAX_VALUE);
     }
 
     public void reserve(String venue, String orderId, int quantity, double price, InstrumentSpec instrument,
+            SignalDirection side, int position) {
+        reserve(venue, orderId, Quantity.fromInt(quantity), price, instrument, side, position);
+        }
+
+        public void reserve(String venue, String orderId, Quantity quantity, double price, InstrumentSpec instrument,
             SignalDirection side, int position) {
         Account account = account(venue);
         if (account == null) return;
@@ -112,7 +123,7 @@ public final class AccountLedger {
         if (account == null) return;
         String currency = instrument == null ? account.currency : marginCurrency(instrument);
         if (account.type == AccountType.CASH) {
-            double notional = fill.quantity() * fill.price();
+            double notional = fill.quantity().asDouble() * fill.price();
             double cashDelta = fill.side() == SignalDirection.BUY ? -notional : notional;
             double commission = convert(fill.commission().amount(), fill.commission().currency(), currency);
             if (!Double.isFinite(commission)) return;
@@ -128,11 +139,11 @@ public final class AccountLedger {
         }
         Reservation reservation = reservations.get(fill.orderId());
         if (reservation != null) {
-            double released = reservation.margin * fill.quantity() / reservation.quantity;
+            double released = reservation.margin * fill.quantity().asDouble() / reservation.quantity.asDouble();
             double remaining = reservation.margin - released;
             if (remaining <= 1e-9) reservations.remove(fill.orderId());
             else reservations.put(fill.orderId(), new Reservation(venue, reservation.currency,
-                    reservation.quantity - fill.quantity(), remaining));
+                    reservation.quantity.subtract(fill.quantity()), remaining));
         }
     }
 
@@ -148,9 +159,9 @@ public final class AccountLedger {
         if (position == 0) account.positionMargins.remove(instrument.symbol());
         else account.positionMargins.put(instrument.symbol(), new MarginRequirement(
             instrument.symbol(), marginCurrency(instrument), position, averagePrice, averagePrice,
-            account.type == AccountType.CASH ? 0.0 : marginFor(instrument, Math.abs(position), averagePrice,
+            account.type == AccountType.CASH ? 0.0 : marginFor(instrument, Quantity.fromInt(Math.abs(position)), averagePrice,
                 account.leverage, false),
-            account.type == AccountType.CASH ? 0.0 : marginFor(instrument, Math.abs(position), averagePrice,
+            account.type == AccountType.CASH ? 0.0 : marginFor(instrument, Quantity.fromInt(Math.abs(position)), averagePrice,
                 account.leverage, true),
             instrument.marginModelType() == com.abc.trading.data.MarginModelType.INVERSE_NOTIONAL_RATE));
         }
@@ -216,17 +227,17 @@ public final class AccountLedger {
         return maintenance > 0.0 && equity < maintenance;
     }
 
-    private static double margin(int quantity, double price, double leverage, double rate) {
-        return quantity * price * rate / leverage;
+    private static double margin(Quantity quantity, double price, double leverage, double rate) {
+        return quantity.asDouble() * price * rate / leverage;
     }
 
-    private static double requiredMargin(int quantity, double price, Account account,
+    private static double requiredMargin(Quantity quantity, double price, Account account,
             InstrumentSpec instrument, SignalDirection side, int position) {
         if (account.type == AccountType.CASH && side == SignalDirection.SELL) return 0.0;
         if (account.type == AccountType.MARGIN && position != 0
                 && Integer.signum(position) != Integer.signum(side == SignalDirection.BUY ? 1 : -1)) {
-            quantity = Math.max(0, quantity - Math.abs(position));
-            if (quantity == 0) return 0.0;
+            quantity = Quantity.fromDecimal(quantity.asDecimal().subtract(java.math.BigDecimal.valueOf(Math.abs(position))), quantity.precision());
+            if (quantity.isZero()) return 0.0;
         }
 
         return instrument == null ? margin(quantity, price, account.leverage, 1.0)
@@ -238,7 +249,7 @@ public final class AccountLedger {
                 ? instrument.baseCurrency() : instrument.quoteCurrency();
     }
 
-        private static double marginFor(InstrumentSpec instrument, int quantity, double price,
+        private static double marginFor(InstrumentSpec instrument, Quantity quantity, double price,
             double leverage, boolean maintenance) {
         return switch (instrument.marginModelType()) {
             case NOTIONAL_RATE -> margin(quantity, price, leverage,
@@ -248,9 +259,9 @@ public final class AccountLedger {
             case INVERSE_NOTIONAL_RATE -> {
                 if (price <= 0.0) throw new IllegalArgumentException("price must be positive");
                 double rate = maintenance ? instrument.marginMaintenanceRate() : instrument.marginInitialRate();
-                yield quantity / price * rate / leverage;
+                yield quantity.asDouble() / price * rate / leverage;
             }
-            case FIXED_PER_UNIT -> quantity * (maintenance
+            case FIXED_PER_UNIT -> quantity.asDouble() * (maintenance
                 ? instrument.maintenanceMarginPerUnit() : instrument.initialMarginPerUnit()) / leverage;
         };
     }
@@ -307,7 +318,7 @@ public final class AccountLedger {
                 }
     }
 
-    private record Reservation(String venue, String currency, int quantity, double margin) { }
+    private record Reservation(String venue, String currency, Quantity quantity, double margin) { }
         private record MarginRequirement(String symbol, String currency, int quantity, double averagePrice,
             double markPrice, double initial, double maintenance, boolean inverse) { }
 }

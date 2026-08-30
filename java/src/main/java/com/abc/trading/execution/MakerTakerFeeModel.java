@@ -1,5 +1,7 @@
 package com.abc.trading.execution;
 
+import com.abc.trading.data.Quantity;
+
 public record MakerTakerFeeModel(
         double makerRate,
         double takerRate,
@@ -16,11 +18,11 @@ public record MakerTakerFeeModel(
     }
 
     @Override
-    public Commission calculate(int fillQuantity, double fillPrice, LiquiditySide liquiditySide) {
-        if (fillQuantity <= 0) throw new IllegalArgumentException("fillQuantity must be positive");
+    public Commission calculate(Quantity fillQuantity, double fillPrice, LiquiditySide liquiditySide) {
+        if (fillQuantity == null || fillQuantity.isZero()) throw new IllegalArgumentException("fillQuantity must be positive");
         if (!Double.isFinite(fillPrice) || fillPrice <= 0.0) throw new IllegalArgumentException("fillPrice must be positive");
         if (liquiditySide == null) throw new IllegalArgumentException("liquiditySide is required");
         double rate = liquiditySide == LiquiditySide.MAKER ? makerRate : takerRate;
-        return new Commission(fillQuantity * fillPrice * rate, currency);
+        return new Commission(fillQuantity.asDouble() * fillPrice * rate, currency);
     }
 }

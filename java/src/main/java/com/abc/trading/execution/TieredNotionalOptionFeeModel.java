@@ -1,5 +1,7 @@
 package com.abc.trading.execution;
 
+import com.abc.trading.data.Quantity;
+
 public record TieredNotionalOptionFeeModel(double makerRate, double takerRate, String currency) implements FeeModel {
     public TieredNotionalOptionFeeModel {
         if (makerRate < 0.0 || takerRate < 0.0 || !Double.isFinite(makerRate) || !Double.isFinite(takerRate)) {
@@ -9,8 +11,8 @@ public record TieredNotionalOptionFeeModel(double makerRate, double takerRate, S
     }
 
     @Override
-    public Commission calculate(int fillQuantity, double fillPrice, LiquiditySide liquiditySide) {
+    public Commission calculate(Quantity fillQuantity, double fillPrice, LiquiditySide liquiditySide) {
         double rate = liquiditySide == LiquiditySide.MAKER ? makerRate : takerRate;
-        return new Commission(fillQuantity * fillPrice * rate, currency);
+        return new Commission(fillQuantity.asDouble() * fillPrice * rate, currency);
     }
 }

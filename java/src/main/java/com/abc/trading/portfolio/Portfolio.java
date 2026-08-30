@@ -40,8 +40,8 @@ public final class Portfolio {
         int previousPosition = cache.position(fill.symbol());
         double previousAverage = averagePrices.getOrDefault(fill.symbol(), 0.0);
         int signedQuantity = fill.side() == com.abc.trading.execution.SignalDirection.BUY
-                ? fill.quantity()
-                : -fill.quantity();
+            ? fill.quantity().toIntExact()
+            : -fill.quantity().toIntExact();
         int nextPosition = previousPosition + signedQuantity;
         double realizedPnlDelta = -fill.commission().amount();
 

@@ -1,5 +1,6 @@
 package com.abc.trading.execution;
 
+import com.abc.trading.data.Quantity;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -15,13 +16,13 @@ class OrderStateMachineTest {
 
         OrderState partial = machine.fill("order-1", 4, 100.0);
         assertEquals(OrderStatus.PARTIALLY_FILLED, partial.status());
-        assertEquals(4, partial.filledQuantity());
-        assertEquals(6, partial.remainingQuantity());
+        assertEquals(Quantity.fromInt(4), partial.filledQuantity());
+        assertEquals(Quantity.fromInt(6), partial.remainingQuantity());
 
         OrderState complete = machine.fill("order-1", 6, 102.0);
         assertEquals(OrderStatus.FILLED, complete.status());
-        assertEquals(10, complete.filledQuantity());
-        assertEquals(0, complete.remainingQuantity());
+        assertEquals(Quantity.fromInt(10), complete.filledQuantity());
+        assertEquals(Quantity.fromInt(0), complete.remainingQuantity());
         assertEquals(101.2, complete.averageFillPrice(), 1e-9);
     }
 

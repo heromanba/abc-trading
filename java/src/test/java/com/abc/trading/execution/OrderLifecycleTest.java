@@ -1,5 +1,6 @@
 package com.abc.trading.execution;
 
+import com.abc.trading.data.Quantity;
 import com.abc.trading.execution.commands.CancelOrder;
 import com.abc.trading.execution.commands.ModifyOrder;
 import com.abc.trading.system.NautilusKernel;
@@ -22,7 +23,7 @@ class OrderLifecycleTest {
             assertEquals(OrderStatus.PARTIALLY_FILLED, kernel.executionEngine().orderState("order-1").status());
             kernel.runBars(new com.abc.trading.data.Bar[] {bar(102, 102.0)});
             assertEquals(OrderStatus.FILLED, kernel.executionEngine().orderState("order-1").status());
-            assertEquals(10, kernel.executionEngine().orderState("order-1").filledQuantity());
+            assertEquals(Quantity.fromInt(10), kernel.executionEngine().orderState("order-1").filledQuantity());
         }
     }
 
@@ -60,7 +61,7 @@ class OrderLifecycleTest {
                     SignalDirection.BUY, 10, 100.0, 0, 0.0, TimeInForce.IOC, 0L));
             OrderState iocState = kernel.executionEngine().orderState("order-5");
             assertEquals(OrderStatus.CANCELED, iocState.status());
-            assertEquals(4, iocState.filledQuantity());
+            assertEquals(Quantity.fromInt(4), iocState.filledQuantity());
         }
     }
 

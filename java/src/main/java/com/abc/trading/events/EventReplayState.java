@@ -1,6 +1,7 @@
 package com.abc.trading.events;
 
 import com.abc.trading.execution.OrderStatus;
+import com.abc.trading.data.Quantity;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -56,23 +57,23 @@ public final class EventReplayState {
 
     private void applyOrder(Event event) {
         ReplayOrderState previous = orders.get(event.orderId());
-        int submitted = previous == null ? event.quantity() : previous.submittedQuantity();
-        int filled = previous == null ? 0 : previous.filledQuantity();
+        Quantity submitted = previous == null ? event.quantity() : previous.submittedQuantity();
+        Quantity filled = previous == null ? Quantity.fromInt(0) : previous.filledQuantity();
         double average = previous == null ? 0.0 : previous.averageFillPrice();
         OrderStatus status = previous == null ? statusFor(event.eventType()) : previous.status();
         if (event.eventType() == EventType.ORDER_FILL || event.eventType() == EventType.LIQUIDATION_FILL) {
-            int nextFilled = filled + event.quantity();
-            average = nextFilled == 0 ? 0.0
-                    : (average * filled + event.price() * event.quantity()) / nextFilled;
+                Quantity nextFilled = filled.add(event.quantity());
+                average = nextFilled.isZero() ? 0.0
+                    : (average * filled.asDouble() + event.price() * event.quantity().asDouble()) / nextFilled.asDouble();
             filled = nextFilled;
-            submitted = Math.max(submitted, filled);
-            status = filled >= submitted ? OrderStatus.FILLED : OrderStatus.PARTIALLY_FILLED;
+                submitted = submitted.max(filled);
+                status = filled.compareTo(submitted) >= 0 ? OrderStatus.FILLED : OrderStatus.PARTIALLY_FILLED;
         } else {
             OrderStatus nextStatus = statusFor(event.eventType());
             if (nextStatus != null) status = nextStatus;
         }
         orders.put(event.orderId(), new ReplayOrderState(event.orderId(), status, submitted, filled,
-                Math.max(0, submitted - filled), average, event.lifecycleSequence()));
+                submitted.subtract(filled), average, event.lifecycleSequence()));
     }
 
     private static OrderStatus statusFor(EventType eventType) {
