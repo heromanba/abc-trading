@@ -132,22 +132,23 @@ public final class ExecutionEngine {
         AccountState state = event.state();
         if (!liquidatingVenues.add(state.venue())) return;
         try {
-            Map<String, Integer> positions = cache.positionsForVenue(state.venue());
-            for (Map.Entry<String, Integer> entry : positions.entrySet()) {
+            Map<String, java.math.BigDecimal> positions = cache.positionsForVenue(state.venue());
+            for (Map.Entry<String, java.math.BigDecimal> entry : positions.entrySet()) {
                 String symbol = entry.getKey();
-                int position = entry.getValue();
-                if (position == 0) continue;
+                java.math.BigDecimal position = entry.getValue();
+                if (position.signum() == 0) continue;
                 String orderId = "LIQ-" + state.venue() + "-" + symbol + "-" + state.tsInit();
-                SignalDirection side = position > 0 ? SignalDirection.SELL : SignalDirection.BUY;
-                bus.publish(new LiquidationStarted(state, symbol, orderId, Math.abs(position)));
+                SignalDirection side = position.signum() > 0 ? SignalDirection.SELL : SignalDirection.BUY;
+                Quantity quantity = Quantity.fromDecimal(position.abs(), position.scale());
+                bus.publish(new LiquidationStarted(state, symbol, orderId, quantity));
                 ExecutionClient client = clientForSymbol(symbol);
                 client.cancelAllOrders(symbol, state.tsInit());
-                stateMachine.initialize(orderId, Math.abs(position), TimeInForce.IOC, 0L);
+                stateMachine.initialize(orderId, quantity, TimeInForce.IOC, 0L);
                 stateMachine.submit(orderId);
                 stateMachine.accept(orderId);
                 liquidationOrders.put(orderId, symbol);
                 client.executeLiquidation(new OrderIntent("SYSTEM_LIQUIDATION", symbol, 0L,
-                        state.tsInit(), orderId + "-CORR", orderId, side, Math.abs(position),
+                        state.tsInit(), orderId + "-CORR", orderId, side, quantity,
                         0.0, position, 0.0));
                 liquidationOrders.remove(orderId);
             }

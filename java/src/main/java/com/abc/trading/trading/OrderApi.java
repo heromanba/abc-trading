@@ -20,6 +20,7 @@ import com.abc.trading.data.Quantity;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.math.BigDecimal;
 
 public final class OrderApi {
     private final MessageBus bus;
@@ -156,7 +157,7 @@ public final class OrderApi {
 
         private SubmitOrder createSubmitOrder(Order order, TimeInForce timeInForce, long expireTimeNs,
             TriggerType emulationTrigger) {
-        int position = context.position(order.symbol());
+        BigDecimal position = context.position(order.symbol());
         String correlationId = order.symbol() + "-" + context.marketTimestamp() + "-" + context.sequence();
         SubmitOrder submitOrder = new SubmitOrder(
                 orderFactory.traderId(),
@@ -187,8 +188,9 @@ public final class OrderApi {
             return submitOrder;
     }
 
-    private static int targetPosition(int position, SignalDirection side, int quantity) {
-        return side == SignalDirection.BUY ? position + quantity : position - quantity;
+    private static BigDecimal targetPosition(BigDecimal position, SignalDirection side, int quantity) {
+        BigDecimal signedQuantity = BigDecimal.valueOf(quantity);
+        return side == SignalDirection.BUY ? position.add(signedQuantity) : position.subtract(signedQuantity);
     }
 
     private static OrderType orderType(Order order) {

@@ -1,5 +1,6 @@
 package com.abc.trading.system;
 
+import java.math.BigDecimal;
 import com.abc.trading.data.Bar;
 import com.abc.trading.execution.OrderFill;
 import com.abc.trading.execution.OrderIntent;
@@ -90,7 +91,7 @@ class NautilusKernelTest {
                     SignalDirection.BUY, 2, 999.0, 2, 0.0));
 
             assertEquals(List.of(123.45), fillPrices);
-            assertEquals(2, kernel.portfolio().position("AAPL"));
+            assertEquals(BigDecimal.valueOf(2), kernel.portfolio().position("AAPL"));
         }
     }
 
@@ -121,7 +122,7 @@ class NautilusKernelTest {
             assertEquals(1, fills.size());
             assertEquals(110.0, fills.get(0).price());
             assertEquals(2.2, fills.get(0).commission().amount());
-            assertEquals(2, kernel.portfolio().position("AAPL"));
+            assertEquals(BigDecimal.valueOf(2), kernel.portfolio().position("AAPL"));
             assertEquals(-2.2, kernel.portfolio().realizedPnl("AAPL"));
         }
     }

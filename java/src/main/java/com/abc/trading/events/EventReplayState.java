@@ -2,6 +2,7 @@ package com.abc.trading.events;
 
 import com.abc.trading.execution.OrderStatus;
 import com.abc.trading.data.Quantity;
+import java.math.BigDecimal;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -9,7 +10,7 @@ import java.util.Map;
 /** In-memory projection rebuilt while replaying the persistent event store. */
 public final class EventReplayState {
     private final Map<String, ReplayOrderState> orders = new LinkedHashMap<>();
-    private final Map<String, Integer> positions = new LinkedHashMap<>();
+    private final Map<String, BigDecimal> positions = new LinkedHashMap<>();
     private final Map<String, Double> realizedPnl = new LinkedHashMap<>();
     private final Map<String, ReplayAccountState> accounts = new LinkedHashMap<>();
     private long lastInputSequence;
@@ -35,7 +36,7 @@ public final class EventReplayState {
         return Map.copyOf(orders);
     }
 
-    public Map<String, Integer> positions() {
+    public Map<String, BigDecimal> positions() {
         return Map.copyOf(positions);
     }
 

@@ -8,6 +8,7 @@ import com.abc.trading.portfolio.Portfolio;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.math.BigDecimal;
 
 /** Minimal synchronous risk boundary for trading commands. */
 public final class RiskEngine {
@@ -53,9 +54,9 @@ public final class RiskEngine {
             return RiskDecision.rejected("notional exceeds maxNotionalPerOrder");
         }
         if (tradingState == TradingState.REDUCING && cache != null) {
-            int position = cache.position(order.symbol());
-            boolean increasesExposure = position > 0 && order.side() == SignalDirection.BUY
-                    || position < 0 && order.side() == SignalDirection.SELL;
+                BigDecimal position = cache.position(order.symbol());
+                boolean increasesExposure = position.signum() > 0 && order.side() == SignalDirection.BUY
+                    || position.signum() < 0 && order.side() == SignalDirection.SELL;
             if (increasesExposure) return RiskDecision.rejected("trading is reducing exposure");
         }
         if (portfolio != null && !portfolio.canReserve(order)) {
@@ -85,9 +86,9 @@ public final class RiskEngine {
             return RiskDecision.rejected("notional exceeds maxNotionalPerOrder");
         }
         if (tradingState == TradingState.REDUCING && cache != null) {
-            int position = cache.position(order.symbol());
-            boolean increasesExposure = position > 0 && order.side() == SignalDirection.BUY
-                    || position < 0 && order.side() == SignalDirection.SELL;
+                BigDecimal position = cache.position(order.symbol());
+                boolean increasesExposure = position.signum() > 0 && order.side() == SignalDirection.BUY
+                    || position.signum() < 0 && order.side() == SignalDirection.SELL;
             if (increasesExposure) return RiskDecision.rejected("trading is reducing exposure");
         }
         if (portfolio != null && !portfolio.canReserve(order)) {

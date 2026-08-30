@@ -7,13 +7,14 @@ import com.abc.trading.data.MarginModelType;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.math.BigDecimal;
 
 /** Deterministic in-memory runtime state store. */
 public final class Cache {
     private final Map<String, String> instruments = new LinkedHashMap<>();
     private final Map<String, TickScheme> tickSchemes = new LinkedHashMap<>();
     private final Map<String, InstrumentSpec> instrumentsBySymbol = new LinkedHashMap<>();
-    private final Map<String, Integer> positions = new LinkedHashMap<>();
+    private final Map<String, BigDecimal> positions = new LinkedHashMap<>();
     private final Map<String, OrderIntent> orders = new LinkedHashMap<>();
 
     public void addInstrument(String symbol, String venue) {
@@ -54,7 +55,7 @@ public final class Cache {
         instruments.put(symbol, venue);
         tickSchemes.put(symbol, tickScheme);
         instrumentsBySymbol.put(symbol, instrument);
-        positions.putIfAbsent(symbol, 0);
+        positions.putIfAbsent(symbol, BigDecimal.ZERO);
     }
 
     public boolean hasInstrument(String symbol) {
@@ -79,11 +80,15 @@ public final class Cache {
         return instrument;
     }
 
-    public int position(String symbol) {
-        return positions.getOrDefault(symbol, 0);
+    public BigDecimal position(String symbol) {
+        return positions.getOrDefault(symbol, BigDecimal.ZERO);
     }
 
     public void updatePosition(String symbol, int position) {
+        updatePosition(symbol, BigDecimal.valueOf(position));
+    }
+
+    public void updatePosition(String symbol, BigDecimal position) {
         positions.put(symbol, position);
     }
 
@@ -91,14 +96,14 @@ public final class Cache {
         orders.put(order.orderId(), order);
     }
 
-    public Map<String, Integer> positions() {
+    public Map<String, BigDecimal> positions() {
         return Map.copyOf(positions);
     }
 
-    public Map<String, Integer> positionsForVenue(String venue) {
-        Map<String, Integer> result = new LinkedHashMap<>();
+    public Map<String, BigDecimal> positionsForVenue(String venue) {
+        Map<String, BigDecimal> result = new LinkedHashMap<>();
         for (Map.Entry<String, String> entry : instruments.entrySet()) {
-            if (entry.getValue().equals(venue) && positions.getOrDefault(entry.getKey(), 0) != 0) {
+            if (entry.getValue().equals(venue) && positions.getOrDefault(entry.getKey(), BigDecimal.ZERO).signum() != 0) {
                 result.put(entry.getKey(), positions.get(entry.getKey()));
             }
         }

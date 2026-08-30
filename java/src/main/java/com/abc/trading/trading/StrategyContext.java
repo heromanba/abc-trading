@@ -115,7 +115,7 @@ public final class StrategyContext {
         return orders;
     }
 
-    public int position(String symbol) {
+    public java.math.BigDecimal position(String symbol) {
         return cache.position(symbol);
     }
 

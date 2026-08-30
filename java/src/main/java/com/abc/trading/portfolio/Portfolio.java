@@ -6,7 +6,7 @@ import com.abc.trading.execution.LimitOrderIntent;
 import com.abc.trading.execution.OrderFill;
 import com.abc.trading.data.FxRateUpdate;
 import com.abc.trading.data.MarketDataSnapshot;
-
+import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -37,27 +37,26 @@ public final class Portfolio {
     }
 
     public PositionUpdate applyFill(OrderFill fill) {
-        int previousPosition = cache.position(fill.symbol());
+        BigDecimal previousPosition = cache.position(fill.symbol());
         double previousAverage = averagePrices.getOrDefault(fill.symbol(), 0.0);
-        int signedQuantity = fill.side() == com.abc.trading.execution.SignalDirection.BUY
-            ? fill.quantity().toIntExact()
-            : -fill.quantity().toIntExact();
-        int nextPosition = previousPosition + signedQuantity;
+        BigDecimal signedQuantity = fill.quantity().asDecimal();
+        if (fill.side() == com.abc.trading.execution.SignalDirection.SELL) signedQuantity = signedQuantity.negate();
+        BigDecimal nextPosition = previousPosition.add(signedQuantity);
         double realizedPnlDelta = -fill.commission().amount();
 
-        if (previousPosition != 0 && Integer.signum(previousPosition) != Integer.signum(signedQuantity)) {
-            int closedQuantity = Math.min(Math.abs(previousPosition), Math.abs(signedQuantity));
-            double direction = previousPosition > 0 ? 1.0 : -1.0;
-            realizedPnlDelta += (fill.price() - previousAverage) * closedQuantity * direction;
+        if (previousPosition.signum() != 0 && previousPosition.signum() != signedQuantity.signum()) {
+            BigDecimal closedQuantity = previousPosition.abs().min(signedQuantity.abs());
+            double direction = previousPosition.signum() > 0 ? 1.0 : -1.0;
+            realizedPnlDelta += (fill.price() - previousAverage) * closedQuantity.doubleValue() * direction;
         }
 
-        if (nextPosition == 0) {
+        if (nextPosition.signum() == 0) {
             averagePrices.put(fill.symbol(), 0.0);
-        } else if (previousPosition == 0
-                || Integer.signum(previousPosition) == Integer.signum(signedQuantity)) {
-            double total = Math.abs(previousPosition) * previousAverage
-                    + Math.abs(signedQuantity) * fill.price();
-            averagePrices.put(fill.symbol(), total / Math.abs(nextPosition));
+        } else if (previousPosition.signum() == 0
+                || previousPosition.signum() == signedQuantity.signum()) {
+            double total = previousPosition.abs().doubleValue() * previousAverage
+                    + signedQuantity.abs().doubleValue() * fill.price();
+            averagePrices.put(fill.symbol(), total / nextPosition.abs().doubleValue());
         } else {
             averagePrices.put(fill.symbol(), fill.price());
         }
@@ -76,12 +75,12 @@ public final class Portfolio {
                 fill.inputSequence(),
                 fill.marketTimestamp(),
                 fill.orderId(),
-                nextPosition,
+                fill.quantity(),
                 nextPosition,
                 realizedPnlDelta);
     }
 
-    public int position(String symbol) {
+    public BigDecimal position(String symbol) {
         return cache.position(symbol);
     }
 

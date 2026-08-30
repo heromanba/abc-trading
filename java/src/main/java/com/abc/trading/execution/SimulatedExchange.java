@@ -17,6 +17,7 @@ import com.abc.trading.execution.commands.ModifyOrder;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -679,7 +680,7 @@ public final class SimulatedExchange {
         private final String correlationId;
         private final String orderId;
         private final SignalDirection side;
-        private final int currentPosition;
+        private final BigDecimal currentPosition;
         private final double realizedPnl;
         private final TimeInForce timeInForce;
         private final long expireTimeNs;
@@ -707,7 +708,7 @@ public final class SimulatedExchange {
 
         private WorkingOrder(String strategyId, String symbol, long inputSequence, long marketTimestamp,
                 String correlationId, String orderId, SignalDirection side, Quantity quantity, double price,
-                int currentPosition, double realizedPnl, TimeInForce timeInForce, long expireTimeNs,
+                BigDecimal currentPosition, double realizedPnl, TimeInForce timeInForce, long expireTimeNs,
                 boolean limit, boolean stop, double triggerPrice, TriggerType triggerType,
                 double activationPrice, double trailingOffset, TrailingOffsetType trailingOffsetType,
                 double limitOffset) {
