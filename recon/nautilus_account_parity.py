@@ -68,6 +68,7 @@ def quote(instrument: Any, timestamp: int, price: float, quantity: Decimal) -> A
 def run(input_path: Path, output_path: Path) -> None:
     with input_path.open(encoding="utf-8") as source:
         fixture = json.load(source)
+    starting_balance = Decimal(str(fixture["starting_balance"]))
     quantity = Decimal(str(fixture["quantity"]))
     instrument = zero_fee_instrument()
     strategy = AccountParityStrategy(instrument, fixture)
@@ -78,7 +79,7 @@ def run(input_path: Path, output_path: Path) -> None:
         venue=venue,
         oms_type=OmsType.NETTING,
         account_type=AccountType.MARGIN,
-        starting_balances=[Money(fixture["starting_balance"], currency)],
+        starting_balances=[Money(starting_balance, currency)],
         base_currency=currency,
         default_leverage=fixture["leverage"],
         trade_execution=True,

@@ -27,7 +27,7 @@
 <h2 id="implementation-status-report">Implementation Status Report</h2>
 <p><strong>Scope:</strong> <code>java/src/main/java</code>, <code>java/src/test/java</code>, the Python JPype facade, and the Rust-vs-Java reconciliation tools.</p>
 <p><strong>Purpose:</strong> describe what is implemented in Java so far, how the pieces fit together, how each class is used, and why the boundaries were chosen.</p>
-<p><strong>Status:</strong> implementation snapshot as of 2026-08-30.</p>
+<p><strong>Status:</strong> implementation snapshot as of 2026-08-31.</p>
 <h2 id="executive-summary">1. Executive Summary</h2>
 <p>The Java rewrite is a deterministic, synchronous, backtest-oriented trading runtime shaped after Nautilus Trader. Java owns the runtime loop, message routing, order state, risk boundary, simulated execution, portfolio position state, and event logging. Python owns the strategy callback and historical-data loading at the current integration boundary.</p>
 <p>The strongest verified feature is cross-backend behavioral reconciliation. The shared historical-bar workflow currently compares 228 semantic lifecycle rows between Nautilus and Java. The dedicated L3 MBO fixture compares two fills across a named venue order, queue-ahead trades, maker/taker classification, and deterministic fill ordering.</p>
@@ -35,7 +35,8 @@
 <pre class="text"><code>mvn -q clean test
 MATCH rows=228
 MATCH L3 fills=2
-MATCH account state fields=8</code></pre>
+MATCH account state fields=8
+MONETARY exact API pass</code></pre>
 <p>The current Java test suite covers the deterministic runtime, L3 queue behavior, and account settlement. Account-state events expose total, locked, free, initial-margin, maintenance-margin, and currency information.</p>
 <h3 id="main-implemented-feature-groups">Main implemented feature groups</h3>
 <ul>
@@ -314,9 +315,9 @@ MATCH account state fields=8</code></pre>
 </tr>
 <tr class="even">
 <td>Decimal accounting</td>
-<td>Partial</td>
-<td><code>Quantity</code>, primitive <code>double</code> prices/PnL</td>
-<td>Quantity and position precision are exact; price and monetary hardening remains future work</td>
+<td>Implemented at monetary boundaries</td>
+<td><code>Money</code>, <code>Commission</code>, <code>AccountBalance</code>, <code>AccountState</code>, <code>AccountLedger</code></td>
+<td>Exact <code>BigDecimal</code> balances, commissions, FX, reservations, margins, equity, and Python <code>Decimal</code> reporting; legacy double projections remain for compatibility</td>
 </tr>
 <tr class="odd">
 <td>Local order emulator</td>
@@ -1058,7 +1059,7 @@ MATCH account state fields=8</code></pre>
 <tr class="even">
 <td><code>Money</code></td>
 <td>Immutable amount/currency value</td>
-<td>Shared primitive-backed monetary boundary; full account precision remains future work</td>
+<td>Exact <code>BigDecimal</code> amount with currency-aware rounding and a legacy double projection</td>
 </tr>
 </tbody>
 </table>
@@ -1404,7 +1405,7 @@ cancel/expiry/reject -&gt; release reservation</code></pre>
 <p>Margin accounts reserve quote-currency notional multiplied by the instrument’s initial-margin rate and divided by leverage. Open positions report both initial and maintenance margin using <code>InstrumentSpec</code>. Cash accounts reserve buy-side funds, settle buy/sell notional in the quote currency, and reject uncovered sells. Additional currencies can be deposited and converted through explicitly configured FX rates; missing conversion data rejects a reservation rather than silently treating currencies as equal.</p>
 <p>These rules are a deterministic backtest baseline. They do not yet model every Nautilus derivative margin model, liquidation execution policy, or live FX feed.</p>
 <h3 id="numeric-representation">6.4 Numeric representation</h3>
-<p>Quantities use immutable fixed-point <code>Quantity</code> values backed by a <code>long</code> raw value and explicit decimal precision. <code>InstrumentSpec</code> validates both the configured <code>sizePrecision</code>/<code>sizeIncrement</code> and <code>pricePrecision</code>/<code>priceTickSize</code>. Binance <code>LOT_SIZE.stepSize</code>, <code>minQty</code>, and <code>PRICE_FILTER.tickSize</code> are mapped into the same contract and invalid orders are rejected before REST or simulated execution. Python accepts integers, <code>Decimal</code>, and decimal strings for exact quantities and tick metadata. Prices and PnL remain primitive <code>double</code> values at the execution boundary, but all configured order-price validation uses exact <code>Decimal</code>/<code>BigDecimal</code> conversion before dispatch.</p>
+<p>Quantities use immutable fixed-point <code>Quantity</code> values backed by a <code>long</code> raw value and explicit decimal precision. <code>InstrumentSpec</code> validates both the configured <code>sizePrecision</code>/<code>sizeIncrement</code> and <code>pricePrecision</code>/<code>priceTickSize</code>. Binance <code>LOT_SIZE.stepSize</code>, <code>minQty</code>, and <code>PRICE_FILTER.tickSize</code> are mapped into the same contract and invalid orders are rejected before REST or simulated execution. Python accepts integers, <code>Decimal</code>, and decimal strings for exact quantities and tick metadata. Monetary values use exact <code>BigDecimal</code> storage through commissions, balances, FX conversions, reservations, margins, and equity; <code>CurrencyPrecision</code> provides explicit currency rounding at external boundaries. Python exposes account values as <code>Decimal</code>. Prices and PnL at the execution boundary remain primitive <code>double</code> where the existing matching API requires them, while configured order-price validation uses exact <code>Decimal</code>/<code>BigDecimal</code> conversion before dispatch.</p>
 <h2 id="python-integration">7. Python Integration</h2>
 <p>The Python facade is intentionally thin:</p>
 <pre class="text"><code>abc_trading.backtest.engine.BacktestEngine

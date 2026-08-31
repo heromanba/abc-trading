@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+from decimal import Decimal
 from pathlib import Path
 
 from abc_trading.backtest.engine import BacktestEngine, shutdown_jvm
@@ -21,12 +22,13 @@ FIELDS = (
 def run(input_path: Path, output_path: Path) -> None:
     with input_path.open(encoding="utf-8") as source:
         fixture = json.load(source)
+    starting_balance = Decimal(str(fixture["starting_balance"]))
     event_path = output_path.with_name(output_path.stem + "_events.csv")
     engine = BacktestEngine(event_path)
     symbol = fixture["symbol"]
     venue = fixture["venue"]
     engine.add_venue(venue)
-    engine.configure_account(venue, fixture["starting_balance"], fixture["currency"], fixture["leverage"])
+    engine.configure_account(venue, starting_balance, fixture["currency"], Decimal(str(fixture["leverage"])))
     engine.add_instrument(symbol, venue, 0.1, "BTC", fixture["currency"], 0.05, 0.025,
                           size_precision=fixture["size_precision"],
                           size_increment=fixture["size_increment"],

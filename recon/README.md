@@ -128,9 +128,14 @@ MATCH account state fields=8
 
 The account fixture uses Binance-style `quantity: "0.001"`,
 `size_precision: 3`, `size_increment: "0.001"`, `price_precision: 1`,
-and `price_tick_size: "0.1"`. Java rejects quantities such as `0.0015`
+and `price_tick_size: "0.1"`, with an exact starting balance of
+`10000.00500001`. Java rejects quantities such as `0.0015`
 and prices such as `100.05` at the risk boundary, while both backends preserve
 the valid fractional position and produce the same account state.
+
+The monetary boundary also preserves values such as `10000.00500001` without
+converting through `double`; Python account-state fields are returned as
+`Decimal` values.
 
 ## Instrument size precision check
 

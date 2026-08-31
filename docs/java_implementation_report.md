@@ -10,7 +10,7 @@ title: ABC Trading Java Rewrite
 
 **Purpose:** describe what is implemented in Java so far, how the pieces fit together, how each class is used, and why the boundaries were chosen.
 
-**Status:** implementation snapshot as of 2026-08-30.
+**Status:** implementation snapshot as of 2026-08-31.
 
 ## 1. Executive Summary
 
@@ -25,6 +25,7 @@ mvn -q clean test
 MATCH rows=228
 MATCH L3 fills=2
 MATCH account state fields=8
+MONETARY exact API pass
 ```
 
 The current Java test suite covers the deterministic runtime, L3 queue behavior,
@@ -192,7 +193,7 @@ The Python bridge lives under `python/abc_trading`; reconciliation scripts live 
 | Account-state events | Implemented | `AccountStateEvent`, `Event`, `CsvEventLogger` | Balance and margin transitions are observable in canonical logs |
 | Mark-to-market valuation | Implemented baseline | `Portfolio`, `AccountLedger`, `MarketDataSnapshot` | Mark updates recalculate signed unrealized PnL and threshold flags |
 | Margin model | Implemented baseline | `MarginModelType`, `InstrumentSpec`, `AccountLedger` | Notional-rate and fixed-per-unit formulas with leverage |
-| Decimal accounting | Partial | `Quantity`, primitive `double` prices/PnL | Quantity and position precision are exact; price and monetary hardening remains future work |
+| Decimal accounting | Implemented at monetary boundaries | `Money`, `Commission`, `AccountBalance`, `AccountState`, `AccountLedger` | Exact `BigDecimal` balances, commissions, FX, reservations, margins, equity, and Python `Decimal` reporting; legacy double projections remain for compatibility |
 | Local order emulator | Implemented | `OrderEmulator` | Snapshot-triggered local ownership and release |
 | Disruptor bus | Scaffold only | `DisruptorMessageBus` | Publish method is still a TODO |
 | External ring-buffer backing | Implemented as backing | `RingBufferMessageBusBacking` | Bounded queue; full-buffer policy currently drops and reports |
@@ -354,7 +355,7 @@ The following catalog covers the Java production types currently under `java/src
 | `StopLimitOrder` | Triggered limit order model | Carries both trigger and limit price |
 | `TrailingStopMarketOrder` | Dynamic stop-market model | Carries activation and offset metadata |
 | `TrailingStopLimitOrder` | Dynamic stop-limit model | Adds limit offset to trailing stop metadata |
-| `Money` | Immutable amount/currency value | Shared primitive-backed monetary boundary; full account precision remains future work |
+| `Money` | Immutable amount/currency value | Exact `BigDecimal` amount with currency-aware rounding and a legacy double projection |
 
 ### 5.7 Indicators package
 
@@ -502,8 +503,12 @@ configured `sizePrecision`/`sizeIncrement` and `pricePrecision`/`priceTickSize`.
 Binance `LOT_SIZE.stepSize`, `minQty`, and `PRICE_FILTER.tickSize` are mapped
 into the same contract and invalid orders are rejected before REST or simulated
 execution. Python accepts integers, `Decimal`, and decimal strings for exact
-quantities and tick metadata. Prices and PnL remain primitive `double` values
-at the execution boundary, but all configured order-price validation uses exact
+quantities and tick metadata. Monetary values use exact `BigDecimal` storage
+through commissions, balances, FX conversions, reservations, margins, and
+equity; `CurrencyPrecision` provides explicit currency rounding at external
+boundaries. Python exposes account values as `Decimal`. Prices and PnL at the
+execution boundary remain primitive `double` where the existing matching API
+requires them, while configured order-price validation uses exact
 `Decimal`/`BigDecimal` conversion before dispatch.
 
 ## 7. Python Integration
