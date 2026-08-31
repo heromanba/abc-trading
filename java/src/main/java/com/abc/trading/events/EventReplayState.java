@@ -11,7 +11,7 @@ import java.util.Map;
 public final class EventReplayState {
     private final Map<String, ReplayOrderState> orders = new LinkedHashMap<>();
     private final Map<String, BigDecimal> positions = new LinkedHashMap<>();
-    private final Map<String, Double> realizedPnl = new LinkedHashMap<>();
+    private final Map<String, BigDecimal> realizedPnl = new LinkedHashMap<>();
     private final Map<String, ReplayAccountState> accounts = new LinkedHashMap<>();
     private long lastInputSequence;
     private long lastLifecycleSequence;
@@ -40,7 +40,7 @@ public final class EventReplayState {
         return Map.copyOf(positions);
     }
 
-    public Map<String, Double> realizedPnl() {
+    public Map<String, BigDecimal> realizedPnl() {
         return Map.copyOf(realizedPnl);
     }
 

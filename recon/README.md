@@ -165,6 +165,9 @@ EventReplayResult result = EventReplayer.replay(
 
 The persistent-store tests cover append/reopen offsets, schema validation,
 checkpoint resume, bus delivery, and state projection recovery.
+Decimal quantities, signed positions, commissions, balances, and margins are
+serialized as canonical strings; high-precision JSONL and CSV round-trip tests
+protect the event schema from `double` conversion.
 
 ## Binance USD-M Futures adapter
 

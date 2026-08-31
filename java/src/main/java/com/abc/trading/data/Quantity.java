@@ -28,8 +28,8 @@ public final class Quantity implements Comparable<Quantity> {
     }
 
     @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
-    public static Quantity fromJson(BigDecimal value) {
-        return fromDecimal(value, Math.max(0, value.scale()));
+    public static Quantity fromJson(String value) {
+        return fromString(value, Math.max(0, new BigDecimal(value).scale()));
     }
 
     public static Quantity fromDecimal(BigDecimal value, int precision) {
@@ -55,9 +55,13 @@ public final class Quantity implements Comparable<Quantity> {
         return precision;
     }
 
-    @JsonValue
     public BigDecimal asDecimal() {
         return BigDecimal.valueOf(raw, precision);
+    }
+
+    @JsonValue
+    public String asJson() {
+        return toString();
     }
 
     public double asDouble() {
@@ -94,31 +98,6 @@ public final class Quantity implements Comparable<Quantity> {
 
     public Quantity max(Quantity other) {
         return compareTo(other) >= 0 ? this : other;
-    }
-
-    private static long scaleFactor(int precision) {
-        return switch (precision) {
-            case 0 -> 1L;
-            case 1 -> 10L;
-            case 2 -> 100L;
-            case 3 -> 1_000L;
-            case 4 -> 10_000L;
-            case 5 -> 100_000L;
-            case 6 -> 1_000_000L;
-            case 7 -> 10_000_000L;
-            case 8 -> 100_000_000L;
-            case 9 -> 1_000_000_000L;
-            case 10 -> 10_000_000_000L;
-            case 11 -> 100_000_000_000L;
-            case 12 -> 1_000_000_000_000L;
-            case 13 -> 10_000_000_000_000L;
-            case 14 -> 100_000_000_000_000L;
-            case 15 -> 1_000_000_000_000_000L;
-            case 16 -> 10_000_000_000_000_000L;
-            case 17 -> 100_000_000_000_000_000L;
-            case 18 -> 1_000_000_000_000_000_000L;
-            default -> throw new IllegalArgumentException("precision must be in 0..18");
-        };
     }
 
     @Override

@@ -675,7 +675,7 @@ MONETARY exact API pass</code></pre>
 <tr class="odd">
 <td><code>Event</code></td>
 <td>Canonical CSV row with lifecycle, order, PnL, commission, liquidity, balance, and margin</td>
-<td>One stable schema supports cross-backend comparison and account evidence</td>
+<td>Quantity, position, and monetary fields are exact decimal values at the schema boundary</td>
 </tr>
 <tr class="even">
 <td><code>EventType</code></td>
@@ -695,7 +695,7 @@ MONETARY exact API pass</code></pre>
 <tr class="odd">
 <td><code>EventStoreRecord</code></td>
 <td>Versioned JSONL envelope with offset and canonical event</td>
-<td>Makes persistence schema and append position explicit</td>
+<td>Makes persistence schema and append position explicit; decimal values serialize as strings</td>
 </tr>
 <tr class="even">
 <td><code>PersistentEventStore</code></td>
@@ -1458,7 +1458,7 @@ limit-buy-1   100.00 x 2  MAKER</code></pre>
 <h3 id="account-and-persistence-evidence">Account and persistence evidence</h3>
 <p>The account fixture compares eight final fields:</p>
 <pre class="text"><code>MATCH account state fields=8</code></pre>
-<p>The event-store integration writes the same canonical events to CSV and versioned JSONL, then replays them into a synchronous bus and state projection. The Binance adapter contract suite validates URL routing, HMAC signing, wire mapping, decimal preservation, REST order parameters, and the kernel bridge without requiring credentials.</p>
+<p>The event-store integration writes the same canonical events to CSV and versioned JSONL, then replays them into a synchronous bus and state projection. Quantities, signed positions, realized PnL, commissions, balances, margins, and equity serialize as canonical decimal strings and are reconstructed without a <code>double</code> conversion. The persistence suite includes high-precision JSONL and CSV round-trip coverage. The Binance adapter contract suite validates URL routing, HMAC signing, wire mapping, decimal preservation, REST order parameters, and the kernel bridge without requiring credentials.</p>
 <h3 id="l3-mbo-workflow">L3 MBO workflow</h3>
 <p>Shared fixture:</p>
 <pre class="text"><code>recon/l3_mbo_market_data.json</code></pre>
@@ -1498,7 +1498,7 @@ limit-buy-1   100.00 x 2  MAKER</code></pre>
 <li><strong>Exact account parity:</strong> broader Rust account-event fixtures, full derivative margin models, and richer market-driven FX coverage remain.</li>
 <li><strong>Binance live hardening:</strong> authenticated Testnet order-flow smoke tests, exchange-info filter enforcement, WebSocket sequence-gap recovery, and user-stream account reconciliation.</li>
 <li><strong>Additional adapters:</strong> add other venues only after the Binance contract and operational path are stable.</li>
-<li><strong>Exact accounting:</strong> fixed-point or <code>BigDecimal</code> money model with explicit currency precision.</li>
+<li><strong>Broader account parity:</strong> extend exact monetary parity to additional Rust account-event and derivative-margin fixtures.</li>
 <li><strong>Execution algorithms:</strong> actual algorithm scheduling rather than the current interface boundary.</li>
 <li><strong>Disruptor integration:</strong> complete the <code>DisruptorMessageBus</code> publication path only if profiling shows the synchronous bus is insufficient.</li>
 </ol>

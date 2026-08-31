@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 COLUMNS = (
@@ -27,7 +28,7 @@ COLUMNS = (
     "liquidity_side",
 )
 NUMERIC_COLUMNS = {"price", "realized_pnl", "commission"}
-NUMERIC_TOLERANCE = 1e-5
+NUMERIC_TOLERANCE = Decimal("0.00001")
 
 COMPARABLE_EVENT_TYPES = {"SIGNAL", "ORDER_FILL", "POSITION_UPDATE"}
 IGNORED_EVENT_TYPES = {"ORDER_SUBMIT", "ORDER_ACCEPT", "ORDER_LIMIT_ACCEPT"}
@@ -52,10 +53,10 @@ def _fields_match(column: str, expected: str, actual: str) -> bool:
     if column not in NUMERIC_COLUMNS:
         return expected == actual
     try:
-        expected_value = 0.0 if expected == "" else float(expected)
-        actual_value = 0.0 if actual == "" else float(actual)
+        expected_value = Decimal("0") if expected == "" else Decimal(expected)
+        actual_value = Decimal("0") if actual == "" else Decimal(actual)
         return abs(expected_value - actual_value) <= NUMERIC_TOLERANCE
-    except ValueError:
+    except InvalidOperation:
         return expected == actual
 
 

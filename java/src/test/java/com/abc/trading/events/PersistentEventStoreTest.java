@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PersistentEventStoreTest {
     @Test
@@ -66,5 +67,51 @@ class PersistentEventStoreTest {
 
         Files.writeString(storePath, Files.readString(storePath).replace("\"offset\":1", "\"offset\":9"));
         assertThrows(IllegalStateException.class, () -> new PersistentEventStore(storePath).readRecords());
+    }
+
+    @Test
+    void roundTripsCanonicalDecimalStringsWithoutDoubleConversion(@TempDir Path tempDir) throws Exception {
+        Path storePath = tempDir.resolve("precise-events.jsonl");
+        Event event = new Event(7, 9, 100, "BTCUSDT", "SettledOrderFill", EventType.ORDER_FILL,
+                "strategy", SignalDirection.BUY, "corr", "precise-order", 100.1,
+                Quantity.fromString("0.001", 3), new BigDecimal("0.001"),
+                new BigDecimal("1234567890.123456789"), new BigDecimal("0.00000001"),
+                "USDT", LiquiditySide.TAKER, "venue-fill", "USDT",
+                new BigDecimal("1000000000.00000001"), new BigDecimal("0.00000001"),
+                new BigDecimal("999999999.99999999"), new BigDecimal("0.00000001"),
+                new BigDecimal("0.000000005"), new BigDecimal("-0.000000001"),
+                new BigDecimal("1234567889.123456788"), false, false);
+
+        try (PersistentEventStore store = new PersistentEventStore(storePath)) {
+            store.log(event);
+        }
+
+        String json = Files.readString(storePath);
+        assertTrue(json.contains("\"quantity\":\"0.001\""));
+        assertTrue(json.contains("\"realizedPnl\":\"1234567890.123456789\""));
+        Event restored = new PersistentEventStore(storePath).readEvents().get(0);
+        assertEquals(event.quantity(), restored.quantity());
+        assertEquals(event.realizedPnl(), restored.realizedPnl());
+        assertEquals(event.accountTotal(), restored.accountTotal());
+    }
+
+    @Test
+    void writesCanonicalDecimalMoneyToCsv(@TempDir Path tempDir) throws Exception {
+        Path csvPath = tempDir.resolve("precise-events.csv");
+        Event event = new Event(1, 1, 100, "BTCUSDT", "AccountStateEvent", EventType.ACCOUNT_STATE,
+                "strategy", SignalDirection.HOLD, "corr", "", 100.1,
+                Quantity.fromInt(0), BigDecimal.ZERO, new BigDecimal("0.000000001"),
+                new BigDecimal("0.00000001"), "USDT", null, "", "USDT",
+                new BigDecimal("1000.00500001"), new BigDecimal("0.00000001"),
+                new BigDecimal("1000.00500000"), BigDecimal.ZERO, BigDecimal.ZERO,
+                new BigDecimal("-0.000000001"), new BigDecimal("1000.004999999"), false, false);
+
+        try (CsvEventLogger logger = new CsvEventLogger(csvPath)) {
+            logger.log(event);
+        }
+
+        String row = Files.readAllLines(csvPath).get(1);
+        assertTrue(row.contains(",0.000000001,0.00000001,USDT,"));
+        assertTrue(row.contains(",1000.00500001,0.00000001,1000.00500000,"));
     }
 }

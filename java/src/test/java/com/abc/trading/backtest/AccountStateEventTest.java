@@ -29,7 +29,7 @@ class AccountStateEventTest {
         String log = Files.readString(output);
         assertTrue(log.lines().findFirst().orElseThrow().contains("account_total"));
         assertTrue(log.contains(",ACCOUNT_STATE,"));
-        assertTrue(log.contains(",1000.00000000,"));
+        assertTrue(log.contains(",1000.0,"));
     }
 
     @Test

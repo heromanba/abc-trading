@@ -275,11 +275,11 @@ The following catalog covers the Java production types currently under `java/src
 
 | Type | Usage | Design rationale |
 |---|---|---|
-| `Event` | Canonical CSV row with lifecycle, order, PnL, commission, liquidity, balance, and margin | One stable schema supports cross-backend comparison and account evidence |
+| `Event` | Canonical CSV row with lifecycle, order, PnL, commission, liquidity, balance, and margin | Quantity, position, and monetary fields are exact decimal values at the schema boundary |
 | `EventType` | Semantic event vocabulary | Keeps logger output independent from concrete Java event class names |
 | `EventLogger` | Event logging contract | Allows CSV or another sink later |
 | `CsvEventLogger` | Writes synchronized CSV rows | Human-readable evidence and simple reconciliation input |
-| `EventStoreRecord` | Versioned JSONL envelope with offset and canonical event | Makes persistence schema and append position explicit |
+| `EventStoreRecord` | Versioned JSONL envelope with offset and canonical event | Makes persistence schema and append position explicit; decimal values serialize as strings |
 | `PersistentEventStore` | Append-only JSONL event sink and reader | Provides durable audit evidence without coupling the runtime to a database |
 | `CompositeEventLogger` | Fans one event to CSV and persistent sinks | Preserves existing CSV output while adding durable storage |
 | `EventCheckpoint` | Stores next offset and sequence watermarks | Supports restart/resume without replaying downstream notifications twice |
@@ -602,6 +602,10 @@ MATCH account state fields=8
 
 The event-store integration writes the same canonical events to CSV and
 versioned JSONL, then replays them into a synchronous bus and state projection.
+Quantities, signed positions, realized PnL, commissions, balances, margins, and
+equity serialize as canonical decimal strings and are reconstructed without a
+`double` conversion. The persistence suite includes high-precision JSONL and
+CSV round-trip coverage.
 The Binance adapter contract suite validates URL routing, HMAC signing, wire
 mapping, decimal preservation, REST order parameters, and the kernel bridge
 without requiring credentials.
@@ -670,7 +674,7 @@ The Java module currently contains 168 production source files and 20 test files
 1. **Exact account parity:** broader Rust account-event fixtures, full derivative margin models, and richer market-driven FX coverage remain.
 2. **Binance live hardening:** authenticated Testnet order-flow smoke tests, exchange-info filter enforcement, WebSocket sequence-gap recovery, and user-stream account reconciliation.
 3. **Additional adapters:** add other venues only after the Binance contract and operational path are stable.
-4. **Exact accounting:** fixed-point or `BigDecimal` money model with explicit currency precision.
+4. **Broader account parity:** extend exact monetary parity to additional Rust account-event and derivative-margin fixtures.
 5. **Execution algorithms:** actual algorithm scheduling rather than the current interface boundary.
 6. **Disruptor integration:** complete the `DisruptorMessageBus` publication path only if profiling shows the synchronous bus is insufficient.
 

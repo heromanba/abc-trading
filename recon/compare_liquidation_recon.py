@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 
@@ -31,7 +32,11 @@ def main() -> None:
             expected_value = expected_row[field_index]
             actual_value = actual_row[field_index]
             if field in NUMERIC_FIELDS:
-                if abs(float(expected_value) - float(actual_value)) > 1e-5:
+                try:
+                    difference = abs(Decimal(expected_value) - Decimal(actual_value))
+                except InvalidOperation as error:
+                    raise SystemExit(f"MISMATCH row={index} field={field} contains non-decimal data") from error
+                if difference > Decimal("0.00001"):
                     raise SystemExit(
                         f"MISMATCH row={index} field={field} expected={expected_value!r} actual={actual_value!r}"
                     )

@@ -63,20 +63,20 @@ public final class CsvEventLogger implements EventLogger {
                 + nullSafe(event.orderId()) + ","
                 + formatDouble(event.price()) + ","
                 + event.quantity() + ","
-                + event.currentPosition() + ","
-                + formatDouble(event.realizedPnl()) + ","
-                + formatDouble(event.commission()) + ","
+                + formatDecimal(event.currentPosition()) + ","
+                + formatDecimal(event.realizedPnl()) + ","
+                + formatDecimal(event.commission()) + ","
                 + nullSafe(event.commissionCurrency()) + ","
                 + (event.liquiditySide() == null ? "" : event.liquiditySide().name())
                 + "," + nullSafe(event.venueOrderId())
                 + "," + nullSafe(event.accountCurrency())
-                + "," + formatDouble(event.accountTotal())
-                + "," + formatDouble(event.accountLocked())
-                + "," + formatDouble(event.accountFree())
-                + "," + formatDouble(event.marginInitial())
-                + "," + formatDouble(event.marginMaintenance())
-                + "," + formatDouble(event.unrealizedPnl())
-                + "," + formatDouble(event.equity())
+                + "," + formatDecimal(event.accountTotal())
+                + "," + formatDecimal(event.accountLocked())
+                + "," + formatDecimal(event.accountFree())
+                + "," + formatDecimal(event.marginInitial())
+                + "," + formatDecimal(event.marginMaintenance())
+                + "," + formatDecimal(event.unrealizedPnl())
+                + "," + formatDecimal(event.equity())
                 + "," + event.marginCall()
                 + "," + event.liquidationRequired();
     }
@@ -87,5 +87,9 @@ public final class CsvEventLogger implements EventLogger {
 
     private static String formatDouble(double value) {
         return String.format(Locale.ROOT, "%.8f", value);
+    }
+
+    private static String formatDecimal(java.math.BigDecimal value) {
+        return value == null ? "" : value.toPlainString();
     }
 }
