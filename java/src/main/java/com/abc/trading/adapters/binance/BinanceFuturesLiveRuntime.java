@@ -6,6 +6,7 @@ import com.abc.trading.data.OrderBookSnapshot;
 import com.abc.trading.data.BookLevel;
 import com.abc.trading.data.TradeTick;
 import com.abc.trading.data.AggressorSide;
+import com.abc.trading.data.Quantity;
 import com.abc.trading.execution.ExecutionClient;
 import com.abc.trading.execution.LimitOrderIntent;
 import com.abc.trading.execution.OrderFill;
@@ -36,7 +37,7 @@ import java.util.function.Consumer;
 public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionClient {
     private final BinanceFuturesAdapter adapter;
     private final Consumer<Object> eventSink;
-    private final Consumer<MarketDataSnapshot> marketSink;
+    private final Consumer<Object> marketSink;
     private final Consumer<TradeTick> tradeSink;
     private final Map<String, OrderIntent> marketOrders = new LinkedHashMap<>();
     private final Map<String, LimitOrderIntent> limitOrders = new LinkedHashMap<>();
@@ -53,10 +54,16 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
 
     public BinanceFuturesLiveRuntime(BinanceFuturesConfig config, BinanceHttpTransport http,
             Consumer<Object> eventSink) {
+        this(config, http, eventSink, eventSink);
+    }
+
+    public BinanceFuturesLiveRuntime(BinanceFuturesConfig config, BinanceHttpTransport http,
+            Consumer<Object> eventSink, Consumer<Object> marketDataSink) {
         if (eventSink == null) throw new IllegalArgumentException("eventSink is required");
+        if (marketDataSink == null) throw new IllegalArgumentException("marketDataSink is required");
         this.eventSink = eventSink;
-        this.marketSink = event -> eventSink.accept(event);
-        this.tradeSink = event -> eventSink.accept(event);
+        this.marketSink = event -> marketDataSink.accept(event);
+        this.tradeSink = event -> marketDataSink.accept(event);
         this.adapter = new BinanceFuturesAdapter(config, http,
                 new BinanceMarketDataHandler() {
                     @Override public void onDepth(BinanceDepthUpdate update) { handleDepth(update); }
@@ -208,14 +215,14 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
         sequence = Math.max(sequence + 1, update.lastUpdateId());
         try {
             List<BookLevel> bidLevels = symbolBids.entrySet().stream()
-                .map(entry -> new BookLevel(Double.parseDouble(entry.getKey()), entry.getValue().intValueExact()))
+                .map(entry -> new BookLevel(Double.parseDouble(entry.getKey()), toQuantity(entry.getValue())))
                 .toList();
             List<BookLevel> askLevels = symbolAsks.entrySet().stream()
-                .map(entry -> new BookLevel(Double.parseDouble(entry.getKey()), entry.getValue().intValueExact()))
+                .map(entry -> new BookLevel(Double.parseDouble(entry.getKey()), toQuantity(entry.getValue())))
                 .toList();
-            eventSink.accept(new OrderBookSnapshot(update.symbol(), update.eventTimeMs() * 1_000_000L,
+            marketSink.accept(new OrderBookSnapshot(update.symbol(), update.eventTimeMs() * 1_000_000L,
                 bidLevels, askLevels, sequence));
-        } catch (ArithmeticException error) {
+        } catch (RuntimeException error) {
             eventSink.accept(new IllegalArgumentException("Core book quantity precision cannot represent Binance level", error));
         }
         publishMarket(update.symbol(), update.eventTimeMs(), update.eventTimeMs());
@@ -226,10 +233,10 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
         last = event.price().doubleValue();
         sequence++;
         try {
-            tradeSink.accept(new TradeTick(event.symbol(), event.tradeTimeMs(), last,
-                    event.quantity().intValueExact(), event.buyerIsMaker() ? AggressorSide.SELLER : AggressorSide.BUYER,
+                tradeSink.accept(new TradeTick(event.symbol(), event.tradeTimeMs(), last,
+                    toQuantity(event.quantity()), event.buyerIsMaker() ? AggressorSide.SELLER : AggressorSide.BUYER,
                     sequence));
-        } catch (ArithmeticException error) {
+            } catch (RuntimeException error) {
             eventSink.accept(new IllegalArgumentException(
                     "Core trade quantity precision cannot represent Binance quantity", error));
         }
@@ -250,17 +257,17 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
         }
         String symbol = update.symbol();
         SignalDirection side = "BUY".equals(update.side()) ? SignalDirection.BUY : SignalDirection.SELL;
-        int quantity = update.lastQuantity().intValueExact();
+        Quantity quantity = toQuantity(update.lastQuantity());
         double price = update.lastPrice().doubleValue();
         String strategy = market != null ? market.strategyId() : limit != null ? limit.strategyId() : "BINANCE";
         long input = market != null ? market.inputSequence() : limit != null ? limit.inputSequence() : 0L;
         String correlation = market != null ? market.correlationId() : limit != null ? limit.correlationId() : update.clientOrderId();
         OrderFill fill = new OrderFill(strategy, symbol, input, update.eventTimeMs(), correlation,
-                update.clientOrderId(), side, quantity, price, 0, 0.0)
+                update.clientOrderId(), side, quantity, price, BigDecimal.ZERO, 0.0)
                 .withLiquiditySide(LiquiditySide.TAKER)
                 .withVenueOrderId(Long.toString(update.orderId()))
                 .withCommission(new com.abc.trading.execution.Commission(
-                        update.commission().doubleValue(), update.commissionAsset()));
+                    update.commission(), update.commissionAsset()));
         eventSink.accept(fill);
         if (update.isTerminal()) { marketOrders.remove(update.clientOrderId()); limitOrders.remove(update.clientOrderId()); }
     }
@@ -330,5 +337,9 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
 
     private static BigDecimal decimal(JsonNode node, String field, String fallback) {
         return new BigDecimal(node.path(field).asText(fallback));
+    }
+
+    private static Quantity toQuantity(BigDecimal value) {
+        return Quantity.fromDecimal(value, Math.max(0, value.scale()));
     }
 }

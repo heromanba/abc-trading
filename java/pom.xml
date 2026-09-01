@@ -18,7 +18,11 @@
     </properties>
 
     <dependencies>
-        <!-- Add core Java dependencies here when implementing the message bus and engine components -->
+        <dependency>
+            <groupId>com.lmax</groupId>
+            <artifactId>disruptor</artifactId>
+            <version>3.4.4</version>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

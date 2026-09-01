@@ -14,6 +14,7 @@ public final class EngineCapabilities {
                 new EngineCapability("backtest-data-iterator", true, "crates/backtest/src/data_iterator.rs", "Bar-only iterator"),
                 new EngineCapability("latency-model", true, "crates/execution/src/models/latency.rs", "Static operation latency with FIFO timestamp ordering"),
                 new EngineCapability("fee-model", true, "crates/execution/src/models/fee.rs", "Fixed, maker/taker, per-contract, probability, capped, and notional models"),
+                new EngineCapability("disruptor-market-data-ingress", true, "crates/common/src/msgbus/backing.rs", "Optional bounded same-JVM handoff from feed callbacks to one trading-thread consumer"),
                 new EngineCapability("binance-usdm-adapter", true, "nautilus_trader/adapters/binance", "Testnet/live REST HMAC signing, public market streams, user data, order lifecycle, and account updates"),
                 new EngineCapability("accounting", true, "crates/portfolio/src/portfolio.rs", "Single-currency and configured multi-currency balance, margin, commission, and PnL ledger"),
                 new EngineCapability("actors", true, "crates/common/src/actor/mod.rs", "Lifecycle interface only"),

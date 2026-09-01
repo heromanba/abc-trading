@@ -36,8 +36,9 @@ public class MessageBusTest {
             }
         };
 
-        DisruptorMessageBus bus = new DisruptorMessageBus(router);
-        assertNotNull(bus);
+        try (DisruptorMessageBus bus = new DisruptorMessageBus(router)) {
+            assertNotNull(bus);
+        }
     }
 
     @Test

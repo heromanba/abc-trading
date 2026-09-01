@@ -211,3 +211,9 @@ The adapter preserves decimal Binance quantities and maps `depthUpdate`,
 typed records. It maps market, limit, stop, and trailing-stop-market orders;
 trailing stop-limit is explicitly rejected because the Nautilus Binance
 adapter does not support that Binance Futures order type.
+
+In the Java kernel, Binance market-data callbacks can cross an optional bounded
+LMAX Disruptor ingress before re-entering the single trading thread and
+`DataEngine`. The ingress applies backpressure when full, drains published
+events on close, and reports consumer failures; the core typed message bus
+remains direct dispatch once data reaches the trading thread.

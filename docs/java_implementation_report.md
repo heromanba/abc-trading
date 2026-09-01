@@ -195,7 +195,7 @@ The Python bridge lives under `python/abc_trading`; reconciliation scripts live 
 | Margin model | Implemented baseline | `MarginModelType`, `InstrumentSpec`, `AccountLedger` | Notional-rate and fixed-per-unit formulas with leverage |
 | Decimal accounting | Implemented at monetary boundaries | `Money`, `Commission`, `AccountBalance`, `AccountState`, `AccountLedger` | Exact `BigDecimal` balances, commissions, FX, reservations, margins, equity, and Python `Decimal` reporting; legacy double projections remain for compatibility |
 | Local order emulator | Implemented | `OrderEmulator` | Snapshot-triggered local ownership and release |
-| Disruptor bus | Scaffold only | `DisruptorMessageBus` | Publish method is still a TODO |
+| Disruptor market-data ingress | Implemented optional | `DisruptorMessageBus`, `DisruptorMarketDataIngress`, `NautilusKernel`, `BinanceFuturesLiveRuntime` | Bounded multi-producer ring buffer, one ordered consumer, backpressure, drain-on-close, and consumer-failure reporting |
 | External ring-buffer backing | Implemented as backing | `RingBufferMessageBusBacking` | Bounded queue; full-buffer policy currently drops and reports |
 | Persistence/event store | Implemented | `PersistentEventStore`, `EventReplayer`, `EventCheckpoint` | Versioned append-only JSONL, projections, synchronous replay, and checkpoint resume |
 | Binance USD-M Futures adapter | Implemented baseline | `BinanceFuturesAdapter`, `BinanceFuturesLiveRuntime` | Public streams, signed REST, user data, reconnects, and kernel routing; Testnet credentials remain opt-in |
@@ -377,10 +377,11 @@ The following catalog covers the Java production types currently under `java/src
 | `BusMessage` | External message envelope | Carries payload type and serialized payload |
 | `MessageBusEvent` | Topic/payload event record | Data unit for transport-backed bus implementations |
 | `MessageBusRouter` | Legacy untyped routing contract | Extension point for non-generic bus consumers |
-| `MessageHandler` | Legacy untyped callback contract | Supports the Disruptor-shaped scaffold |
+| `MessageHandler` | Legacy untyped callback contract | Routes ring-buffer messages to topic subscribers |
 | `MessageBusBacking` | External transport backing contract | Separates transport buffering from synchronous bus semantics |
 | `RingBufferMessageBusBacking` | Bounded `ArrayBlockingQueue` backing | External-flow buffering with explicit full-buffer behavior |
-| `DisruptorMessageBus` | LMAX Disruptor-shaped facade | Performance experiment/scaffold; publish integration remains TODO |
+| `DisruptorMessageBus` | LMAX Disruptor-backed asynchronous handoff | Optional same-JVM bounded multi-producer queue; direct typed `MessageBus` remains the local correctness path |
+| `DisruptorMarketDataIngress` | Feed callback to trading-loop handoff | Reuses Disruptor to deliver Binance book, market, and trade objects through `DataEngine` |
 | `SerializationEncoding` | Encoding vocabulary | Configuration marker for serialized messages |
 
 ### 5.9 Portfolio, risk, and reconciliation packages
@@ -665,9 +666,9 @@ Current Java tests cover:
 - cash/margin account settlement and account-state events
 - account-state parity across balance, margin, unrealized PnL, and equity
 - persistent JSONL event storage, replay projections, and checkpoint recovery
-- Binance adapter URL, signing, market-data, user-data, and kernel integration
+- Binance adapter URL, signing, market-data, user-data, kernel integration, and Disruptor ingress
 
-The Java module currently contains 168 production source files and 20 test files. The test suite is intentionally focused on the current deterministic backtest and one live-adapter slice; it is not yet a complete replacement of all Nautilus modules.
+The Java module currently contains 172 production source files and 24 test files. The test suite is intentionally focused on the current deterministic backtest and one live-adapter slice; it is not yet a complete replacement of all Nautilus modules.
 
 ## 10. Current Gaps and Recommended Next Work
 
@@ -676,7 +677,7 @@ The Java module currently contains 168 production source files and 20 test files
 3. **Additional adapters:** add other venues only after the Binance contract and operational path are stable.
 4. **Broader account parity:** extend exact monetary parity to additional Rust account-event and derivative-margin fixtures.
 5. **Execution algorithms:** actual algorithm scheduling rather than the current interface boundary.
-6. **Disruptor integration:** complete the `DisruptorMessageBus` publication path only if profiling shows the synchronous bus is insufficient.
+6. **Disruptor tuning:** benchmark ring-buffer capacity, wait strategy, and producer contention against the direct bus and Rust typed-router path.
 
 ## 11. Design Conclusion
 

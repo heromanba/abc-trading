@@ -4,6 +4,7 @@ import com.abc.trading.data.MarketDataSnapshot;
 import com.abc.trading.data.OrderBookSnapshot;
 import com.abc.trading.execution.OrderFill;
 import com.abc.trading.portfolio.AccountStateEvent;
+import com.abc.trading.msgbus.DisruptorMarketDataIngress;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -16,6 +17,24 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BinanceFuturesLiveRuntimeTest {
+    @Test
+    void routesBinanceMarketDataThroughDisruptorIngress() {
+        List<Object> directEvents = new ArrayList<>();
+        List<Object> ingestedEvents = new ArrayList<>();
+        try (DisruptorMarketDataIngress ingress = new DisruptorMarketDataIngress(ingestedEvents::add)) {
+            BinanceFuturesLiveRuntime runtime = new BinanceFuturesLiveRuntime(
+                    new BinanceFuturesConfig(BinanceEnvironment.TESTNET, null, null, List.of("BTCUSDT")),
+                    new FakeHttp(), directEvents::add, ingress::publish);
+
+            runtime.acceptMarketPayload("{\"e\":\"depthUpdate\",\"E\":1000,\"T\":999,\"s\":\"BTCUSDT\",\"U\":10,\"u\":12,\"pu\":9,\"b\":[[\"100.10\",\"0.125\"]],\"a\":[[\"100.20\",\"2.500\"]]}");
+            ingress.close();
+        }
+
+        assertEquals(List.of(OrderBookSnapshot.class, MarketDataSnapshot.class),
+                ingestedEvents.stream().map(Object::getClass).toList());
+        assertTrue(directEvents.isEmpty());
+    }
+
     @Test
     void bridgesBinanceMarketAndUserEventsIntoCoreEvents() {
         List<Object> events = new ArrayList<>();

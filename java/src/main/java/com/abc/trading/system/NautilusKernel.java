@@ -19,6 +19,7 @@ import com.abc.trading.adapters.binance.BinanceFuturesLiveRuntime;
 import com.abc.trading.adapters.binance.BinanceHttpTransport;
 import com.abc.trading.data.DataEngine;
 import com.abc.trading.msgbus.MessageBus;
+import com.abc.trading.msgbus.DisruptorMarketDataIngress;
 import com.abc.trading.portfolio.Portfolio;
 import com.abc.trading.risk.RiskEngine;
 import com.abc.trading.execution.ExecutionEngine;
@@ -42,6 +43,7 @@ import java.util.List;
 /** Minimal Java runtime composition root modeled after NautilusKernel. */
 public final class NautilusKernel implements AutoCloseable {
     private final MessageBus bus;
+    private final DisruptorMarketDataIngress marketDataIngress;
     private final Clock clock;
     private final Cache cache;
     private final Portfolio portfolio;
@@ -68,6 +70,7 @@ public final class NautilusKernel implements AutoCloseable {
         riskEngine = new RiskEngine(Integer.MAX_VALUE, cache, portfolio);
         executionEngine = new ExecutionEngine(bus, riskEngine, portfolio, cache);
         dataEngine = new DataEngine(bus);
+        marketDataIngress = new DisruptorMarketDataIngress(this::publishLiveMarketData);
         trader = new Trader(bus, cache, () -> inputSequence);
     }
 
@@ -167,7 +170,8 @@ public final class NautilusKernel implements AutoCloseable {
         if (lifecycle.state() != ComponentState.PRE_INITIALIZED && lifecycle.state() != ComponentState.READY) {
             throw new IllegalStateException("Cannot add live adapters after initialization");
         }
-        BinanceFuturesLiveRuntime runtime = new BinanceFuturesLiveRuntime(config, http, bus::publish);
+        BinanceFuturesLiveRuntime runtime = new BinanceFuturesLiveRuntime(
+            config, http, bus::publish, marketDataIngress::publish);
         executionEngine.registerClient(runtime);
         liveClients.add(runtime);
         return runtime;
@@ -359,6 +363,7 @@ public final class NautilusKernel implements AutoCloseable {
         if (lifecycle.state() != ComponentState.RUNNING) return;
         lifecycle.stop();
         for (DataClient client : liveClients) client.stop();
+        marketDataIngress.drain();
         trader.stop();
         lifecycle.stopCompleted();
     }
@@ -379,6 +384,7 @@ public final class NautilusKernel implements AutoCloseable {
             throw new IllegalStateException("Kernel cannot dispose from state: " + lifecycle.state());
         }
         lifecycle.dispose();
+        marketDataIngress.close();
         trader.dispose();
         lifecycle.disposeCompleted();
     }
@@ -390,6 +396,37 @@ public final class NautilusKernel implements AutoCloseable {
     public Portfolio portfolio() { return portfolio; }
     public RiskEngine riskEngine() { return riskEngine; }
     public ExecutionEngine executionEngine() { return executionEngine; }
+
+    private void publishLiveMarketData(Object data) {
+        inputSequence++;
+        if (data instanceof Bar bar) {
+            clock.setTimestampNs(bar.tsInit());
+            dataEngine.publishBar(bar);
+        } else if (data instanceof MarketDataSnapshot snapshot) {
+            clock.setTimestampNs(snapshot.tsInit());
+            dataEngine.publishMarketData(snapshot);
+        } else if (data instanceof OrderBookSnapshot snapshot) {
+            clock.setTimestampNs(snapshot.tsInit());
+            dataEngine.publishOrderBook(snapshot);
+        } else if (data instanceof TradeTick trade) {
+            clock.setTimestampNs(trade.tsInit());
+            dataEngine.publishTradeTick(trade);
+        } else if (data instanceof OrderBookDelta delta) {
+            clock.setTimestampNs(delta.tsInit());
+            dataEngine.publishOrderBookDelta(delta);
+        } else if (data instanceof OrderBookL3Snapshot snapshot) {
+            clock.setTimestampNs(snapshot.tsInit());
+            dataEngine.publishOrderBookL3(snapshot);
+        } else if (data instanceof OrderBookL3Delta delta) {
+            clock.setTimestampNs(delta.tsInit());
+            dataEngine.publishOrderBookL3Delta(delta);
+        } else if (data instanceof FxRateUpdate update) {
+            clock.setTimestampNs(update.tsInit());
+            dataEngine.publishFxRate(update);
+        } else {
+            bus.publish(data);
+        }
+    }
 
     public SimulatedExchange exchange(String venue) {
         SimulatedExchange exchange = exchanges.get(new VenueId(venue));

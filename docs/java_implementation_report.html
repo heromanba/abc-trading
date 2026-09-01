@@ -326,10 +326,10 @@ MONETARY exact API pass</code></pre>
 <td>Snapshot-triggered local ownership and release</td>
 </tr>
 <tr class="even">
-<td>Disruptor bus</td>
-<td>Scaffold only</td>
-<td><code>DisruptorMessageBus</code></td>
-<td>Publish method is still a TODO</td>
+<td>Disruptor market-data ingress</td>
+<td>Implemented optional</td>
+<td><code>DisruptorMessageBus</code>, <code>DisruptorMarketDataIngress</code>, <code>NautilusKernel</code>, <code>BinanceFuturesLiveRuntime</code></td>
+<td>Bounded multi-producer ring buffer, one ordered consumer, backpressure, drain-on-close, and consumer-failure reporting</td>
 </tr>
 <tr class="odd">
 <td>External ring-buffer backing</td>
@@ -1153,7 +1153,7 @@ MONETARY exact API pass</code></pre>
 <tr class="even">
 <td><code>MessageHandler</code></td>
 <td>Legacy untyped callback contract</td>
-<td>Supports the Disruptor-shaped scaffold</td>
+<td>Routes ring-buffer messages to topic subscribers</td>
 </tr>
 <tr class="odd">
 <td><code>MessageBusBacking</code></td>
@@ -1167,10 +1167,15 @@ MONETARY exact API pass</code></pre>
 </tr>
 <tr class="odd">
 <td><code>DisruptorMessageBus</code></td>
-<td>LMAX Disruptor-shaped facade</td>
-<td>Performance experiment/scaffold; publish integration remains TODO</td>
+<td>LMAX Disruptor-backed asynchronous handoff</td>
+<td>Optional same-JVM bounded multi-producer queue; direct typed <code>MessageBus</code> remains the local correctness path</td>
 </tr>
 <tr class="even">
+<td><code>DisruptorMarketDataIngress</code></td>
+<td>Feed callback to trading-loop handoff</td>
+<td>Reuses Disruptor to deliver Binance book, market, and trade objects through <code>DataEngine</code></td>
+</tr>
+<tr class="odd">
 <td><code>SerializationEncoding</code></td>
 <td>Encoding vocabulary</td>
 <td>Configuration marker for serialized messages</td>
@@ -1490,9 +1495,9 @@ limit-buy-1   100.00 x 2  MAKER</code></pre>
 <li>cash/margin account settlement and account-state events</li>
 <li>account-state parity across balance, margin, unrealized PnL, and equity</li>
 <li>persistent JSONL event storage, replay projections, and checkpoint recovery</li>
-<li>Binance adapter URL, signing, market-data, user-data, and kernel integration</li>
+<li>Binance adapter URL, signing, market-data, user-data, kernel integration, and Disruptor ingress</li>
 </ul>
-<p>The Java module currently contains 168 production source files and 20 test files. The test suite is intentionally focused on the current deterministic backtest and one live-adapter slice; it is not yet a complete replacement of all Nautilus modules.</p>
+<p>The Java module currently contains 172 production source files and 24 test files. The test suite is intentionally focused on the current deterministic backtest and one live-adapter slice; it is not yet a complete replacement of all Nautilus modules.</p>
 <h2 id="current-gaps-and-recommended-next-work">10. Current Gaps and Recommended Next Work</h2>
 <ol type="1">
 <li><strong>Exact account parity:</strong> broader Rust account-event fixtures, full derivative margin models, and richer market-driven FX coverage remain.</li>
@@ -1500,7 +1505,7 @@ limit-buy-1   100.00 x 2  MAKER</code></pre>
 <li><strong>Additional adapters:</strong> add other venues only after the Binance contract and operational path are stable.</li>
 <li><strong>Broader account parity:</strong> extend exact monetary parity to additional Rust account-event and derivative-margin fixtures.</li>
 <li><strong>Execution algorithms:</strong> actual algorithm scheduling rather than the current interface boundary.</li>
-<li><strong>Disruptor integration:</strong> complete the <code>DisruptorMessageBus</code> publication path only if profiling shows the synchronous bus is insufficient.</li>
+<li><strong>Disruptor tuning:</strong> benchmark ring-buffer capacity, wait strategy, and producer contention against the direct bus and Rust typed-router path.</li>
 </ol>
 <h2 id="design-conclusion">11. Design Conclusion</h2>
 <p>The Java implementation has moved beyond isolated skeleton classes. It now forms a coherent deterministic backtest runtime with explicit Rust-shaped ownership boundaries, durable replay evidence, and one Binance USD-M live-adapter slice. The next work is operational Testnet hardening and deeper account parity, not multiplying adapters before the first one is proven.</p>
