@@ -4,6 +4,7 @@ import com.abc.trading.execution.OrderIntent;
 import com.abc.trading.data.TickScheme;
 import com.abc.trading.data.InstrumentSpec;
 import com.abc.trading.data.MarginModelType;
+import com.abc.trading.data.DerivativeType;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -68,6 +69,19 @@ public final class Cache {
                 initialMarginPerUnit, maintenanceMarginPerUnit, sizePrecision,
                 sizeIncrement, pricePrecision, priceTickSize));
             }
+
+    public void addInstrument(String symbol, String venue, TickScheme tickScheme,
+            String baseCurrency, String quoteCurrency, double marginInitialRate,
+            double marginMaintenanceRate, MarginModelType marginModelType,
+            double initialMarginPerUnit, double maintenanceMarginPerUnit,
+            int sizePrecision, BigDecimal sizeIncrement, int pricePrecision,
+            BigDecimal priceTickSize, DerivativeType derivativeType,
+            BigDecimal contractMultiplier, String settlementCurrency) {
+        addInstrument(new InstrumentSpec(symbol, venue, tickScheme, baseCurrency, quoteCurrency,
+            marginInitialRate, marginMaintenanceRate, marginModelType,
+            initialMarginPerUnit, maintenanceMarginPerUnit, sizePrecision, sizeIncrement,
+            pricePrecision, priceTickSize, derivativeType, contractMultiplier, settlementCurrency));
+    }
 
     public void addInstrument(InstrumentSpec instrument) {
         String symbol = instrument.symbol();

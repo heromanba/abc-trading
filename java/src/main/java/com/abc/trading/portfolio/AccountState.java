@@ -20,6 +20,7 @@ public final class AccountState {
     private final BigDecimal equityDecimal;
     private final boolean marginCall;
     private final boolean liquidationRequired;
+    private final MarginMode marginMode;
 
     public AccountState(String venue, String currency, double balanceTotal, double balanceLocked,
             double balanceFree, double marginInitial, double marginMaintenance, long tsInit) {
@@ -27,7 +28,7 @@ public final class AccountState {
                 BigDecimal.valueOf(balanceFree), BigDecimal.valueOf(marginInitial),
                 BigDecimal.valueOf(marginMaintenance), tsInit,
                 Map.of(currency, new AccountBalance(currency, balanceTotal, balanceLocked, balanceFree)),
-                BigDecimal.ZERO, BigDecimal.valueOf(balanceTotal), false, false);
+                BigDecimal.ZERO, BigDecimal.valueOf(balanceTotal), false, false, MarginMode.CROSS);
     }
 
     public AccountState(String venue, String currency, double balanceTotal, double balanceLocked,
@@ -36,13 +37,22 @@ public final class AccountState {
         this(venue, currency, BigDecimal.valueOf(balanceTotal), BigDecimal.valueOf(balanceLocked),
                 BigDecimal.valueOf(balanceFree), BigDecimal.valueOf(marginInitial),
                 BigDecimal.valueOf(marginMaintenance), tsInit, balances, BigDecimal.ZERO,
-                BigDecimal.valueOf(balanceTotal), false, false);
+                BigDecimal.valueOf(balanceTotal), false, false, MarginMode.CROSS);
     }
 
     public AccountState(String venue, String currency, BigDecimal balanceTotal, BigDecimal balanceLocked,
             BigDecimal balanceFree, BigDecimal marginInitial, BigDecimal marginMaintenance, long tsInit,
             Map<String, AccountBalance> balances, BigDecimal unrealizedPnl, BigDecimal equity,
             boolean marginCall, boolean liquidationRequired) {
+            this(venue, currency, balanceTotal, balanceLocked, balanceFree, marginInitial,
+                marginMaintenance, tsInit, balances, unrealizedPnl, equity, marginCall,
+                liquidationRequired, MarginMode.CROSS);
+            }
+
+            public AccountState(String venue, String currency, BigDecimal balanceTotal, BigDecimal balanceLocked,
+                BigDecimal balanceFree, BigDecimal marginInitial, BigDecimal marginMaintenance, long tsInit,
+                Map<String, AccountBalance> balances, BigDecimal unrealizedPnl, BigDecimal equity,
+                boolean marginCall, boolean liquidationRequired, MarginMode marginMode) {
         if (venue == null || venue.isBlank()) throw new IllegalArgumentException("venue is required");
         if (currency == null || currency.isBlank()) throw new IllegalArgumentException("currency is required");
         balanceTotalDecimal = Objects.requireNonNull(balanceTotal, "balanceTotal");
@@ -62,12 +72,14 @@ public final class AccountState {
             throw new IllegalArgumentException("equity must equal balanceTotal + unrealizedPnl");
         }
         if (balances == null || balances.isEmpty()) throw new IllegalArgumentException("balances are required");
+        if (marginMode == null) throw new IllegalArgumentException("marginMode is required");
         this.venue = venue;
         this.currency = currency;
         this.tsInit = tsInit;
         this.balances = Map.copyOf(new LinkedHashMap<>(balances));
         this.marginCall = marginCall;
         this.liquidationRequired = liquidationRequired;
+        this.marginMode = marginMode;
     }
 
     public String venue() { return venue; }
@@ -83,6 +95,7 @@ public final class AccountState {
     public double equity() { return equityDecimal.doubleValue(); }
     public boolean marginCall() { return marginCall; }
     public boolean liquidationRequired() { return liquidationRequired; }
+    public MarginMode marginMode() { return marginMode; }
     public BigDecimal balanceTotalDecimal() { return balanceTotalDecimal; }
     public BigDecimal balanceLockedDecimal() { return balanceLockedDecimal; }
     public BigDecimal balanceFreeDecimal() { return balanceFreeDecimal; }

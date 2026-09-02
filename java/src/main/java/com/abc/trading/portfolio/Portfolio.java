@@ -6,6 +6,8 @@ import com.abc.trading.execution.LimitOrderIntent;
 import com.abc.trading.execution.OrderFill;
 import com.abc.trading.data.FxRateUpdate;
 import com.abc.trading.data.MarketDataSnapshot;
+import com.abc.trading.data.FundingRateUpdate;
+import com.abc.trading.data.InstrumentSpec;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -43,13 +45,17 @@ public final class Portfolio {
         if (fill.side() == com.abc.trading.execution.SignalDirection.SELL) signedQuantity = signedQuantity.negate();
         BigDecimal nextPosition = previousPosition.add(signedQuantity);
         BigDecimal realizedPnlDelta = fill.commission().amountDecimal().negate();
+        var instrument = cache.hasInstrument(fill.symbol()) ? cache.instrument(fill.symbol()) : null;
 
         if (previousPosition.signum() != 0 && previousPosition.signum() != signedQuantity.signum()) {
             BigDecimal closedQuantity = previousPosition.abs().min(signedQuantity.abs());
-                BigDecimal direction = previousPosition.signum() > 0 ? BigDecimal.ONE : BigDecimal.ONE.negate();
-                realizedPnlDelta = realizedPnlDelta.add(
-                    BigDecimal.valueOf(fill.price()).subtract(BigDecimal.valueOf(previousAverage))
-                        .multiply(closedQuantity, java.math.MathContext.DECIMAL128).multiply(direction));
+            BigDecimal closeDirection = previousPosition.signum() > 0 ? BigDecimal.ONE : BigDecimal.ONE.negate();
+            BigDecimal signedClosedQuantity = closedQuantity.multiply(closeDirection);
+            BigDecimal pnl = instrument == null
+                    ? signedClosedQuantity.multiply(BigDecimal.valueOf(fill.price() - previousAverage))
+                    : instrument.calculatePnl(signedClosedQuantity, BigDecimal.valueOf(previousAverage),
+                        BigDecimal.valueOf(fill.price()));
+            realizedPnlDelta = realizedPnlDelta.add(pnl);
         }
 
         if (nextPosition.signum() == 0) {
@@ -66,10 +72,10 @@ public final class Portfolio {
         BigDecimal cumulativeRealizedPnl = realizedPnl.getOrDefault(fill.symbol(), BigDecimal.ZERO).add(realizedPnlDelta);
         realizedPnl.put(fill.symbol(), cumulativeRealizedPnl);
         cache.updatePosition(fill.symbol(), nextPosition);
-        if (cache.hasInstrument(fill.symbol())) {
+        if (instrument != null) {
             String venue = cache.venue(fill.symbol());
-                accountLedger.applyFill(venue, fill, realizedPnlDelta, cache.instrument(fill.symbol()));
-                accountLedger.updatePosition(venue, cache.instrument(fill.symbol()), nextPosition,
+                accountLedger.applyFill(venue, fill, realizedPnlDelta, instrument);
+                accountLedger.updatePosition(venue, instrument, nextPosition,
                     averagePrices.getOrDefault(fill.symbol(), 0.0), fill.marketTimestamp());
         }
         return new PositionUpdate(
@@ -108,6 +114,11 @@ public final class Portfolio {
         accountLedger.configure(venue, startingBalance, currency, leverage, accountType);
     }
 
+    public void configureAccount(String venue, BigDecimal startingBalance, String currency,
+            BigDecimal leverage, AccountType accountType, MarginMode marginMode) {
+        accountLedger.configure(venue, startingBalance, currency, leverage, accountType, marginMode);
+    }
+
     public void deposit(String venue, String currency, double amount) {
         accountLedger.deposit(venue, currency, amount);
     }
@@ -133,6 +144,15 @@ public final class Portfolio {
         String venue = cache.venue(snapshot.symbol());
         accountLedger.updateMarketPrice(venue, cache.instrument(snapshot.symbol()), snapshot.mark(), snapshot.tsInit());
         return accountLedger.state(venue, snapshot.tsInit());
+    }
+
+    public FundingPayment applyFunding(FundingRateUpdate update) {
+        if (!cache.hasInstrument(update.symbol())) return null;
+        String venue = cache.venue(update.symbol());
+        InstrumentSpec instrument = cache.instrument(update.symbol());
+        FundingPayment payment = accountLedger.applyFunding(venue, update, instrument);
+        if (payment != null) realizedPnl.merge(update.symbol(), payment.amount(), BigDecimal::add);
+        return payment;
     }
 
     public Map<String, AccountState> accountStates(long timestamp) {

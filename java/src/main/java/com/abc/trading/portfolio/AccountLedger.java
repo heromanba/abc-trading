@@ -5,6 +5,7 @@ import com.abc.trading.data.FxRateUpdate;
 import com.abc.trading.execution.OrderFill;
 import com.abc.trading.execution.SignalDirection;
 import com.abc.trading.data.Quantity;
+import com.abc.trading.data.FundingRateUpdate;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -19,6 +20,7 @@ public final class AccountLedger {
     private final Map<String, Account> accounts = new LinkedHashMap<>();
     private final Map<String, Reservation> reservations = new LinkedHashMap<>();
     private final Map<String, BigDecimal> fxRates = new LinkedHashMap<>();
+    private final java.util.Set<String> fundingSettlements = new java.util.HashSet<>();
 
     public void configure(String venue, double startingBalance, String currency, double leverage) {
         configure(venue, BigDecimal.valueOf(startingBalance), currency, BigDecimal.valueOf(leverage), AccountType.MARGIN);
@@ -31,6 +33,11 @@ public final class AccountLedger {
 
         public void configure(String venue, BigDecimal startingBalance, String currency, BigDecimal leverage,
             AccountType accountType) {
+            configure(venue, startingBalance, currency, leverage, accountType, MarginMode.CROSS);
+            }
+
+            public void configure(String venue, BigDecimal startingBalance, String currency, BigDecimal leverage,
+                AccountType accountType, MarginMode marginMode) {
         if (venue == null || venue.isBlank()) throw new IllegalArgumentException("venue is required");
         if (startingBalance == null || startingBalance.signum() < 0) {
             throw new IllegalArgumentException("startingBalance must be finite and non-negative");
@@ -38,8 +45,9 @@ public final class AccountLedger {
         if (currency == null || currency.isBlank()) throw new IllegalArgumentException("currency is required");
         if (leverage == null || leverage.signum() <= 0) throw new IllegalArgumentException("leverage must be positive");
         if (accountType == null) throw new IllegalArgumentException("accountType is required");
+        if (marginMode == null) throw new IllegalArgumentException("marginMode is required");
         if (accounts.containsKey(venue)) throw new IllegalArgumentException("account already configured: " + venue);
-        accounts.put(venue, new Account(venue, startingBalance, currency, leverage, accountType));
+        accounts.put(venue, new Account(venue, startingBalance, currency, leverage, accountType, marginMode));
     }
 
     public boolean configured(String venue) {
@@ -72,6 +80,25 @@ public final class AccountLedger {
 
     public void applyFxRate(FxRateUpdate update) {
         setFxRate(update.fromCurrency(), update.toCurrency(), update.rate());
+    }
+
+    public FundingPayment applyFunding(String venue, FundingRateUpdate update, InstrumentSpec instrument) {
+        Account account = account(venue);
+        if (account == null) return null;
+        if (!instrument.derivativeType().isPerpetual()) return null;
+        String settlementKey = venue + "|" + update.symbol() + "|"
+                + (update.nextFundingTimestamp() == null ? update.tsEvent() : update.nextFundingTimestamp());
+        if (!fundingSettlements.add(settlementKey)) return null;
+        MarginRequirement position = account.positionMargins.get(instrument.symbol());
+        if (position == null || position.quantity.signum() == 0) return null;
+        BigDecimal notional = instrument.notional(position.quantity.abs(), BigDecimal.valueOf(position.markPrice));
+        BigDecimal direction = position.quantity.signum() > 0 ? BigDecimal.ONE.negate() : BigDecimal.ONE;
+        BigDecimal amount = notional.multiply(update.rate(), DECIMAL_CONTEXT).multiply(direction, DECIMAL_CONTEXT);
+        BigDecimal settled = convert(amount, instrument.settlementCurrency(), account.currency);
+        if (settled == null) throw new IllegalArgumentException("missing FX rate for funding settlement");
+        account.totals.merge(account.currency, settled, BigDecimal::add);
+        return new FundingPayment(venue, instrument.symbol(), update.rate(), notional, amount,
+            instrument.settlementCurrency(), update.tsEvent());
     }
 
     public Map<String, AccountState> states(long timestamp) {
@@ -195,24 +222,33 @@ public final class AccountLedger {
             double averagePrice, long timestamp) {
         Account account = account(venue);
         if (account == null) return;
-        if (position.signum() == 0) account.positionMargins.remove(instrument.symbol());
-        else account.positionMargins.put(instrument.symbol(), new MarginRequirement(
+        if (position.signum() == 0) {
+            account.positionMargins.remove(instrument.symbol());
+            account.isolatedCollateral.remove(instrument.symbol());
+        } else {
+            BigDecimal initial = account.type == AccountType.CASH ? BigDecimal.ZERO
+                : marginFor(instrument, Quantity.fromDecimal(position.abs(), position.scale()), averagePrice,
+                    account.leverage, false);
+            account.positionMargins.put(instrument.symbol(), new MarginRequirement(
             instrument.symbol(), marginCurrency(instrument), position, averagePrice, averagePrice,
-            account.type == AccountType.CASH ? BigDecimal.ZERO : marginFor(instrument, Quantity.fromDecimal(position.abs(), position.scale()), averagePrice,
-                account.leverage, false),
+            initial,
             account.type == AccountType.CASH ? BigDecimal.ZERO : marginFor(instrument, Quantity.fromDecimal(position.abs(), position.scale()), averagePrice,
                 account.leverage, true),
-            instrument.marginModelType() == com.abc.trading.data.MarginModelType.INVERSE_NOTIONAL_RATE));
+            instrument.derivativeType().isInverse(), instrument.contractMultiplier()));
+            if (account.marginMode == MarginMode.ISOLATED) {
+                account.isolatedCollateral.put(instrument.symbol(), initial);
+            }
         }
+    }
 
-        public void updateMarketPrice(String venue, InstrumentSpec instrument, double markPrice, long timestamp) {
+    public void updateMarketPrice(String venue, InstrumentSpec instrument, double markPrice, long timestamp) {
         Account account = account(venue);
         if (account == null) return;
         MarginRequirement position = account.positionMargins.get(instrument.symbol());
         if (position != null) {
             account.positionMargins.put(instrument.symbol(), new MarginRequirement(
                 position.symbol, position.currency, position.quantity, position.averagePrice,
-                markPrice, position.initial, position.maintenance, position.inverse));
+                markPrice, position.initial, position.maintenance, position.inverse, position.multiplier));
         }
     }
 
@@ -232,11 +268,11 @@ public final class AccountLedger {
         BigDecimal maintenance = account.maintenanceMargin(account.currency, this);
         BigDecimal unrealized = account.unrealized(account.currency, this);
         BigDecimal equity = primary.totalDecimal().add(unrealized);
-        boolean marginCall = maintenance.signum() > 0 && equity.compareTo(maintenance) < 0;
+        boolean marginCall = account.isMaintenanceBreached(this, equity, maintenance);
         boolean liquidationRequired = marginCall;
         return new AccountState(venue, account.currency,
             primary.totalDecimal(), locked, free, initial, maintenance, timestamp, balances,
-            unrealized, equity, marginCall, liquidationRequired);
+            unrealized, equity, marginCall, liquidationRequired, account.marginMode);
     }
 
     private Account account(String venue) {
@@ -262,7 +298,7 @@ public final class AccountLedger {
         BigDecimal maintenance = account.maintenanceMargin(account.currency, this);
         BigDecimal unrealized = account.unrealized(account.currency, this);
         BigDecimal equity = account.totals.getOrDefault(account.currency, BigDecimal.ZERO).add(unrealized);
-        return maintenance.signum() > 0 && equity.compareTo(maintenance) < 0;
+        return account.isMaintenanceBreached(this, equity, maintenance);
     }
 
     private static BigDecimal margin(Quantity quantity, double price, BigDecimal leverage, double rate) {
@@ -315,20 +351,31 @@ public final class AccountLedger {
         private final String currency;
         private final BigDecimal leverage;
         private final AccountType type;
+        private final MarginMode marginMode;
         private final Map<String, BigDecimal> totals = new LinkedHashMap<>();
         private final Map<String, MarginRequirement> positionMargins = new LinkedHashMap<>();
-        private Account(String venue, BigDecimal total, String currency, BigDecimal leverage, AccountType type) {
+        private final Map<String, BigDecimal> isolatedCollateral = new LinkedHashMap<>();
+        private Account(String venue, BigDecimal total, String currency, BigDecimal leverage,
+            AccountType type, MarginMode marginMode) {
             this.venue = venue;
             this.currency = currency;
             this.leverage = leverage;
             this.type = type;
+            this.marginMode = marginMode;
             this.totals.put(currency, total);
         }
 
         private BigDecimal locked(Map<String, Reservation> reservations, String currency, AccountLedger ledger) {
-            BigDecimal result = positionMargins.values().stream()
-                .map(margin -> ledger.convert(margin.maintenance, margin.currency, currency))
-                .filter(java.util.Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal result = marginMode == MarginMode.ISOLATED
+                ? isolatedCollateral.entrySet().stream()
+                    .map(entry -> {
+                        MarginRequirement margin = positionMargins.get(entry.getKey());
+                        return margin == null ? entry.getValue() : ledger.convert(entry.getValue(), margin.currency, currency);
+                    })
+                    .filter(java.util.Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add)
+                : positionMargins.values().stream()
+                    .map(margin -> ledger.convert(margin.maintenance, margin.currency, currency))
+                    .filter(java.util.Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
             for (Reservation reservation : reservations.values()) {
                 if (reservation.venue.equals(venue)) {
                     BigDecimal converted = ledger == null || reservation.currency.equals(currency)
@@ -341,6 +388,14 @@ public final class AccountLedger {
 
         private BigDecimal initialMargin(String currency, Map<String, Reservation> reservations, AccountLedger ledger) {
             BigDecimal result = BigDecimal.ZERO;
+            if (marginMode == MarginMode.ISOLATED) {
+                result = isolatedCollateral.entrySet().stream()
+                    .map(entry -> {
+                        MarginRequirement margin = positionMargins.get(entry.getKey());
+                        return margin == null ? entry.getValue() : ledger.convert(entry.getValue(), margin.currency, currency);
+                    })
+                    .filter(java.util.Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+            }
             for (Reservation reservation : reservations.values()) {
                 if (reservation.venue.equals(venue)) {
                     BigDecimal converted = ledger.convert(reservation.margin, reservation.currency, currency);
@@ -360,15 +415,42 @@ public final class AccountLedger {
                     return positionMargins.values().stream()
                         .map(position -> ledger.convert(
                             position.inverse
-                                ? position.quantity.multiply(BigDecimal.ONE.divide(BigDecimal.valueOf(position.averagePrice), DECIMAL_CONTEXT)
-                                    .subtract(BigDecimal.ONE.divide(BigDecimal.valueOf(position.markPrice), DECIMAL_CONTEXT)), DECIMAL_CONTEXT)
-                                : BigDecimal.valueOf(position.markPrice - position.averagePrice).multiply(position.quantity, DECIMAL_CONTEXT),
+                                ? position.quantity.abs().multiply(position.multiplier, DECIMAL_CONTEXT)
+                                    .multiply(position.quantity.signum() > 0
+                                        ? BigDecimal.ONE.divide(BigDecimal.valueOf(position.averagePrice), DECIMAL_CONTEXT)
+                                            .subtract(BigDecimal.ONE.divide(BigDecimal.valueOf(position.markPrice), DECIMAL_CONTEXT), DECIMAL_CONTEXT)
+                                        : BigDecimal.ONE.divide(BigDecimal.valueOf(position.markPrice), DECIMAL_CONTEXT)
+                                            .subtract(BigDecimal.ONE.divide(BigDecimal.valueOf(position.averagePrice), DECIMAL_CONTEXT), DECIMAL_CONTEXT), DECIMAL_CONTEXT)
+                                : BigDecimal.valueOf(position.markPrice - position.averagePrice)
+                                    .multiply(position.quantity, DECIMAL_CONTEXT).multiply(position.multiplier, DECIMAL_CONTEXT),
                             position.currency, currency))
                         .filter(java.util.Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
                 }
+
+        private boolean isMaintenanceBreached(AccountLedger ledger, BigDecimal equity,
+                BigDecimal maintenance) {
+            if (marginMode == MarginMode.CROSS) {
+                return maintenance.signum() > 0 && equity.compareTo(maintenance) < 0;
+            }
+            for (MarginRequirement position : positionMargins.values()) {
+                BigDecimal collateral = isolatedCollateral.getOrDefault(position.symbol, BigDecimal.ZERO);
+                BigDecimal pnl = position.inverse
+                    ? position.quantity.abs().multiply(position.multiplier, DECIMAL_CONTEXT)
+                        .multiply(position.quantity.signum() > 0
+                            ? BigDecimal.ONE.divide(BigDecimal.valueOf(position.averagePrice), DECIMAL_CONTEXT)
+                                .subtract(BigDecimal.ONE.divide(BigDecimal.valueOf(position.markPrice), DECIMAL_CONTEXT), DECIMAL_CONTEXT)
+                            : BigDecimal.ONE.divide(BigDecimal.valueOf(position.markPrice), DECIMAL_CONTEXT)
+                                .subtract(BigDecimal.ONE.divide(BigDecimal.valueOf(position.averagePrice), DECIMAL_CONTEXT), DECIMAL_CONTEXT), DECIMAL_CONTEXT)
+                    : BigDecimal.valueOf(position.markPrice - position.averagePrice)
+                        .multiply(position.quantity, DECIMAL_CONTEXT).multiply(position.multiplier, DECIMAL_CONTEXT);
+                BigDecimal isolatedEquity = collateral.add(pnl);
+                if (isolatedEquity.compareTo(position.maintenance) < 0) return true;
+            }
+            return false;
+        }
     }
 
     private record Reservation(String venue, String currency, Quantity quantity, BigDecimal margin) { }
         private record MarginRequirement(String symbol, String currency, BigDecimal quantity, double averagePrice,
-            double markPrice, BigDecimal initial, BigDecimal maintenance, boolean inverse) { }
+            double markPrice, BigDecimal initial, BigDecimal maintenance, boolean inverse, BigDecimal multiplier) { }
 }

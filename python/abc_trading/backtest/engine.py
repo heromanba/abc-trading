@@ -7,7 +7,7 @@ from pathlib import Path
 from decimal import Decimal
 
 from abc_trading._java import ensure_jvm, java_class
-from abc_trading.model.data import Bar, MarketDataSnapshot, OrderBookSnapshot, OrderBookDelta, OrderBookL3Snapshot, OrderBookL3Delta, TradeTick, FxRateUpdate, QuantityValue, _java_quantity
+from abc_trading.model.data import Bar, MarketDataSnapshot, OrderBookSnapshot, OrderBookDelta, OrderBookL3Snapshot, OrderBookL3Delta, TradeTick, FxRateUpdate, FundingRateUpdate, QuantityValue, _java_quantity
 
 
 class StrategyContext:
@@ -194,15 +194,18 @@ class BacktestEngine:
 
     def configure_account(
         self, venue: str, starting_balance: float | Decimal, currency: str = "USD", leverage: float | Decimal = 1.0,
-        account_type: str = "MARGIN"
+        account_type: str = "MARGIN", margin_mode: str = "CROSS"
     ) -> None:
         account_class = java_class("com.abc.trading.portfolio.AccountType")
         if isinstance(starting_balance, Decimal) or isinstance(leverage, Decimal):
             decimal_type = java_class("java.math.BigDecimal")
             self._java.configureAccount(venue, decimal_type(str(starting_balance)), currency,
-                                        decimal_type(str(leverage)), account_class.valueOf(account_type))
+                                        decimal_type(str(leverage)), account_class.valueOf(account_type),
+                                        java_class("com.abc.trading.portfolio.MarginMode").valueOf(margin_mode))
         else:
-            self._java.configureAccount(venue, starting_balance, currency, leverage, account_class.valueOf(account_type))
+            self._java.configureAccount(venue, starting_balance, currency, leverage,
+                                        account_class.valueOf(account_type),
+                                        java_class("com.abc.trading.portfolio.MarginMode").valueOf(margin_mode))
 
     def deposit(self, venue: str, currency: str, amount: float | Decimal) -> None:
         value = java_class("java.math.BigDecimal")(str(amount)) if isinstance(amount, Decimal) else amount
@@ -237,6 +240,8 @@ class BacktestEngine:
         maintenance_margin_per_unit: float = 0.0, size_precision: int = 0,
         size_increment: QuantityValue | None = None, price_precision: int | None = None,
         price_tick_size: QuantityValue | None = None,
+        derivative_type: str = "SPOT", contract_multiplier: QuantityValue = "1",
+        settlement_currency: str | None = None,
     ) -> None:
         if (base_currency is None and quote_currency is None and size_increment is None
                 and size_precision == 0 and price_precision is None and price_tick_size is None):
@@ -258,7 +263,10 @@ class BacktestEngine:
                      java_class("com.abc.trading.data.MarginModelType").valueOf(margin_model_type),
                      initial_margin_per_unit, maintenance_margin_per_unit,
                      precision, java_class("java.math.BigDecimal")(str(increment)),
-                     resolved_price_precision, java_class("java.math.BigDecimal")(str(price_tick)))
+                     resolved_price_precision, java_class("java.math.BigDecimal")(str(price_tick)),
+                     java_class("com.abc.trading.data.DerivativeType").valueOf(derivative_type),
+                     java_class("java.math.BigDecimal")(str(contract_multiplier)),
+                     settlement_currency or (quote_currency or "USD"))
         self._quantity_rules[symbol] = (precision, increment)
         self._price_rules[symbol] = (resolved_price_precision, price_tick)
 
@@ -444,6 +452,11 @@ class BacktestEngine:
         java_type = java_class("com.abc.trading.data.FxRateUpdate")
         java_updates = jpype.JArray(java_type)([update.java for update in updates])
         self._java.runFxRates(java_updates)
+
+    def run_funding_rates(self, updates: list[FundingRateUpdate]) -> None:
+        java_type = java_class("com.abc.trading.data.FundingRateUpdate")
+        java_updates = jpype.JArray(java_type)([update.java for update in updates])
+        self._java.runFundingRates(java_updates)
 
     @property
     def started(self) -> bool:

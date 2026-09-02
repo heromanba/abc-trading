@@ -219,6 +219,21 @@ class FxRateUpdate:
     def java(self) -> object:
         return self._java
 
+class FundingRateUpdate:
+    def __init__(self, symbol: str, rate: Decimal | str | float,
+                 timestamp: int, sequence: int = 0,
+                 interval_minutes: int | None = None,
+                 next_funding_timestamp: int | None = None) -> None:
+        decimal_type = java_class("java.math.BigDecimal")
+        self._java = java_class("com.abc.trading.data.FundingRateUpdate")(
+            symbol, decimal_type(str(rate)), interval_minutes, next_funding_timestamp,
+            timestamp, timestamp, sequence
+        )
+
+    @property
+    def java(self) -> object:
+        return self._java
+
 
 @dataclass(frozen=True)
 class BarType:

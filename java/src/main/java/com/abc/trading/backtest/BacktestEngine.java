@@ -10,6 +10,8 @@ import com.abc.trading.data.OrderBookL3Delta;
 import com.abc.trading.data.TradeTick;
 import com.abc.trading.data.Quantity;
 import com.abc.trading.data.FxRateUpdate;
+import com.abc.trading.data.FundingRateUpdate;
+import com.abc.trading.data.DerivativeType;
 import com.abc.trading.portfolio.AccountType;
 import com.abc.trading.data.MarginModelType;
 import com.abc.trading.adapters.binance.BinanceFuturesConfig;
@@ -49,6 +51,7 @@ import com.abc.trading.portfolio.PositionUpdate;
 import com.abc.trading.portfolio.AccountStateEvent;
 import com.abc.trading.portfolio.AccountMarginCall;
 import com.abc.trading.portfolio.AccountLiquidationRequired;
+import com.abc.trading.portfolio.MarginMode;
 import com.abc.trading.portfolio.LiquidationStarted;
 import com.abc.trading.portfolio.LiquidationFill;
 import com.abc.trading.portfolio.LiquidationCompleted;
@@ -323,6 +326,20 @@ public final class BacktestEngine implements AutoCloseable {
                 sizeIncrement, pricePrecision, priceTickSize);
     }
 
+    public void addInstrument(String symbol, String venue, double tickSize,
+            String baseCurrency, String quoteCurrency, double marginInitialRate,
+            double marginMaintenanceRate, MarginModelType marginModelType,
+            double initialMarginPerUnit, double maintenanceMarginPerUnit,
+            int sizePrecision, java.math.BigDecimal sizeIncrement, int pricePrecision,
+            java.math.BigDecimal priceTickSize, DerivativeType derivativeType,
+            java.math.BigDecimal contractMultiplier, String settlementCurrency) {
+        if (started) throw new IllegalStateException("Cannot add instruments after start");
+        kernel.addInstrument(symbol, venue, TickScheme.fixed(tickSize), baseCurrency, quoteCurrency,
+                marginInitialRate, marginMaintenanceRate, marginModelType,
+                initialMarginPerUnit, maintenanceMarginPerUnit, sizePrecision, sizeIncrement,
+                pricePrecision, priceTickSize, derivativeType, contractMultiplier, settlementCurrency);
+    }
+
     public void addInstrument(String symbol, String venue, TickScheme tickScheme) {
         if (started) throw new IllegalStateException("Cannot add instruments after start");
         if (symbol == null || symbol.isBlank()) throw new IllegalArgumentException("symbol is required");
@@ -364,6 +381,11 @@ public final class BacktestEngine implements AutoCloseable {
     public void configureAccount(String venue, java.math.BigDecimal startingBalance, String currency,
             java.math.BigDecimal leverage, AccountType accountType) {
         kernel.configureAccount(venue, startingBalance, currency, leverage, accountType);
+    }
+
+    public void configureAccount(String venue, java.math.BigDecimal startingBalance, String currency,
+            java.math.BigDecimal leverage, AccountType accountType, MarginMode marginMode) {
+        kernel.configureAccount(venue, startingBalance, currency, leverage, accountType, marginMode);
     }
 
     public void deposit(String venue, String currency, double amount) {
@@ -542,6 +564,11 @@ public final class BacktestEngine implements AutoCloseable {
     public void runFxRates(FxRateUpdate[] updates) {
         if (!started) throw new IllegalStateException("Engine must be started before running");
         kernel.runFxRates(updates);
+    }
+
+    public void runFundingRates(FundingRateUpdate[] updates) {
+        if (!started) throw new IllegalStateException("Engine must be started before running");
+        kernel.runFundingRates(updates);
     }
 
     public void submitMarketOrder(String strategyId, String symbol, String orderId,

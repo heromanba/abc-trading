@@ -10,6 +10,8 @@ import com.abc.trading.data.OrderBookL3Snapshot;
 import com.abc.trading.data.OrderBookL3Delta;
 import com.abc.trading.data.TradeTick;
 import com.abc.trading.data.FxRateUpdate;
+import com.abc.trading.data.FundingRateUpdate;
+import com.abc.trading.data.DerivativeType;
 import com.abc.trading.portfolio.AccountType;
 import com.abc.trading.data.MarginModelType;
 import java.math.BigDecimal;
@@ -21,6 +23,8 @@ import com.abc.trading.data.DataEngine;
 import com.abc.trading.msgbus.MessageBus;
 import com.abc.trading.msgbus.DisruptorMarketDataIngress;
 import com.abc.trading.portfolio.Portfolio;
+import com.abc.trading.portfolio.FundingPayment;
+import com.abc.trading.portfolio.MarginMode;
 import com.abc.trading.risk.RiskEngine;
 import com.abc.trading.execution.ExecutionEngine;
 import com.abc.trading.execution.BacktestExecutionClient;
@@ -70,6 +74,12 @@ public final class NautilusKernel implements AutoCloseable {
         riskEngine = new RiskEngine(Integer.MAX_VALUE, cache, portfolio);
         executionEngine = new ExecutionEngine(bus, riskEngine, portfolio, cache);
         dataEngine = new DataEngine(bus);
+        bus.subscribe(FundingRateUpdate.class, update -> {
+            if (cache.hasInstrument(update.symbol())) {
+                FundingPayment payment = portfolio.applyFunding(update);
+                if (payment != null) bus.publish(payment);
+            }
+        }, 100);
         marketDataIngress = new DisruptorMarketDataIngress(this::publishLiveMarketData);
         trader = new Trader(bus, cache, () -> inputSequence);
     }
@@ -139,6 +149,22 @@ public final class NautilusKernel implements AutoCloseable {
                 sizeIncrement, pricePrecision, priceTickSize);
     }
 
+    public void addInstrument(String symbol, String venue, TickScheme tickScheme,
+            String baseCurrency, String quoteCurrency, double marginInitialRate,
+            double marginMaintenanceRate, MarginModelType marginModelType,
+            double initialMarginPerUnit, double maintenanceMarginPerUnit,
+            int sizePrecision, BigDecimal sizeIncrement, int pricePrecision,
+            BigDecimal priceTickSize, DerivativeType derivativeType,
+            BigDecimal contractMultiplier, String settlementCurrency) {
+        if (lifecycle.state() != ComponentState.PRE_INITIALIZED && lifecycle.state() != ComponentState.READY) {
+            throw new IllegalStateException("Cannot add instruments after initialization");
+        }
+        cache.addInstrument(symbol, venue, tickScheme, baseCurrency, quoteCurrency,
+            marginInitialRate, marginMaintenanceRate, marginModelType,
+            initialMarginPerUnit, maintenanceMarginPerUnit, sizePrecision, sizeIncrement,
+            pricePrecision, priceTickSize, derivativeType, contractMultiplier, settlementCurrency);
+    }
+
     public void addVenue(String venue) {
         addVenue(SimulatedVenueConfig.defaults(new VenueId(venue)));
     }
@@ -201,6 +227,14 @@ public final class NautilusKernel implements AutoCloseable {
             throw new IllegalStateException("Cannot configure accounts after initialization");
         }
         portfolio.configureAccount(venue, startingBalance, currency, leverage, accountType);
+    }
+
+    public void configureAccount(String venue, BigDecimal startingBalance, String currency,
+            BigDecimal leverage, AccountType accountType, MarginMode marginMode) {
+        if (lifecycle.state() != ComponentState.PRE_INITIALIZED && lifecycle.state() != ComponentState.READY) {
+            throw new IllegalStateException("Cannot configure accounts after initialization");
+        }
+        portfolio.configureAccount(venue, startingBalance, currency, leverage, accountType, marginMode);
     }
 
     public void deposit(String venue, String currency, double amount) {
@@ -355,6 +389,18 @@ public final class NautilusKernel implements AutoCloseable {
         }
     }
 
+    public void runFundingRates(FundingRateUpdate[] updates) {
+        if (lifecycle.state() != ComponentState.RUNNING) throw new IllegalStateException("Kernel must be running before processing funding rates");
+        if (updates == null) throw new IllegalArgumentException("updates are required");
+        Arrays.sort(updates, Comparator.comparingLong(FundingRateUpdate::tsInit)
+                .thenComparing(FundingRateUpdate::symbol));
+        for (FundingRateUpdate update : updates) {
+            inputSequence++;
+            clock.setTimestampNs(update.tsInit());
+            dataEngine.publishFundingRate(update);
+        }
+    }
+
     public ComponentState state() {
         return lifecycle.state();
     }
@@ -423,6 +469,9 @@ public final class NautilusKernel implements AutoCloseable {
         } else if (data instanceof FxRateUpdate update) {
             clock.setTimestampNs(update.tsInit());
             dataEngine.publishFxRate(update);
+        } else if (data instanceof FundingRateUpdate update) {
+            clock.setTimestampNs(update.tsInit());
+            dataEngine.publishFundingRate(update);
         } else {
             bus.publish(data);
         }

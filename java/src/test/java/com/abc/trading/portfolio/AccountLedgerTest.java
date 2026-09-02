@@ -5,6 +5,10 @@ import com.abc.trading.data.TickScheme;
 import com.abc.trading.data.MarketDataSnapshot;
 import com.abc.trading.data.FxRateUpdate;
 import com.abc.trading.data.MarginModelType;
+import com.abc.trading.data.DerivativeType;
+import com.abc.trading.data.FundingRateUpdate;
+import com.abc.trading.data.InstrumentSpec;
+import com.abc.trading.data.Quantity;
 import com.abc.trading.execution.Commission;
 import com.abc.trading.execution.OrderFill;
 import com.abc.trading.execution.OrderIntent;
@@ -16,6 +20,8 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class AccountLedgerTest {
     @Test
@@ -266,6 +272,73 @@ class AccountLedgerTest {
         AccountState state = portfolio.accountState("XNAS", 100);
 
         assertEquals(100.005, state.balanceLocked(), 1e-9);
+        }
+
+        @Test
+        void calculatesLinearAndInverseContractPnlWithMultiplier() {
+        InstrumentSpec linear = derivative("LINEAR", DerivativeType.LINEAR_FUTURE, "10", "USD");
+        InstrumentSpec inverse = derivative("INVERSE", DerivativeType.INVERSE_FUTURE, "2", "BTC");
+
+        assertEquals(new java.math.BigDecimal("200"),
+            linear.calculatePnl(new java.math.BigDecimal("2"), new java.math.BigDecimal("100"), new java.math.BigDecimal("110")));
+        assertEquals(new java.math.BigDecimal("0.0004"),
+            inverse.calculatePnl(new java.math.BigDecimal("-2"), new java.math.BigDecimal("10000"), new java.math.BigDecimal("5000")));
+        }
+
+        @Test
+        void settlesPerpetualFundingOnceWithLongAndShortSigns() {
+        Cache cache = new Cache();
+        cache.addInstrument(derivative("PERP", DerivativeType.LINEAR_PERPETUAL, "1", "USDT"));
+        Portfolio portfolio = new Portfolio(cache);
+        portfolio.configureAccount("BINANCE", 10_000.0, "USDT", 1.0);
+        portfolio.applyOrderIntent(new OrderIntent("strategy", "PERP", 1, 100, "open-corr", "open",
+            SignalDirection.BUY, Quantity.fromString("1", 0), 100.0, 0, 0.0));
+        portfolio.applyFill(new OrderFill("strategy", "PERP", 1, 100, "open-corr", "open",
+            SignalDirection.BUY, Quantity.fromString("1", 0), 100.0, java.math.BigDecimal.ZERO, 0.0,
+            new Commission(0.0, "USDT"), LiquiditySide.TAKER, ""));
+        FundingRateUpdate update = new FundingRateUpdate("PERP", new java.math.BigDecimal("0.01"), 1_000, 1_000, 1);
+
+        FundingPayment payment = portfolio.applyFunding(update);
+        assertNotNull(payment);
+        assertEquals(0, new java.math.BigDecimal("-1.00").compareTo(payment.amount()));
+        assertNull(portfolio.applyFunding(update));
+        assertEquals(0, new java.math.BigDecimal("9999.00")
+            .compareTo(portfolio.accountState("BINANCE", 1_000).balanceTotalDecimal()));
+        }
+
+        @Test
+        void isolatedThresholdsDoNotNetAgainstAnotherPosition() {
+        InstrumentSpec first = derivative("FIRST", DerivativeType.LINEAR_PERPETUAL, "1", "USD");
+        InstrumentSpec second = derivative("SECOND", DerivativeType.LINEAR_PERPETUAL, "1", "USD");
+        Cache cache = new Cache();
+        cache.addInstrument(first);
+        cache.addInstrument(second);
+
+        AccountLedger cross = new AccountLedger();
+        cross.configure("X", new java.math.BigDecimal("100"), "USD", java.math.BigDecimal.ONE,
+            AccountType.MARGIN, MarginMode.CROSS);
+        cross.updatePosition("X", first, java.math.BigDecimal.ONE, 100.0, 1);
+        cross.updatePosition("X", second, java.math.BigDecimal.ONE, 100.0, 1);
+        cross.updateMarketPrice("X", first, 0.01, 2);
+        cross.updateMarketPrice("X", second, 200.0, 2);
+        assertFalse(cross.state("X", 2).liquidationRequired());
+
+        AccountLedger isolated = new AccountLedger();
+        isolated.configure("X", new java.math.BigDecimal("100"), "USD", java.math.BigDecimal.ONE,
+            AccountType.MARGIN, MarginMode.ISOLATED);
+        isolated.updatePosition("X", first, java.math.BigDecimal.ONE, 100.0, 1);
+        isolated.updatePosition("X", second, java.math.BigDecimal.ONE, 100.0, 1);
+        isolated.updateMarketPrice("X", first, 0.01, 2);
+        isolated.updateMarketPrice("X", second, 200.0, 2);
+        assertTrue(isolated.state("X", 2).liquidationRequired());
+        }
+
+        private static InstrumentSpec derivative(String symbol, DerivativeType type, String multiplier,
+            String settlementCurrency) {
+        return new InstrumentSpec(symbol, "BINANCE", TickScheme.fixed(0.01), "BTC", settlementCurrency,
+            0.10, 0.05, MarginModelType.NOTIONAL_RATE, 0.0, 0.0,
+            0, java.math.BigDecimal.ONE, 2, new java.math.BigDecimal("0.01"),
+            type, new java.math.BigDecimal(multiplier), settlementCurrency);
         }
 
     private static Cache cache() {

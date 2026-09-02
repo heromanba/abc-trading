@@ -49,4 +49,9 @@ public final class DataEngine {
         bus.publish("data.fx." + update.fromCurrency() + "." + update.toCurrency(), update);
         bus.publish(update);
     }
+
+    public void publishFundingRate(FundingRateUpdate update) {
+        bus.publish("data.funding." + update.symbol(), update);
+        bus.publish(update);
+    }
 }
