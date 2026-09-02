@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /** Ordered same-JVM handoff from concurrent producers to one routing consumer. */
 public final class DisruptorMessageBus implements AutoCloseable {
-    public static final int DEFAULT_BUFFER_SIZE = 1024;
+    public static final int DEFAULT_BUFFER_SIZE = 4096;
     private static final long CLOSE_TIMEOUT_SECONDS = 5;
 
     private final MessageBusRouter router;
