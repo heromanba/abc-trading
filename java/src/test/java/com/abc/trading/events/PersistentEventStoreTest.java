@@ -114,4 +114,28 @@ class PersistentEventStoreTest {
         assertTrue(row.contains(",0.000000001,0.00000001,USDT,"));
         assertTrue(row.contains(",1000.00500001,0.00000001,1000.00500000,"));
     }
+
+    @Test
+    void replaysFundingPaymentBeforeItsPostSettlementAccountState(@TempDir Path tempDir) {
+        Path storePath = tempDir.resolve("funding-events.jsonl");
+        Event funding = new Event(0, 1, 200, "PERP", "FundingPayment",
+                EventType.FUNDING_PAYMENT, "", SignalDirection.HOLD, "", "", 100.0,
+                Quantity.fromInt(0), new BigDecimal("1"), new BigDecimal("-1.000"),
+                BigDecimal.ZERO, "USDT", null, "");
+        Event account = new Event(0, 2, 200, "", "AccountStateEvent", EventType.ACCOUNT_STATE,
+                "", SignalDirection.HOLD, "", "", 0.0, 0, 0, 0.0, 0.0, "USDT", null, "",
+                "USDT", 999.0, 100.0, 899.0, 100.0, 50.0, 0.0, 999.0, false, false);
+
+        try (PersistentEventStore store = new PersistentEventStore(storePath)) {
+            store.log(funding);
+            store.log(account);
+        }
+
+        EventReplayResult result = EventReplayer.replay(storePath, new MessageBus(null));
+
+        assertEquals(2, result.eventsReplayed());
+        assertEquals(new BigDecimal("1"), result.state().positions().get("PERP"));
+        assertEquals(new BigDecimal("-1.000"), result.state().realizedPnl().get("PERP"));
+        assertEquals(999.0, result.state().accounts().get("USDT").total(), 1e-9);
+    }
 }

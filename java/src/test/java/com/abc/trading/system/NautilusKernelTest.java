@@ -2,12 +2,20 @@ package com.abc.trading.system;
 
 import java.math.BigDecimal;
 import com.abc.trading.data.Bar;
+import com.abc.trading.data.DerivativeType;
+import com.abc.trading.data.FundingRateUpdate;
+import com.abc.trading.data.MarginModelType;
+import com.abc.trading.data.MarketDataSnapshot;
 import com.abc.trading.execution.OrderFill;
 import com.abc.trading.execution.OrderIntent;
 import com.abc.trading.execution.SignalDirection;
 import com.abc.trading.execution.MakerTakerFeeModel;
 import com.abc.trading.execution.StaticLatencyModel;
 import com.abc.trading.backtest.SimulatedVenueConfig;
+import com.abc.trading.portfolio.AccountStateEvent;
+import com.abc.trading.portfolio.AccountType;
+import com.abc.trading.portfolio.FundingPayment;
+import com.abc.trading.portfolio.MarginMode;
 import com.abc.trading.trading.StrategyHandler;
 import org.junit.jupiter.api.Test;
 
@@ -126,4 +134,41 @@ class NautilusKernelTest {
             assertEquals(-2.2, kernel.portfolio().realizedPnl("AAPL"));
         }
     }
+
+        @Test
+        void publishesPostFundingAccountStateAfterFundingPayment() {
+        List<FundingPayment> payments = new ArrayList<>();
+        List<AccountStateEvent> accountStates = new ArrayList<>();
+        try (NautilusKernel kernel = new NautilusKernel()) {
+            kernel.addVenue("BINANCE");
+            kernel.addInstrument("PERP", "BINANCE", com.abc.trading.data.TickScheme.fixed(0.01),
+                "BTC", "USDT", 0.10, 0.05, MarginModelType.NOTIONAL_RATE,
+                0.0, 0.0, 0, java.math.BigDecimal.ONE, 2,
+                new java.math.BigDecimal("0.01"), DerivativeType.LINEAR_PERPETUAL,
+                java.math.BigDecimal.ONE, "USDT");
+            kernel.configureAccount("BINANCE", new BigDecimal("1000"), "USDT", BigDecimal.ONE,
+                AccountType.MARGIN, MarginMode.CROSS);
+            kernel.bus().subscribe(FundingPayment.class, payments::add);
+            kernel.bus().subscribe(AccountStateEvent.class, accountStates::add);
+            kernel.start();
+            kernel.runMarketData(new MarketDataSnapshot[] {
+                new MarketDataSnapshot("PERP", 100, 100.0, 100.0, 100.0, 100.0, 100.0, 1)
+            });
+            kernel.bus().publish(new OrderIntent(
+                "strategy", "PERP", 1, 100, "corr", "order-1",
+                SignalDirection.BUY, 1, 100.0, 0, 0.0));
+
+            payments.clear();
+            accountStates.clear();
+            kernel.runFundingRates(new FundingRateUpdate[] {
+                new FundingRateUpdate("PERP", new BigDecimal("0.01"), 200, 200, 2)
+            });
+
+            assertEquals(1, payments.size());
+            assertEquals(0, new BigDecimal("-1.00").compareTo(payments.get(0).amount()));
+            assertEquals(1, accountStates.size());
+                assertEquals(0, new BigDecimal("999.00")
+                    .compareTo(accountStates.get(0).state().balanceTotalDecimal()));
+        }
+        }
 }

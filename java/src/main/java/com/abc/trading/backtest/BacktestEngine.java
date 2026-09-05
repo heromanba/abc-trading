@@ -52,6 +52,7 @@ import com.abc.trading.portfolio.AccountStateEvent;
 import com.abc.trading.portfolio.AccountMarginCall;
 import com.abc.trading.portfolio.AccountLiquidationRequired;
 import com.abc.trading.portfolio.MarginMode;
+import com.abc.trading.portfolio.FundingPayment;
 import com.abc.trading.portfolio.LiquidationStarted;
 import com.abc.trading.portfolio.LiquidationFill;
 import com.abc.trading.portfolio.LiquidationCompleted;
@@ -60,6 +61,7 @@ import com.abc.trading.system.NautilusKernel;
 import com.abc.trading.trading.StrategyHandler;
 import com.abc.trading.trading.StrategySignal;
 
+import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -101,6 +103,7 @@ public final class BacktestEngine implements AutoCloseable {
         kernel.bus().subscribe(OrderFill.class, this::logOrderFill, 100);
         kernel.bus().subscribe(SettledOrderFill.class, this::logSettledOrderFill, 100);
         kernel.bus().subscribe(PositionUpdate.class, this::logPositionUpdate);
+        kernel.bus().subscribe(FundingPayment.class, this::logFundingPayment);
         kernel.bus().subscribe(AccountStateEvent.class, this::logAccountState);
         kernel.bus().subscribe(AccountMarginCall.class, event -> logAccountThreshold(event.state(), EventType.MARGIN_CALL));
         kernel.bus().subscribe(AccountLiquidationRequired.class, event -> logAccountThreshold(event.state(), EventType.LIQUIDATION_REQUIRED));
@@ -229,6 +232,18 @@ public final class BacktestEngine implements AutoCloseable {
                 update.inputSequence(), nextLifecycleSequence(), update.marketTimestamp(), update.symbol(),
                 PositionUpdate.class.getSimpleName(), EventType.POSITION_UPDATE, "", SignalDirection.HOLD,
                 "", update.orderId(), 0.0, update.quantity(), update.position(), update.realizedPnl()));
+    }
+
+    private void logFundingPayment(FundingPayment payment) {
+        log(new Event(0, nextLifecycleSequence(), payment.timestamp(), payment.symbol(),
+                FundingPayment.class.getSimpleName(), EventType.FUNDING_PAYMENT,
+                "", SignalDirection.HOLD, "", "", payment.notional().doubleValue(),
+                Quantity.fromInt(0), kernelPosition(payment.symbol()), payment.amount(),
+                BigDecimal.ZERO, payment.currency(), null, ""));
+    }
+
+    private BigDecimal kernelPosition(String symbol) {
+        return kernel.portfolio().position(symbol);
     }
 
     private void logAccountState(AccountStateEvent event) {

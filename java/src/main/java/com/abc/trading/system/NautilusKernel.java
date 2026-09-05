@@ -23,6 +23,10 @@ import com.abc.trading.data.DataEngine;
 import com.abc.trading.msgbus.MessageBus;
 import com.abc.trading.msgbus.DisruptorMarketDataIngress;
 import com.abc.trading.portfolio.Portfolio;
+import com.abc.trading.portfolio.AccountMarginCall;
+import com.abc.trading.portfolio.AccountLiquidationRequired;
+import com.abc.trading.portfolio.AccountState;
+import com.abc.trading.portfolio.AccountStateEvent;
 import com.abc.trading.portfolio.FundingPayment;
 import com.abc.trading.portfolio.MarginMode;
 import com.abc.trading.risk.RiskEngine;
@@ -77,7 +81,18 @@ public final class NautilusKernel implements AutoCloseable {
         bus.subscribe(FundingRateUpdate.class, update -> {
             if (cache.hasInstrument(update.symbol())) {
                 FundingPayment payment = portfolio.applyFunding(update);
-                if (payment != null) bus.publish(payment);
+                if (payment != null) {
+                    bus.publish(payment);
+                    AccountState state = portfolio.accountState(
+                            cache.venue(update.symbol()), update.tsEvent());
+                    if (state != null) {
+                        bus.publish(new AccountStateEvent(state));
+                        if (state.marginCall()) bus.publish(new AccountMarginCall(state));
+                        if (state.liquidationRequired()) {
+                            bus.publish(new AccountLiquidationRequired(state));
+                        }
+                    }
+                }
             }
         }, 100);
         marketDataIngress = new DisruptorMarketDataIngress(this::publishLiveMarketData);
