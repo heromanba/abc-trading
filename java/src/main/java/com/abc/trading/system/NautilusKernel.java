@@ -20,6 +20,7 @@ import com.abc.trading.adapters.binance.BinanceFuturesConfig;
 import com.abc.trading.adapters.binance.BinanceFuturesLiveRuntime;
 import com.abc.trading.adapters.binance.BinanceHttpTransport;
 import com.abc.trading.data.DataEngine;
+import com.abc.trading.msgbus.AeronMessageBusBacking;
 import com.abc.trading.msgbus.JacksonSerializer;
 import com.abc.trading.msgbus.MessageBus;
 import com.abc.trading.msgbus.MessageBusBacking;
@@ -65,6 +66,7 @@ public final class NautilusKernel implements AutoCloseable {
     private final NautilusKernelConfig config;
     private final MessageBusBacking externalBacking;
     private RedisMessageBusBacking.RedisSubscription externalSubscription;
+    private AeronMessageBusBacking.AeronSubscription aeronExternalSubscription;
     private final Map<VenueId, SimulatedExchange> exchanges = new LinkedHashMap<>();
     private final List<DataClient> liveClients = new ArrayList<>();
     private final ComponentLifecycle lifecycle = new ComponentLifecycle();
@@ -463,6 +465,10 @@ public final class NautilusKernel implements AutoCloseable {
             externalSubscription.close();
             externalSubscription = null;
         }
+        if (aeronExternalSubscription != null) {
+            aeronExternalSubscription.close();
+            aeronExternalSubscription = null;
+        }
         if (externalBacking != null) externalBacking.close();
         marketDataIngress.close();
         trader.dispose();
@@ -480,6 +486,15 @@ public final class NautilusKernel implements AutoCloseable {
         if (externalSubscription != null) externalSubscription.close();
         externalSubscription = redisBacking.subscribe(group, consumer, bus);
         return externalSubscription;
+    }
+
+    public AeronMessageBusBacking.AeronSubscription startAeronExternalConsumer() {
+        if (!(externalBacking instanceof AeronMessageBusBacking aeronBacking)) {
+            throw new IllegalStateException("Aeron external backing is not configured");
+        }
+        if (aeronExternalSubscription != null) aeronExternalSubscription.close();
+        aeronExternalSubscription = aeronBacking.subscribe(bus);
+        return aeronExternalSubscription;
     }
 
     public NautilusKernelConfig config() { return config; }
