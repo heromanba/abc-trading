@@ -17,13 +17,26 @@ public class MessageBus {
     private final Map<String, Class<?>> nameToClass = new LinkedHashMap<>();
     private final Map<UUID, Consumer<Object>> correlation = new LinkedHashMap<>();
     private final Serializer serializer;
+    private final MessageBusBacking backing;
 
     public MessageBus(Serializer serializer) {
+        this(serializer, null);
+    }
+
+    public MessageBus(Serializer serializer, MessageBusBacking backing) {
         this.serializer = serializer;
+        this.backing = backing;
     }
 
     public <T> void registerType(String name, Class<T> cls) {
+        if (name == null || name.isBlank()) throw new IllegalArgumentException("type name is required");
+        if (cls == null) throw new IllegalArgumentException("type is required");
         nameToClass.put(name, cls);
+    }
+
+    public <T> void registerExternalType(Class<T> cls) {
+        if (cls == null) throw new IllegalArgumentException("type is required");
+        registerType(cls.getName(), cls);
     }
 
     public <T> void subscribe(Class<T> cls, Handler<T> handler) {
@@ -165,10 +178,24 @@ public class MessageBus {
     }
 
     public void publishExternal(BusMessage m) throws Exception {
+        if (serializer == null) throw new IllegalStateException("serializer is not configured");
         Class<?> cls = nameToClass.get(m.getPayloadType());
         if (cls == null) return; // unknown type
         Object obj = serializer.deserialize(m.getPayload(), cls);
         publish(obj);
+    }
+
+    public <T> void publishExternal(String topic, T msg) {
+        if (topic == null || topic.isBlank()) throw new IllegalArgumentException("topic is required");
+        if (msg == null) throw new IllegalArgumentException("message is required");
+        if (serializer == null) throw new IllegalStateException("serializer is not configured");
+        if (backing == null) throw new IllegalStateException("external backing is not configured");
+        try {
+            backing.publish(new BusMessage(topic, msg.getClass().getName(),
+                    serializer.serialize(msg), SerializationEncoding.JSON));
+        } catch (Exception error) {
+            throw new IllegalStateException("Unable to serialize external message", error);
+        }
     }
 
     public void send(String endpoint, Object msg) {

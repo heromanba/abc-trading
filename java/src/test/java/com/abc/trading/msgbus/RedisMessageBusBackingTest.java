@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import redis.clients.jedis.JedisPooled;
 import redis.clients.jedis.StreamEntryID;
 import redis.clients.jedis.resps.StreamEntry;
+import com.abc.trading.system.NautilusKernel;
 
 import java.time.Duration;
 import java.util.Map;
@@ -86,11 +87,58 @@ class RedisMessageBusBackingTest {
         }
     }
 
+    @Test
+    void connectsTwoJavaRuntimesThroughTheTypedExternalBus() throws Exception {
+        Assumptions.assumeTrue(redisAvailable());
+        String suffix = UUID.randomUUID().toString();
+        String stream = "abc-trading-runtime:" + suffix;
+        String group = "group-" + suffix;
+        RedisMessageBusConfig config = new RedisMessageBusConfig(
+                "127.0.0.1", 6379, stream);
+        CountDownLatch delivered = new CountDownLatch(1);
+        AtomicReference<ExternalPayload> received = new AtomicReference<>();
+
+        try (RedisMessageBusBacking senderBacking = new RedisMessageBusBacking(config);
+                RedisMessageBusBacking receiverBacking = new RedisMessageBusBacking(config);
+                NautilusKernel receiver = new NautilusKernel(receiverBacking)) {
+            receiver.registerExternalType(ExternalPayload.class);
+            receiver.bus().subscribe(ExternalPayload.class, payload -> {
+                received.set(payload);
+                delivered.countDown();
+            });
+            receiver.start();
+            try (RedisMessageBusBacking.RedisSubscription subscription =
+                    receiver.startExternalConsumer(group, "receiver-" + suffix)) {
+                MessageBus sender = new MessageBus(new JacksonSerializer(), senderBacking);
+                sender.publishExternal("events.test", new ExternalPayload("hello", 7));
+                assertTrue(delivered.await(5, TimeUnit.SECONDS));
+                assertEquals("hello", received.get().value);
+                assertEquals(7, received.get().sequence);
+            }
+        }
+        try (JedisPooled redis = new JedisPooled("127.0.0.1", 6379)) {
+            redis.del(stream);
+        }
+    }
+
     private static boolean redisAvailable() {
         try (JedisPooled redis = new JedisPooled("127.0.0.1", 6379)) {
             return "PONG".equals(redis.ping());
         } catch (RuntimeException error) {
             return false;
+        }
+    }
+
+    public static final class ExternalPayload {
+        public String value;
+        public int sequence;
+
+        public ExternalPayload() {
+        }
+
+        private ExternalPayload(String value, int sequence) {
+            this.value = value;
+            this.sequence = sequence;
         }
     }
 }

@@ -20,8 +20,11 @@ import com.abc.trading.adapters.binance.BinanceFuturesConfig;
 import com.abc.trading.adapters.binance.BinanceFuturesLiveRuntime;
 import com.abc.trading.adapters.binance.BinanceHttpTransport;
 import com.abc.trading.data.DataEngine;
+import com.abc.trading.msgbus.JacksonSerializer;
 import com.abc.trading.msgbus.MessageBus;
+import com.abc.trading.msgbus.MessageBusBacking;
 import com.abc.trading.msgbus.DisruptorMarketDataIngress;
+import com.abc.trading.msgbus.RedisMessageBusBacking;
 import com.abc.trading.portfolio.Portfolio;
 import com.abc.trading.portfolio.AccountMarginCall;
 import com.abc.trading.portfolio.AccountLiquidationRequired;
@@ -60,18 +63,29 @@ public final class NautilusKernel implements AutoCloseable {
     private final ExecutionEngine executionEngine;
     private final Trader trader;
     private final NautilusKernelConfig config;
+    private final MessageBusBacking externalBacking;
+    private RedisMessageBusBacking.RedisSubscription externalSubscription;
     private final Map<VenueId, SimulatedExchange> exchanges = new LinkedHashMap<>();
     private final List<DataClient> liveClients = new ArrayList<>();
     private final ComponentLifecycle lifecycle = new ComponentLifecycle();
     private long inputSequence;
 
     public NautilusKernel() {
-        this(NautilusKernelConfig.defaults());
+        this(NautilusKernelConfig.defaults(), null);
     }
 
     public NautilusKernel(NautilusKernelConfig config) {
+        this(config, null);
+    }
+
+    public NautilusKernel(MessageBusBacking externalBacking) {
+        this(NautilusKernelConfig.defaults(), externalBacking);
+    }
+
+    public NautilusKernel(NautilusKernelConfig config, MessageBusBacking externalBacking) {
         this.config = config;
-        bus = new MessageBus(null);
+        this.externalBacking = externalBacking;
+        bus = new MessageBus(externalBacking == null ? null : new JacksonSerializer(), externalBacking);
         clock = new SimulatedClock();
         cache = new Cache();
         portfolio = new Portfolio(cache);
@@ -445,12 +459,29 @@ public final class NautilusKernel implements AutoCloseable {
             throw new IllegalStateException("Kernel cannot dispose from state: " + lifecycle.state());
         }
         lifecycle.dispose();
+        if (externalSubscription != null) {
+            externalSubscription.close();
+            externalSubscription = null;
+        }
+        if (externalBacking != null) externalBacking.close();
         marketDataIngress.close();
         trader.dispose();
         lifecycle.disposeCompleted();
     }
 
     public MessageBus bus() { return bus; }
+    public <T> void registerExternalType(Class<T> cls) { bus.registerExternalType(cls); }
+    public <T> void publishExternal(String topic, T message) { bus.publishExternal(topic, message); }
+
+    public RedisMessageBusBacking.RedisSubscription startExternalConsumer(String group, String consumer) {
+        if (!(externalBacking instanceof RedisMessageBusBacking redisBacking)) {
+            throw new IllegalStateException("Redis external backing is not configured");
+        }
+        if (externalSubscription != null) externalSubscription.close();
+        externalSubscription = redisBacking.subscribe(group, consumer, bus);
+        return externalSubscription;
+    }
+
     public NautilusKernelConfig config() { return config; }
     public Clock clock() { return clock; }
     public Cache cache() { return cache; }

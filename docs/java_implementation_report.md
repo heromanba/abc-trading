@@ -36,6 +36,7 @@ initial-margin, maintenance-margin, and currency information.
 
 - synchronous typed message bus with topic routing, priorities, wildcards, endpoints, and correlation callbacks
 - Redis Streams external message-bus backing with Rust-compatible fields, consumer groups, acknowledgements, and retry
+- optional kernel/runtime bridge for explicitly registered external payload types
 - component lifecycle and kernel composition
 - Python strategy callbacks through JPype
 - market and limit orders
@@ -198,6 +199,7 @@ The Python bridge lives under `python/abc_trading`; reconciliation scripts live 
 | Local order emulator | Implemented | `OrderEmulator` | Snapshot-triggered local ownership and release |
 | Disruptor market-data ingress | Implemented optional | `DisruptorMessageBus`, `DisruptorMarketDataIngress`, `NautilusKernel`, `BinanceFuturesLiveRuntime` | Bounded multi-producer ring buffer, one ordered consumer, backpressure, drain-on-close, and consumer-failure reporting |
 | Redis Streams external backing | Implemented optional | `RedisMessageBusBacking`, `RedisMessageBusConfig` | Jedis transport, Rust-compatible `topic`/`type`/`payload`/`encoding` fields, consumer-group delivery, post-handler acknowledgements, pending-message retry, and bounded reconnect retry |
+| External runtime bridge | Implemented optional | `MessageBus`, `NautilusKernel` | Explicit outbound publication, class-name type registration, Redis consumer startup, typed local delivery, and lifecycle-owned shutdown |
 | External ring-buffer backing | Implemented as backing | `RingBufferMessageBusBacking` | Bounded queue; full-buffer policy currently drops and reports |
 | Persistence/event store | Implemented | `PersistentEventStore`, `EventReplayer`, `EventCheckpoint` | Versioned append-only JSONL, projections, synchronous replay, and checkpoint resume |
 | Binance USD-M Futures adapter | Implemented baseline | `BinanceFuturesAdapter`, `BinanceFuturesLiveRuntime` | Public streams, signed REST, user data, reconnects, and kernel routing; Testnet credentials remain opt-in |
