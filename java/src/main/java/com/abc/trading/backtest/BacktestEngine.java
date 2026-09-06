@@ -47,6 +47,10 @@ import com.abc.trading.execution.commands.CancelOrder;
 import com.abc.trading.execution.commands.ModifyOrder;
 import com.abc.trading.execution.OrderFill;
 import com.abc.trading.execution.SettledOrderFill;
+import com.abc.trading.execution.TwapExecutionAlgorithm;
+import com.abc.trading.execution.TwapExecutionConfig;
+import com.abc.trading.execution.VwapExecutionAlgorithm;
+import com.abc.trading.execution.VwapExecutionConfig;
 import com.abc.trading.portfolio.PositionUpdate;
 import com.abc.trading.portfolio.AccountStateEvent;
 import com.abc.trading.portfolio.AccountMarginCall;
@@ -584,6 +588,14 @@ public final class BacktestEngine implements AutoCloseable {
     public void runFundingRates(FundingRateUpdate[] updates) {
         if (!started) throw new IllegalStateException("Engine must be started before running");
         kernel.runFundingRates(updates);
+    }
+
+    public TwapExecutionAlgorithm startTwap(TwapExecutionConfig config) {
+        return kernel.startTwap(config);
+    }
+
+    public VwapExecutionAlgorithm startVwap(VwapExecutionConfig config) {
+        return kernel.startVwap(config);
     }
 
     public void submitMarketOrder(String strategyId, String symbol, String orderId,

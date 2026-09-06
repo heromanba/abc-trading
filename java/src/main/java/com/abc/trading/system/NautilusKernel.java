@@ -35,6 +35,11 @@ import com.abc.trading.portfolio.FundingPayment;
 import com.abc.trading.portfolio.MarginMode;
 import com.abc.trading.risk.RiskEngine;
 import com.abc.trading.execution.ExecutionEngine;
+import com.abc.trading.execution.ExecutionAlgorithm;
+import com.abc.trading.execution.TwapExecutionAlgorithm;
+import com.abc.trading.execution.TwapExecutionConfig;
+import com.abc.trading.execution.VwapExecutionAlgorithm;
+import com.abc.trading.execution.VwapExecutionConfig;
 import com.abc.trading.execution.BacktestExecutionClient;
 import com.abc.trading.execution.SimulatedExchange;
 import com.abc.trading.execution.VenueId;
@@ -69,6 +74,7 @@ public final class NautilusKernel implements AutoCloseable {
     private AeronMessageBusBacking.AeronSubscription aeronExternalSubscription;
     private final Map<VenueId, SimulatedExchange> exchanges = new LinkedHashMap<>();
     private final List<DataClient> liveClients = new ArrayList<>();
+    private final List<ExecutionAlgorithm> executionAlgorithms = new ArrayList<>();
     private final ComponentLifecycle lifecycle = new ComponentLifecycle();
     private long inputSequence;
 
@@ -438,6 +444,8 @@ public final class NautilusKernel implements AutoCloseable {
 
     public void stop() {
         if (lifecycle.state() != ComponentState.RUNNING) return;
+        executionAlgorithms.forEach(ExecutionAlgorithm::close);
+        executionAlgorithms.clear();
         lifecycle.stop();
         for (DataClient client : liveClients) client.stop();
         marketDataIngress.drain();
@@ -476,6 +484,28 @@ public final class NautilusKernel implements AutoCloseable {
     }
 
     public MessageBus bus() { return bus; }
+    public TwapExecutionAlgorithm startTwap(TwapExecutionConfig config) {
+        requireRunningForAlgorithm();
+        TwapExecutionAlgorithm algorithm = new TwapExecutionAlgorithm(bus, config);
+        executionAlgorithms.add(algorithm);
+        algorithm.start();
+        return algorithm;
+    }
+
+    public VwapExecutionAlgorithm startVwap(VwapExecutionConfig config) {
+        requireRunningForAlgorithm();
+        VwapExecutionAlgorithm algorithm = new VwapExecutionAlgorithm(bus, config);
+        executionAlgorithms.add(algorithm);
+        algorithm.start();
+        return algorithm;
+    }
+
+    private void requireRunningForAlgorithm() {
+        if (lifecycle.state() != ComponentState.RUNNING) {
+            throw new IllegalStateException("Kernel must be running before starting an execution algorithm");
+        }
+    }
+
     public <T> void registerExternalType(Class<T> cls) { bus.registerExternalType(cls); }
     public <T> void publishExternal(String topic, T message) { bus.publishExternal(topic, message); }
 
