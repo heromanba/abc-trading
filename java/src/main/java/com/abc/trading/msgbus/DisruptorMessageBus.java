@@ -57,8 +57,12 @@ public final class DisruptorMessageBus implements AutoCloseable {
         if (topic == null || topic.isBlank()) throw new IllegalArgumentException("topic is required");
         if (payload == null) throw new IllegalArgumentException("payload is required");
         ensureOpen();
-        ringBuffer.publishEvent((event, sequence, arguments) ->
-                event.set((String) arguments[0], arguments[1]), topic, payload);
+        long sequence = ringBuffer.next();
+        try {
+            ringBuffer.get(sequence).set(topic, payload);
+        } finally {
+            ringBuffer.publish(sequence);
+        }
     }
 
     public void subscribe(String topicPattern, MessageHandler handler) {

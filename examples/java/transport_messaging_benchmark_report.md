@@ -105,6 +105,8 @@ Single-producer `-prof gc` results for the 64-byte payload:
 
 The allocation figures include this harness's payload and envelope construction. They are useful for relative direction, not an isolated transport-object accounting.
 
+The Disruptor publisher was then changed from the varargs `EventTranslator` path to direct `RingBuffer.next/get/publish` operations. A follow-up short run measured approximately `114 B/op` single-producer and `113 B/op` four-producer for the 64-byte payload, down from about `140 B/op`. Throughput measured `6.57M ops/s` single-producer and `9.45M ops/s` with four producers in that run. The handler-side immutable event and router snapshot remain intentionally unchanged for subscription safety.
+
 The Aeron publisher was then changed to reuse a thread-local envelope buffer and cache the stable topic/type/encoding prefix. A follow-up short run measured approximately `605 B/op` for one producer and `638 B/op` for four producers, down from the earlier `933 B/op` and `926 B/op` results. The remaining allocation includes benchmark payload creation and the message/envelope path; longer runs should verify this on representative payloads.
 
 ### CPU profile observations
