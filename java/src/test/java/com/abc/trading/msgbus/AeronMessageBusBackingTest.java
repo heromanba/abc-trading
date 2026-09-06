@@ -15,9 +15,19 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AeronMessageBusBackingTest {
+    @Test
+    void rejectsPublicationAfterShutdown() {
+        AeronMessageBusBacking backing = new AeronMessageBusBacking(AeronMessageBusConfig.embedded());
+        backing.close();
+
+        assertThrows(IllegalStateException.class, () -> backing.publish(
+                new BusMessage("topic", "type", new byte[]{1}, SerializationEncoding.JSON)));
+    }
+
     @Test
     void roundTripsBinaryEnvelopeFields() {
         BusMessage message = new BusMessage("data.trade.BINANCE.BTCUSDT", "QuoteTick",

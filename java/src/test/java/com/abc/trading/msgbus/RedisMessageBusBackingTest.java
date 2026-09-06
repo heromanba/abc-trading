@@ -48,6 +48,18 @@ class RedisMessageBusBackingTest {
     }
 
     @Test
+    void boundsPublicationFailureWhenRedisIsUnavailable() {
+        RedisMessageBusConfig config = new RedisMessageBusConfig(
+                "127.0.0.1", 1, null, null, false,
+                Duration.ofMillis(50), Duration.ofMillis(50),
+                "unavailable", 1, Duration.ofMillis(50), 1, Duration.ofMillis(1));
+        try (RedisMessageBusBacking backing = new RedisMessageBusBacking(config)) {
+            assertThrows(RuntimeException.class, () -> backing.publish(
+                    new BusMessage("topic", "type", new byte[]{1}, SerializationEncoding.JSON)));
+        }
+    }
+
+    @Test
     void publishesAcknowledgesAndRetriesPendingMessages() throws Exception {
         Assumptions.assumeTrue(redisAvailable());
         String suffix = UUID.randomUUID().toString();

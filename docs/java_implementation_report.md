@@ -41,6 +41,7 @@ initial-margin, maintenance-margin, and currency information.
 - TWAP and trade-volume participation execution algorithms with restart snapshots
 - comparable direct/Disruptor/Aeron/Redis transport benchmark harness with throughput, latency, allocation, and CPU profiling
 - explicit kernel transport selection with allocation-reduced Aeron publication buffers
+- environment-driven deployment configuration and end-to-end trading workload benchmark
 - component lifecycle and kernel composition
 - Python strategy callbacks through JPype
 - market and limit orders
@@ -208,6 +209,8 @@ The Python bridge lives under `python/abc_trading`; reconciliation scripts live 
 | TWAP/VWAP execution | Implemented | `TwapExecutionAlgorithm`, `VwapExecutionAlgorithm`, `ExecutionAlgorithm`, `NautilusKernel` | Deterministic child slicing, trade-volume participation caps, minimum/maximum slices, IOC/GTC selection, fill tracking, cancellation, and state restoration |
 | Transport benchmark | Implemented | `TransportMessagingJmhBenchmark`, `AeronBenchmarkProcess` | Common payload, single/four-producer throughput, end-to-end sample time, cross-process Aeron, GC allocation profiling, and sampled CPU stacks |
 | Runtime transport selection | Implemented optional | `ExternalTransportSelection`, `NautilusKernelConfig`, `NautilusKernel` | Explicit `NONE`, Redis, or Aeron selection with kernel-owned backing lifecycle; Aeron reuses per-publisher envelope buffers |
+| Deployment configuration | Implemented | `TransportEnvironmentConfig`, `docs/deployment/transport.env.example` | Environment-driven Redis/Aeron host, port, stream, IPC directory, retry, batching, and timeout settings with validation |
+| Trading workload benchmark | Implemented | `TradingWorkloadJmhBenchmark` | Market snapshot, L3 book, trade tick, order, fill, portfolio, and account-state round trips with one/four child-order modes |
 | External ring-buffer backing | Implemented as backing | `RingBufferMessageBusBacking` | Bounded queue; full-buffer policy currently drops and reports |
 | Persistence/event store | Implemented | `PersistentEventStore`, `EventReplayer`, `EventCheckpoint` | Versioned append-only JSONL, projections, synchronous replay, and checkpoint resume |
 | Binance USD-M Futures adapter | Implemented baseline | `BinanceFuturesAdapter`, `BinanceFuturesLiveRuntime` | Public streams, signed REST, user data, reconnects, and kernel routing; Testnet credentials remain opt-in |
