@@ -4,7 +4,7 @@ Date: 2026-09-06
 
 ## Harness
 
-`TransportMessagingJmhBenchmark` uses the same 64-byte binary payload for every transport. The first eight bytes contain a sequence number consumed by the live subscriber. The benchmark provides:
+`TransportMessagingJmhBenchmark` uses the same binary payload shape for every transport. The first eight bytes contain a sequence number consumed by the live subscriber. Payload sizes are parameterized at 64 bytes, 256 bytes, and 1 KiB. The benchmark provides:
 
 - single-producer throughput
 - four-producer throughput
@@ -105,6 +105,8 @@ Single-producer `-prof gc` results for the 64-byte payload:
 
 The allocation figures include this harness's payload and envelope construction. They are useful for relative direction, not an isolated transport-object accounting.
 
+The Aeron publisher was then changed to reuse a thread-local envelope buffer and cache the stable topic/type/encoding prefix. A follow-up short run measured approximately `605 B/op` for one producer and `638 B/op` for four producers, down from the earlier `933 B/op` and `926 B/op` results. The remaining allocation includes benchmark payload creation and the message/envelope path; longer runs should verify this on representative payloads.
+
 ### CPU profile observations
 
 The JMH `stack` profiler showed:
@@ -122,5 +124,7 @@ Use `-prof async` or `perfasm` on deployment hardware for deeper CPU attribution
 - Use Disruptor for same-JVM feed-to-trading-thread handoff when bounded buffering and ordered consumption matter.
 - Use Aeron for cross-process Java IPC or when sub-millisecond end-to-end handoff matters; its same-JVM result is lower-throughput than this Disruptor configuration but substantially lower latency in this short run.
 - Use Redis Streams for durable external coordination, recovery, and process-to-process integration where tens of thousands of messages per second and tens-to-hundreds of microseconds latency are acceptable.
+
+Runtime selection is explicit through `NautilusKernelConfig.externalTransport()`: `NONE` is the default, while `ExternalTransportSelection.aeron(...)` and `ExternalTransportSelection.redis(...)` construct the selected backing and make its lifecycle kernel-owned.
 
 These are directional short-run measurements. Repeat with production payload sizes, subscriber counts, CPU pinning, wait strategies, Redis topology, and longer measurement windows before making a latency-sensitive deployment decision.

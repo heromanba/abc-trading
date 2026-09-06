@@ -48,7 +48,7 @@ public class TransportMessagingJmhBenchmark {
     @Param({"direct", "disruptor", "aeron", "aeronProcess", "redis"})
     private String transport;
 
-    @Param({"64"})
+    @Param({"64", "256", "1024"})
     private int payloadSize;
 
     private MessageBus directBus;

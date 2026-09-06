@@ -39,6 +39,10 @@ public class MessageBus {
         registerType(cls.getName(), cls);
     }
 
+    public boolean isExternalConfigured() {
+        return serializer != null && backing != null;
+    }
+
     public <T> void subscribe(Class<T> cls, Handler<T> handler) {
         subscribe(cls, handler, 0);
     }

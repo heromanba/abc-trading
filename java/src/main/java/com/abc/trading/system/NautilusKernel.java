@@ -83,7 +83,7 @@ public final class NautilusKernel implements AutoCloseable {
     }
 
     public NautilusKernel(NautilusKernelConfig config) {
-        this(config, null);
+        this(config, config.externalTransport().createBacking());
     }
 
     public NautilusKernel(MessageBusBacking externalBacking) {

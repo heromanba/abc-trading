@@ -10,6 +10,7 @@ import org.agrona.concurrent.UnsafeBuffer;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -30,6 +31,8 @@ public final class AeronMessageBusBacking implements MessageBusBacking, AutoClos
     private final ExecutorService consumers;
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final AtomicReference<Throwable> failure = new AtomicReference<>();
+        private final ThreadLocal<PublicationScratch> publicationScratch =
+            ThreadLocal.withInitial(PublicationScratch::new);
 
     public AeronMessageBusBacking() {
         this(AeronMessageBusConfig.embedded());
@@ -73,11 +76,11 @@ public final class AeronMessageBusBacking implements MessageBusBacking, AutoClos
     public void publish(BusMessage message) {
         Objects.requireNonNull(message, "message");
         ensureOpen();
-        byte[] encoded = encode(message);
-        UnsafeBuffer buffer = new UnsafeBuffer(encoded);
+        PublicationScratch scratch = publicationScratch.get();
+        int encodedLength = scratch.encode(message);
         long result = Publication.NOT_CONNECTED;
         for (int attempt = 0; attempt <= config.maxRetries(); attempt++) {
-            result = publication.offer(buffer, 0, encoded.length);
+            result = publication.offer(scratch.buffer, 0, encodedLength);
             if (result > 0) return;
             if (result == Publication.CLOSED || result == Publication.MAX_POSITION_EXCEEDED) break;
             if (attempt < config.maxRetries()) waitBeforeRetry();
@@ -115,15 +118,8 @@ public final class AeronMessageBusBacking implements MessageBusBacking, AutoClos
     }
 
     static byte[] encode(BusMessage message) {
-        byte[] topic = message.getTopic().getBytes(StandardCharsets.UTF_8);
-        byte[] type = message.getPayloadType().getBytes(StandardCharsets.UTF_8);
-        byte[] payload = message.getPayload();
-        byte[] encoding = message.getEncoding().name().getBytes(StandardCharsets.US_ASCII);
-        ByteBuffer buffer = ByteBuffer.allocate(4 + 4 + topic.length + 4 + type.length
-                + 4 + encoding.length + 4 + payload.length).order(ByteOrder.BIG_ENDIAN);
-        buffer.putInt(VERSION).putInt(topic.length).put(topic).putInt(type.length).put(type)
-                .putInt(encoding.length).put(encoding).putInt(payload.length).put(payload);
-        return buffer.array();
+        PublicationScratch scratch = new PublicationScratch();
+        return Arrays.copyOf(scratch.storage, scratch.encode(message));
     }
 
     static BusMessage decode(byte[] bytes) {
@@ -186,6 +182,53 @@ public final class AeronMessageBusBacking implements MessageBusBacking, AutoClos
             throw new IllegalArgumentException("Invalid Aeron " + name + " length");
         }
         return length;
+    }
+
+    private static final class PublicationScratch {
+        private byte[] storage = new byte[1024];
+        private UnsafeBuffer buffer = new UnsafeBuffer(storage);
+        private String topic;
+        private String payloadType;
+        private SerializationEncoding encoding;
+        private byte[] prefix;
+
+        private int encode(BusMessage message) {
+            if (!message.getTopic().equals(topic)
+                    || !message.getPayloadType().equals(payloadType)
+                    || message.getEncoding() != encoding) {
+                topic = message.getTopic();
+                payloadType = message.getPayloadType();
+                encoding = message.getEncoding();
+                prefix = encodePrefix(message);
+            }
+
+            byte[] payload = message.getPayload();
+            int totalLength = prefix.length + Integer.BYTES + payload.length;
+            ensureCapacity(totalLength);
+            System.arraycopy(prefix, 0, storage, 0, prefix.length);
+            buffer.putInt(prefix.length, payload.length, ByteOrder.BIG_ENDIAN);
+            buffer.putBytes(prefix.length + Integer.BYTES, payload);
+            return totalLength;
+        }
+
+        private void ensureCapacity(int requiredLength) {
+            if (requiredLength <= storage.length) return;
+            int capacity = storage.length;
+            while (capacity < requiredLength) capacity = Math.multiplyExact(capacity, 2);
+            storage = Arrays.copyOf(storage, capacity);
+            buffer.wrap(storage);
+        }
+
+        private static byte[] encodePrefix(BusMessage message) {
+            byte[] topic = message.getTopic().getBytes(StandardCharsets.UTF_8);
+            byte[] type = message.getPayloadType().getBytes(StandardCharsets.UTF_8);
+            byte[] encoding = message.getEncoding().name().getBytes(StandardCharsets.US_ASCII);
+            ByteBuffer buffer = ByteBuffer.allocate(4 + 4 + topic.length + 4 + type.length
+                    + 4 + encoding.length).order(ByteOrder.BIG_ENDIAN);
+            buffer.putInt(VERSION).putInt(topic.length).put(topic).putInt(type.length).put(type)
+                    .putInt(encoding.length).put(encoding);
+            return buffer.array();
+        }
     }
 
     public static final class AeronSubscription implements AutoCloseable {

@@ -40,6 +40,7 @@ initial-margin, maintenance-margin, and currency information.
 - Aeron IPC external message-bus backing with embedded-driver and shared-directory modes
 - TWAP and trade-volume participation execution algorithms with restart snapshots
 - comparable direct/Disruptor/Aeron/Redis transport benchmark harness with throughput, latency, allocation, and CPU profiling
+- explicit kernel transport selection with allocation-reduced Aeron publication buffers
 - component lifecycle and kernel composition
 - Python strategy callbacks through JPype
 - market and limit orders
@@ -206,6 +207,7 @@ The Python bridge lives under `python/abc_trading`; reconciliation scripts live 
 | Aeron IPC external backing | Implemented optional | `AeronMessageBusBacking`, `AeronMessageBusConfig`, `NautilusKernel` | Versioned binary envelope, bounded publication retry, ordered subscription polling, embedded MediaDriver mode, and shared Aeron-directory client mode |
 | TWAP/VWAP execution | Implemented | `TwapExecutionAlgorithm`, `VwapExecutionAlgorithm`, `ExecutionAlgorithm`, `NautilusKernel` | Deterministic child slicing, trade-volume participation caps, minimum/maximum slices, IOC/GTC selection, fill tracking, cancellation, and state restoration |
 | Transport benchmark | Implemented | `TransportMessagingJmhBenchmark`, `AeronBenchmarkProcess` | Common payload, single/four-producer throughput, end-to-end sample time, cross-process Aeron, GC allocation profiling, and sampled CPU stacks |
+| Runtime transport selection | Implemented optional | `ExternalTransportSelection`, `NautilusKernelConfig`, `NautilusKernel` | Explicit `NONE`, Redis, or Aeron selection with kernel-owned backing lifecycle; Aeron reuses per-publisher envelope buffers |
 | External ring-buffer backing | Implemented as backing | `RingBufferMessageBusBacking` | Bounded queue; full-buffer policy currently drops and reports |
 | Persistence/event store | Implemented | `PersistentEventStore`, `EventReplayer`, `EventCheckpoint` | Versioned append-only JSONL, projections, synchronous replay, and checkpoint resume |
 | Binance USD-M Futures adapter | Implemented baseline | `BinanceFuturesAdapter`, `BinanceFuturesLiveRuntime` | Public streams, signed REST, user data, reconnects, and kernel routing; Testnet credentials remain opt-in |
