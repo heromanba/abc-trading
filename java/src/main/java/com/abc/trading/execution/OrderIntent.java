@@ -23,6 +23,8 @@ public record OrderIntent(
         double trailingOffset,
         TrailingOffsetType trailingOffsetType
 ) {
+        public BigDecimal priceDecimal() { return BigDecimal.valueOf(price); }
+        public BigDecimal realizedPnlDecimal() { return BigDecimal.valueOf(realizedPnl); }
         public OrderIntent(String strategyId, String symbol, long inputSequence, long marketTimestamp,
                         String correlationId, String orderId, SignalDirection side, Quantity quantity, double price,
                         BigDecimal currentPosition, double realizedPnl, TimeInForce timeInForce, long expireTimeNs,

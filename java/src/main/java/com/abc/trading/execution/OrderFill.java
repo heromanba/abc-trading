@@ -69,6 +69,9 @@ public record OrderFill(
                 liquiditySide, venueOrderId);
     }
 
+        public BigDecimal priceDecimal() { return BigDecimal.valueOf(price); }
+        public BigDecimal realizedPnlDecimal() { return BigDecimal.valueOf(realizedPnl); }
+
     public OrderFill withCommission(Commission nextCommission) {
         return new OrderFill(strategyId, symbol, inputSequence, marketTimestamp, correlationId,
                 orderId, side, quantity, price, position, realizedPnl, nextCommission,

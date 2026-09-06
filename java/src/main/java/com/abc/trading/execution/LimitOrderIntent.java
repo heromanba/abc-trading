@@ -24,6 +24,8 @@ public record LimitOrderIntent(
         TrailingOffsetType trailingOffsetType,
         double limitOffset
 ) {
+        public BigDecimal limitPriceDecimal() { return BigDecimal.valueOf(limitPrice); }
+        public BigDecimal realizedPnlDecimal() { return BigDecimal.valueOf(realizedPnl); }
         public LimitOrderIntent(String strategyId, String symbol, long inputSequence, long marketTimestamp,
                         String correlationId, String orderId, SignalDirection side, Quantity quantity, double limitPrice,
                         BigDecimal currentPosition, double realizedPnl, TimeInForce timeInForce, long expireTimeNs,

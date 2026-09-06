@@ -220,6 +220,11 @@ public final class AccountLedger {
 
     public void updatePosition(String venue, InstrumentSpec instrument, BigDecimal position,
             double averagePrice, long timestamp) {
+        updatePosition(venue, instrument, position, BigDecimal.valueOf(averagePrice), timestamp);
+        }
+
+        public void updatePosition(String venue, InstrumentSpec instrument, BigDecimal position,
+            BigDecimal averagePrice, long timestamp) {
         Account account = account(venue);
         if (account == null) return;
         if (position.signum() == 0) {
@@ -227,12 +232,12 @@ public final class AccountLedger {
             account.isolatedCollateral.remove(instrument.symbol());
         } else {
             BigDecimal initial = account.type == AccountType.CASH ? BigDecimal.ZERO
-                : marginFor(instrument, Quantity.fromDecimal(position.abs(), position.scale()), averagePrice,
+                : marginFor(instrument, Quantity.fromDecimal(position.abs(), position.scale()), averagePrice.doubleValue(),
                     account.leverage, false);
             account.positionMargins.put(instrument.symbol(), new MarginRequirement(
-            instrument.symbol(), marginCurrency(instrument), position, averagePrice, averagePrice,
+            instrument.symbol(), marginCurrency(instrument), position, averagePrice.doubleValue(), averagePrice.doubleValue(),
             initial,
-            account.type == AccountType.CASH ? BigDecimal.ZERO : marginFor(instrument, Quantity.fromDecimal(position.abs(), position.scale()), averagePrice,
+            account.type == AccountType.CASH ? BigDecimal.ZERO : marginFor(instrument, Quantity.fromDecimal(position.abs(), position.scale()), averagePrice.doubleValue(),
                 account.leverage, true),
             instrument.derivativeType().isInverse(), instrument.contractMultiplier()));
             if (account.marginMode == MarginMode.ISOLATED) {

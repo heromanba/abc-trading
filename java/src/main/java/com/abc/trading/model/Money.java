@@ -19,9 +19,14 @@ public final class Money {
         this.currency = currency;
     }
 
+    public Money(Decimal amount, String currency) {
+        this(amount.asBigDecimal(), currency);
+    }
+
     public double amount() { return amountDecimal.doubleValue(); }
     public BigDecimal amountDecimal() { return amountDecimal; }
     public String currency() { return currency; }
+    public Decimal decimal() { return new Decimal(amountDecimal); }
 
     public Money rounded(RoundingMode roundingMode) {
         return new Money(CurrencyPrecision.round(amountDecimal, currency, roundingMode), currency);

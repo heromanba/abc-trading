@@ -9,13 +9,14 @@ import com.abc.trading.data.MarketDataSnapshot;
 import com.abc.trading.data.FundingRateUpdate;
 import com.abc.trading.data.InstrumentSpec;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /** Minimal deterministic portfolio state owner. */
 public final class Portfolio {
     private final Cache cache;
-    private final Map<String, Double> averagePrices = new LinkedHashMap<>();
+    private final Map<String, BigDecimal> averagePrices = new LinkedHashMap<>();
     private final Map<String, BigDecimal> realizedPnl = new LinkedHashMap<>();
     private final AccountLedger accountLedger = new AccountLedger();
 
@@ -40,7 +41,7 @@ public final class Portfolio {
 
     public PositionUpdate applyFill(OrderFill fill) {
         BigDecimal previousPosition = cache.position(fill.symbol());
-        double previousAverage = averagePrices.getOrDefault(fill.symbol(), 0.0);
+        BigDecimal previousAverage = averagePrices.getOrDefault(fill.symbol(), BigDecimal.ZERO);
         BigDecimal signedQuantity = fill.quantity().asDecimal();
         if (fill.side() == com.abc.trading.execution.SignalDirection.SELL) signedQuantity = signedQuantity.negate();
         BigDecimal nextPosition = previousPosition.add(signedQuantity);
@@ -52,21 +53,21 @@ public final class Portfolio {
             BigDecimal closeDirection = previousPosition.signum() > 0 ? BigDecimal.ONE : BigDecimal.ONE.negate();
             BigDecimal signedClosedQuantity = closedQuantity.multiply(closeDirection);
             BigDecimal pnl = instrument == null
-                    ? signedClosedQuantity.multiply(BigDecimal.valueOf(fill.price() - previousAverage))
-                    : instrument.calculatePnl(signedClosedQuantity, BigDecimal.valueOf(previousAverage),
+                    ? signedClosedQuantity.multiply(BigDecimal.valueOf(fill.price()).subtract(previousAverage))
+                    : instrument.calculatePnl(signedClosedQuantity, previousAverage,
                         BigDecimal.valueOf(fill.price()));
             realizedPnlDelta = realizedPnlDelta.add(pnl);
         }
 
         if (nextPosition.signum() == 0) {
-            averagePrices.put(fill.symbol(), 0.0);
+            averagePrices.put(fill.symbol(), BigDecimal.ZERO);
         } else if (previousPosition.signum() == 0
                 || previousPosition.signum() == signedQuantity.signum()) {
-            double total = previousPosition.abs().doubleValue() * previousAverage
-                    + signedQuantity.abs().doubleValue() * fill.price();
-            averagePrices.put(fill.symbol(), total / nextPosition.abs().doubleValue());
+                BigDecimal total = previousPosition.abs().multiply(previousAverage)
+                    .add(signedQuantity.abs().multiply(BigDecimal.valueOf(fill.price())));
+                averagePrices.put(fill.symbol(), total.divide(nextPosition.abs(), RoundingMode.HALF_EVEN));
         } else {
-            averagePrices.put(fill.symbol(), fill.price());
+                averagePrices.put(fill.symbol(), BigDecimal.valueOf(fill.price()));
         }
 
         BigDecimal cumulativeRealizedPnl = realizedPnl.getOrDefault(fill.symbol(), BigDecimal.ZERO).add(realizedPnlDelta);
@@ -76,7 +77,7 @@ public final class Portfolio {
             String venue = cache.venue(fill.symbol());
                 accountLedger.applyFill(venue, fill, realizedPnlDelta, instrument);
                 accountLedger.updatePosition(venue, instrument, nextPosition,
-                    averagePrices.getOrDefault(fill.symbol(), 0.0), fill.marketTimestamp());
+                    averagePrices.getOrDefault(fill.symbol(), BigDecimal.ZERO), fill.marketTimestamp());
         }
         return new PositionUpdate(
                 fill.symbol(),

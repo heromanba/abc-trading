@@ -1,6 +1,7 @@
 package com.abc.trading.data;
 
 import java.math.BigDecimal;
+import com.abc.trading.model.identifiers.InstrumentId;
 
 /** Instrument metadata required by account settlement and margin calculation. */
 public record InstrumentSpec(
@@ -20,7 +21,8 @@ public record InstrumentSpec(
         BigDecimal priceTickSize,
         DerivativeType derivativeType,
         BigDecimal contractMultiplier,
-        String settlementCurrency) {
+        String settlementCurrency,
+        InstrumentType instrumentType) {
     private static final java.math.MathContext DECIMAL_CONTEXT = java.math.MathContext.DECIMAL128;
     public InstrumentSpec(String symbol, String venue, TickScheme tickScheme,
             String baseCurrency, String quoteCurrency, double marginInitialRate,
@@ -29,7 +31,7 @@ public record InstrumentSpec(
             marginMaintenanceRate, MarginModelType.NOTIONAL_RATE, 0.0, 0.0,
             0, BigDecimal.ONE, precisionOf(tickScheme.tickSize(0.0)),
             BigDecimal.valueOf(tickScheme.tickSize(0.0)), DerivativeType.SPOT,
-            BigDecimal.ONE, quoteCurrency);
+            BigDecimal.ONE, quoteCurrency, InstrumentType.FX);
     }
 
     public InstrumentSpec(String symbol, String venue, TickScheme tickScheme,
@@ -39,7 +41,7 @@ public record InstrumentSpec(
         this(symbol, venue, tickScheme, baseCurrency, quoteCurrency, marginInitialRate,
                 marginMaintenanceRate, marginModelType, initialMarginPerUnit, maintenanceMarginPerUnit,
                 0, BigDecimal.ONE, precisionOf(tickScheme.tickSize(0.0)), BigDecimal.valueOf(tickScheme.tickSize(0.0)),
-                DerivativeType.SPOT, BigDecimal.ONE, quoteCurrency);
+                DerivativeType.SPOT, BigDecimal.ONE, quoteCurrency, InstrumentType.FX);
     }
 
     public InstrumentSpec(String symbol, String venue, TickScheme tickScheme,
@@ -50,8 +52,21 @@ public record InstrumentSpec(
             BigDecimal priceTickSize) {
         this(symbol, venue, tickScheme, baseCurrency, quoteCurrency, marginInitialRate,
             marginMaintenanceRate, marginModelType, initialMarginPerUnit, maintenanceMarginPerUnit,
-            sizePrecision, sizeIncrement, pricePrecision, priceTickSize, DerivativeType.SPOT,
-            BigDecimal.ONE, quoteCurrency);
+                sizePrecision, sizeIncrement, pricePrecision, priceTickSize, DerivativeType.SPOT,
+                BigDecimal.ONE, quoteCurrency, InstrumentType.FX);
+    }
+
+    public InstrumentSpec(String symbol, String venue, TickScheme tickScheme,
+            String baseCurrency, String quoteCurrency, double marginInitialRate,
+            double marginMaintenanceRate, MarginModelType marginModelType,
+            double initialMarginPerUnit, double maintenanceMarginPerUnit,
+            int sizePrecision, BigDecimal sizeIncrement, int pricePrecision,
+            BigDecimal priceTickSize, DerivativeType derivativeType,
+            BigDecimal contractMultiplier, String settlementCurrency) {
+            this(symbol, venue, tickScheme, baseCurrency, quoteCurrency, marginInitialRate,
+                marginMaintenanceRate, marginModelType, initialMarginPerUnit, maintenanceMarginPerUnit,
+                sizePrecision, sizeIncrement, pricePrecision, priceTickSize, derivativeType,
+                contractMultiplier, settlementCurrency, typeFor(derivativeType, baseCurrency, quoteCurrency));
     }
 
     public InstrumentSpec {
@@ -98,13 +113,14 @@ public record InstrumentSpec(
         if (settlementCurrency == null || settlementCurrency.isBlank()) {
             throw new IllegalArgumentException("settlementCurrency is required");
         }
+        if (instrumentType == null) throw new IllegalArgumentException("instrumentType is required");
     }
 
     public static InstrumentSpec defaults(String symbol, String venue, TickScheme tickScheme) {
         return new InstrumentSpec(symbol, venue, tickScheme, symbol, "USD", 1.0, 0.5,
             MarginModelType.NOTIONAL_RATE, 0.0, 0.0, 0, BigDecimal.ONE,
             precisionOf(tickScheme.tickSize(0.0)), BigDecimal.valueOf(tickScheme.tickSize(0.0)),
-            DerivativeType.SPOT, BigDecimal.ONE, "USD");
+            DerivativeType.SPOT, BigDecimal.ONE, "USD", InstrumentType.FX);
     }
 
     private static int precisionOf(double value) {
@@ -135,6 +151,24 @@ public record InstrumentSpec(
         if (value.remainder(priceTickSize).signum() != 0) {
             throw new IllegalArgumentException("price does not match priceTickSize for " + symbol);
         }
+    }
+
+    public void validatePrice(Price price) {
+        if (price == null) throw new IllegalArgumentException("price is required");
+        validatePrice(price.asDecimal().doubleValue());
+        if (price.asDecimal().remainder(priceTickSize).signum() != 0) {
+            throw new IllegalArgumentException("price does not match priceTickSize for " + symbol);
+        }
+    }
+
+    public InstrumentId instrumentId() { return new InstrumentId(symbol + "." + venue); }
+
+    private static InstrumentType typeFor(DerivativeType derivativeType, String baseCurrency, String quoteCurrency) {
+        return switch (derivativeType) {
+            case LINEAR_FUTURE, INVERSE_FUTURE -> InstrumentType.FUTURE;
+            case LINEAR_PERPETUAL, INVERSE_PERPETUAL -> InstrumentType.PERPETUAL;
+            case SPOT -> baseCurrency.equals(quoteCurrency) ? InstrumentType.EQUITY : InstrumentType.FX;
+        };
     }
 
     /** Returns signed realized or unrealized PnL for a position quantity. */
