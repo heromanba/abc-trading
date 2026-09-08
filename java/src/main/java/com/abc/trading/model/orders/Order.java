@@ -4,6 +4,9 @@ import com.abc.trading.execution.SignalDirection;
 import com.abc.trading.execution.TriggerType;
 import com.abc.trading.execution.TrailingOffsetType;
 import com.abc.trading.data.Quantity;
+import com.abc.trading.data.Price;
+
+import java.math.BigDecimal;
 
 public sealed interface Order permits MarketOrder, LimitOrder, StopMarketOrder, StopLimitOrder,
     TrailingStopMarketOrder, TrailingStopLimitOrder {
@@ -13,9 +16,12 @@ public sealed interface Order permits MarketOrder, LimitOrder, StopMarketOrder, 
     SignalDirection side();
     Quantity quantity();
     double price();
+    default BigDecimal priceDecimal() { return BigDecimal.valueOf(price()); }
+    default Price priceValue(int precision) { return Price.fromDecimal(priceDecimal(), precision); }
     long timestampNs();
 
     default double triggerPrice() { return 0.0; }
+    default BigDecimal triggerPriceDecimal() { return BigDecimal.valueOf(triggerPrice()); }
 
     default TriggerType triggerType() { return TriggerType.NO_TRIGGER; }
 

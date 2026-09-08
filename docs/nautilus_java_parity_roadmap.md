@@ -21,7 +21,7 @@ This roadmap tracks the remaining behavioral and API gap between the Java rewrit
 - [ ] Migrate order commands, fills, book levels, triggers, fees, and event prices away from `double`.
 - [x] Migrate portfolio average fill prices and realized PnL calculations to BigDecimal arithmetic.
 - [x] Add explicit instrument taxonomy metadata for equity, FX, futures, and perpetuals.
-- [ ] Add option and spread contract semantics, including pricing and margin behavior.
+- [x] Add option and spread contract semantics, including exact intrinsic payoff, margin, and net spread valuation.
 - [x] Preserve backward-compatible constructors while making exact types available as the preferred API.
 
 ## Phase 2: Order and Execution Parity

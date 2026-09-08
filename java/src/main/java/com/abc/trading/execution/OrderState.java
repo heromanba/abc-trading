@@ -2,6 +2,8 @@ package com.abc.trading.execution;
 
 import com.abc.trading.data.Quantity;
 
+import java.math.BigDecimal;
+
 public record OrderState(
         String orderId,
         OrderStatus status,
@@ -26,6 +28,8 @@ public record OrderState(
                 }
                 if (timeInForce == null) throw new IllegalArgumentException("timeInForce is required");
         }
+
+        public BigDecimal averageFillPriceDecimal() { return BigDecimal.valueOf(averageFillPrice); }
 
         public OrderState(String orderId, OrderStatus status, int submittedQuantity,
                         int filledQuantity, double averageFillPrice) {
