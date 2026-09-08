@@ -8,6 +8,7 @@ import com.abc.trading.execution.TimeInForce;
 import com.abc.trading.execution.TriggerType;
 import com.abc.trading.execution.TrailingOffsetType;
 import com.abc.trading.data.Quantity;
+import com.abc.trading.data.Price;
 import java.math.BigDecimal;
 
 /** Trading command analogous to Nautilus SubmitOrder. */
@@ -37,14 +38,17 @@ public record SubmitOrder(
         double limitOffset,
         TriggerType emulationTrigger
 ) {
+    public Price priceValue(int precision) { return Price.fromDecimal(java.math.BigDecimal.valueOf(price), precision); }
+    public Price triggerPriceValue(int precision) { return Price.fromDecimal(java.math.BigDecimal.valueOf(triggerPrice), precision); }
+    public Price activationPriceValue(int precision) { return Price.fromDecimal(java.math.BigDecimal.valueOf(activationPrice), precision); }
         public SubmitOrder(String traderId, String strategyId, String symbol, long inputSequence,
             long timestampNs, String clientOrderId, String commandId, String correlationId,
             SignalDirection side, OrderType orderType, int quantity, double price,
             int currentPosition, double realizedPnl, Order order) {
         this(traderId, strategyId, symbol, inputSequence, timestampNs, clientOrderId, commandId,
             correlationId, side, orderType, Quantity.fromInt(quantity), price, BigDecimal.valueOf(currentPosition), realizedPnl,
-            order, TimeInForce.GTC, 0L, order.triggerPrice(), order.triggerType(),
-            order.activationPrice(), order.trailingOffset(), order.trailingOffsetType(), order.limitOffset(),
+            order, TimeInForce.GTC, 0L, order.triggerPrice().asDouble(), order.triggerType(),
+            order.activationPrice().asDouble(), order.trailingOffset(), order.trailingOffsetType(), order.limitOffset(),
             order.emulationTrigger());
         }
     public SubmitOrder {

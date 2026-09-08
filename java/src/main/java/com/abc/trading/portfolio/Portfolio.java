@@ -53,9 +53,9 @@ public final class Portfolio {
             BigDecimal closeDirection = previousPosition.signum() > 0 ? BigDecimal.ONE : BigDecimal.ONE.negate();
             BigDecimal signedClosedQuantity = closedQuantity.multiply(closeDirection);
             BigDecimal pnl = instrument == null
-                    ? signedClosedQuantity.multiply(BigDecimal.valueOf(fill.price()).subtract(previousAverage))
+                    ? signedClosedQuantity.multiply(fill.price().asDecimal().subtract(previousAverage))
                     : instrument.calculatePnl(signedClosedQuantity, previousAverage,
-                        BigDecimal.valueOf(fill.price()));
+                        fill.price().asDecimal());
             realizedPnlDelta = realizedPnlDelta.add(pnl);
         }
 
@@ -64,10 +64,10 @@ public final class Portfolio {
         } else if (previousPosition.signum() == 0
                 || previousPosition.signum() == signedQuantity.signum()) {
                 BigDecimal total = previousPosition.abs().multiply(previousAverage)
-                    .add(signedQuantity.abs().multiply(BigDecimal.valueOf(fill.price())));
+                    .add(signedQuantity.abs().multiply(fill.price().asDecimal()));
                 averagePrices.put(fill.symbol(), total.divide(nextPosition.abs(), RoundingMode.HALF_EVEN));
         } else {
-                averagePrices.put(fill.symbol(), BigDecimal.valueOf(fill.price()));
+                averagePrices.put(fill.symbol(), fill.price().asDecimal());
         }
 
         BigDecimal cumulativeRealizedPnl = realizedPnl.getOrDefault(fill.symbol(), BigDecimal.ZERO).add(realizedPnlDelta);
@@ -143,7 +143,7 @@ public final class Portfolio {
     public AccountState applyMarketData(MarketDataSnapshot snapshot) {
         if (!cache.hasInstrument(snapshot.symbol())) return null;
         String venue = cache.venue(snapshot.symbol());
-        accountLedger.updateMarketPrice(venue, cache.instrument(snapshot.symbol()), snapshot.mark(), snapshot.tsInit());
+        accountLedger.updateMarketPrice(venue, cache.instrument(snapshot.symbol()), snapshot.mark().asDouble(), snapshot.tsInit());
         return accountLedger.state(venue, snapshot.tsInit());
     }
 

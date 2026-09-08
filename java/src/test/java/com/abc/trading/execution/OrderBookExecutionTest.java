@@ -27,7 +27,7 @@ class OrderBookExecutionTest {
 
         exchange.submitMarketOrder(order("buy-1", SignalDirection.BUY, 6));
 
-        assertEquals(List.of(101.0, 102.0), fills.stream().map(OrderFill::price).toList());
+        assertEquals(List.of(101.0, 102.0), fills.stream().map(fill -> fill.price().asDouble()).toList());
         assertEquals(List.of(Quantity.fromInt(3), Quantity.fromInt(3)), fills.stream().map(OrderFill::quantity).toList());
         assertEquals(List.of(LiquiditySide.TAKER, LiquiditySide.TAKER),
                 fills.stream().map(OrderFill::liquiditySide).toList());
@@ -42,7 +42,7 @@ class OrderBookExecutionTest {
 
         exchange.submitMarketOrder(order("sell-1", SignalDirection.SELL, 12));
 
-        assertEquals(List.of(99.0, 98.0), fills.stream().map(OrderFill::price).toList());
+        assertEquals(List.of(99.0, 98.0), fills.stream().map(fill -> fill.price().asDouble()).toList());
         assertEquals(List.of(Quantity.fromInt(5), Quantity.fromInt(4)), fills.stream().map(OrderFill::quantity).toList());
     }
 
@@ -58,7 +58,7 @@ class OrderBookExecutionTest {
 
         assertEquals(List.of(LiquiditySide.TAKER, LiquiditySide.MAKER),
                 fills.stream().map(OrderFill::liquiditySide).toList());
-        assertEquals(List.of(101.0, 100.0), fills.stream().map(OrderFill::price).toList());
+        assertEquals(List.of(101.0, 100.0), fills.stream().map(fill -> fill.price().asDouble()).toList());
     }
 
     @Test
@@ -97,7 +97,7 @@ class OrderBookExecutionTest {
             new OrderBookDelta("AAPL", 102, SignalDirection.SELL, BookAction.UPDATE, 102.0, 5, 3));
         exchange.submitMarketOrder(order("delta-buy", SignalDirection.BUY, 6));
 
-        assertEquals(List.of(101.0, 102.0), fills.stream().map(OrderFill::price).toList());
+        assertEquals(List.of(101.0, 102.0), fills.stream().map(fill -> fill.price().asDouble()).toList());
         assertEquals(List.of(Quantity.fromInt(1), Quantity.fromInt(5)), fills.stream().map(OrderFill::quantity).toList());
     }
 
@@ -115,7 +115,7 @@ class OrderBookExecutionTest {
 
         assertEquals(List.of("ask-1", "ask-2"), fills.stream().map(OrderFill::venueOrderId).toList());
         assertEquals(List.of(Quantity.fromInt(2), Quantity.fromInt(2)), fills.stream().map(OrderFill::quantity).toList());
-        assertEquals(List.of(101.0, 101.0), fills.stream().map(OrderFill::price).toList());
+        assertEquals(List.of(101.0, 101.0), fills.stream().map(fill -> fill.price().asDouble()).toList());
     }
 
     @Test
@@ -207,7 +207,7 @@ class OrderBookExecutionTest {
         exchange.processTradeTick(new TradeTick("AAPL", 102, 100.0, 4, AggressorSide.SELLER, 3));
 
         assertEquals(List.of(Quantity.fromInt(2)), fills.stream().map(OrderFill::quantity).toList());
-        assertEquals(List.of(100.0), fills.stream().map(OrderFill::price).toList());
+        assertEquals(List.of(100.0), fills.stream().map(fill -> fill.price().asDouble()).toList());
         assertEquals(List.of(LiquiditySide.MAKER), fills.stream().map(OrderFill::liquiditySide).toList());
         assertEquals(List.of(""), fills.stream().map(OrderFill::venueOrderId).toList());
     }

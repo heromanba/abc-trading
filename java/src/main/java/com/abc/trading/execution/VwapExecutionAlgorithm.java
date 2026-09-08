@@ -48,7 +48,7 @@ public final class VwapExecutionAlgorithm extends ExecutionAlgorithm {
         sliceValue = sliceValue.min(config.maximumSlice().asDecimal())
                 .min(remainingQuantity().asDecimal());
         if (sliceValue.signum() > 0) {
-            submitChild(Quantity.fromDecimal(sliceValue, precision), trade.price(), trade.tsInit());
+            submitChild(Quantity.fromDecimal(sliceValue, precision), trade.price().asDouble(), trade.tsInit());
         }
         setLastTimestampNs(trade.tsInit());
     }

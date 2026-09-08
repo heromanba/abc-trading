@@ -1,6 +1,7 @@
 package com.abc.trading.events;
 
 import com.abc.trading.data.Quantity;
+import com.abc.trading.data.Price;
 import com.abc.trading.execution.LiquiditySide;
 import com.abc.trading.execution.SignalDirection;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
@@ -38,6 +39,7 @@ public record Event(
         boolean marginCall,
         boolean liquidationRequired
 ) {
+        public Price priceValue(int precision) { return Price.fromDecimal(BigDecimal.valueOf(price), precision); }
     public Event(long inputSequence, long lifecycleSequence, long marketTimestamp, String symbol,
             String sourceEventType, EventType eventType, String strategyId,
             SignalDirection signalDirection, String correlationId, String orderId,

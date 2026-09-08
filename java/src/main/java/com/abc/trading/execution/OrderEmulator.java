@@ -48,8 +48,8 @@ public final class OrderEmulator {
 
     private static boolean matches(SubmitOrder command, MarketDataSnapshot snapshot) {
         double marketPrice = switch (command.emulationTrigger()) {
-            case DEFAULT, BID_ASK -> command.side() == SignalDirection.BUY ? snapshot.ask() : snapshot.bid();
-            case LAST_PRICE -> snapshot.last();
+            case DEFAULT, BID_ASK -> command.side() == SignalDirection.BUY ? snapshot.ask().asDouble() : snapshot.bid().asDouble();
+            case LAST_PRICE -> snapshot.last().asDouble();
             default -> throw new IllegalArgumentException("Unsupported emulation trigger");
         };
         double triggerPrice = command.triggerPrice() > 0.0 ? command.triggerPrice() : command.price();

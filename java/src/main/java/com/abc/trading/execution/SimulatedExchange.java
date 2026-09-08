@@ -87,8 +87,8 @@ public final class SimulatedExchange {
 
     public void processOrderBook(OrderBookSnapshot snapshot) {
         currentTimestamp = snapshot.tsInit();
-        double bid = snapshot.bids().isEmpty() ? snapshot.asks().get(0).price() : snapshot.bids().get(0).price();
-        double ask = snapshot.asks().isEmpty() ? snapshot.bids().get(0).price() : snapshot.asks().get(0).price();
+        double bid = snapshot.bids().isEmpty() ? snapshot.asks().get(0).price().asDouble() : snapshot.bids().get(0).price().asDouble();
+        double ask = snapshot.asks().isEmpty() ? snapshot.bids().get(0).price().asDouble() : snapshot.asks().get(0).price().asDouble();
         double midpoint = (bid + ask) / 2.0;
         marketData.put(snapshot.symbol(), new MarketDataSnapshot(
                 snapshot.symbol(), snapshot.tsInit(), bid, ask, midpoint, midpoint, midpoint, snapshot.sequence()));
@@ -153,7 +153,7 @@ public final class SimulatedExchange {
         L3BookState book = l3Books.get(trade.symbol());
         if (book == null) throw new IllegalStateException("No L3 order-book snapshot for " + trade.symbol());
         currentTimestamp = trade.tsInit();
-        updateMarketDataFromL3Trade(trade.symbol(), trade.tsInit(), trade.price(), trade.sequence());
+        updateMarketDataFromL3Trade(trade.symbol(), trade.tsInit(), trade.price().asDouble(), trade.sequence());
         expireDueOrders();
         drainDueCommands();
         processTriggers(trade.symbol());
@@ -245,9 +245,9 @@ public final class SimulatedExchange {
         liquidation.insertionSequence = workingOrderSequence++;
         MarketDataSnapshot snapshot = marketData.get(order.symbol());
         if (snapshot == null) throw new IllegalStateException("No market data for liquidation symbol " + order.symbol());
-        double executablePrice = order.side() == SignalDirection.SELL ? snapshot.bid() : snapshot.ask();
-        if (!Double.isFinite(executablePrice) || executablePrice <= 0.0) executablePrice = snapshot.mark();
-        if (!Double.isFinite(executablePrice) || executablePrice <= 0.0) executablePrice = snapshot.last();
+        double executablePrice = order.side() == SignalDirection.SELL ? snapshot.bid().asDouble() : snapshot.ask().asDouble();
+        if (!Double.isFinite(executablePrice) || executablePrice <= 0.0) executablePrice = snapshot.mark().asDouble();
+        if (!Double.isFinite(executablePrice) || executablePrice <= 0.0) executablePrice = snapshot.last().asDouble();
         if (!Double.isFinite(executablePrice) || executablePrice <= 0.0) {
             throw new IllegalStateException("No executable price for liquidation symbol " + order.symbol());
         }
@@ -410,7 +410,7 @@ public final class SimulatedExchange {
         MarketDataSnapshot snapshot = marketData.get(order.symbol);
         if (snapshot == null) throw new IllegalStateException("No market data for " + order.symbol);
         if (order.trailing && !order.activated) {
-            double activationMarket = order.side == SignalDirection.BUY ? snapshot.ask() : snapshot.bid();
+            double activationMarket = order.side == SignalDirection.BUY ? snapshot.ask().asDouble() : snapshot.bid().asDouble();
             boolean activate = order.activationPrice <= 0.0 || (order.side == SignalDirection.BUY
                     ? activationMarket <= order.activationPrice : activationMarket >= order.activationPrice);
             if (!activate) return false;
@@ -432,13 +432,13 @@ public final class SimulatedExchange {
             }
         }
         double marketPrice = switch (order.triggerType) {
-            case LAST_PRICE, DOUBLE_LAST -> snapshot.last();
-            case MARK_PRICE -> snapshot.mark();
-            case INDEX_PRICE -> snapshot.index();
+            case LAST_PRICE, DOUBLE_LAST -> snapshot.last().asDouble();
+            case MARK_PRICE -> snapshot.mark().asDouble();
+            case INDEX_PRICE -> snapshot.index().asDouble();
             case BID_ASK, DOUBLE_BID_ASK, DEFAULT -> order.side == SignalDirection.BUY
-                    ? snapshot.ask() : snapshot.bid();
-            case LAST_OR_BID_ASK -> snapshot.last();
-            case MID_POINT -> (snapshot.bid() + snapshot.ask()) / 2.0;
+                        ? snapshot.ask().asDouble() : snapshot.bid().asDouble();
+                    case LAST_OR_BID_ASK -> snapshot.last().asDouble();
+                    case MID_POINT -> (snapshot.bid().asDouble() + snapshot.ask().asDouble()) / 2.0;
             case NO_TRIGGER -> throw new IllegalArgumentException("Stop order trigger type is required");
         };
         return order.side == SignalDirection.BUY
@@ -504,10 +504,10 @@ public final class SimulatedExchange {
             BookLevel level = book.bestLevel(order.side == SignalDirection.BUY);
             if (level == null) break;
             boolean eligible = !order.limit || (order.side == SignalDirection.BUY
-                    ? level.price() <= order.price : level.price() >= order.price);
+                    ? level.price().asDouble() <= order.price : level.price().asDouble() >= order.price);
             if (!eligible) break;
             Quantity fillQuantity = level.quantity().min(order.quantity.subtract(order.filledQuantity)).min(budget);
-            fill(order, level.price(), fillQuantity, liquiditySide);
+            fill(order, level.price().asDouble(), fillQuantity, liquiditySide);
             book.consume(order.side == SignalDirection.BUY, fillQuantity);
             budget = budget.subtract(fillQuantity);
         }
@@ -534,10 +534,10 @@ public final class SimulatedExchange {
             VenueOrder venueOrder = book.bestOrder(order.side == SignalDirection.BUY);
             if (venueOrder == null) break;
             boolean eligible = !order.limit || (order.side == SignalDirection.BUY
-                    ? venueOrder.price() <= order.price : venueOrder.price() >= order.price);
+                    ? venueOrder.price().asDouble() <= order.price : venueOrder.price().asDouble() >= order.price);
             if (!eligible) break;
             Quantity fillQuantity = venueOrder.quantity().min(order.quantity.subtract(order.filledQuantity)).min(budget);
-            fill(order, venueOrder.price(), fillQuantity, liquiditySide, venueOrder.orderId());
+            fill(order, venueOrder.price().asDouble(), fillQuantity, liquiditySide, venueOrder.orderId());
             book.consume(order.side == SignalDirection.BUY, fillQuantity);
             budget = budget.subtract(fillQuantity);
         }
@@ -621,13 +621,13 @@ public final class SimulatedExchange {
 
     private static double trailingMarketPrice(WorkingOrder order, MarketDataSnapshot snapshot) {
         return switch (order.triggerType) {
-            case LAST_PRICE, DOUBLE_LAST -> snapshot.last();
-            case MARK_PRICE -> snapshot.mark();
-            case INDEX_PRICE -> snapshot.index();
+            case LAST_PRICE, DOUBLE_LAST -> snapshot.last().asDouble();
+            case MARK_PRICE -> snapshot.mark().asDouble();
+            case INDEX_PRICE -> snapshot.index().asDouble();
             case BID_ASK, DOUBLE_BID_ASK, DEFAULT -> order.side == SignalDirection.BUY
-                    ? snapshot.ask() : snapshot.bid();
-            case LAST_OR_BID_ASK -> snapshot.last();
-            case MID_POINT -> (snapshot.bid() + snapshot.ask()) / 2.0;
+                        ? snapshot.ask().asDouble() : snapshot.bid().asDouble();
+                    case LAST_OR_BID_ASK -> snapshot.last().asDouble();
+                    case MID_POINT -> (snapshot.bid().asDouble() + snapshot.ask().asDouble()) / 2.0;
             case NO_TRIGGER -> throw new IllegalArgumentException("trailing trigger type is required");
         };
     }
@@ -790,7 +790,7 @@ public final class SimulatedExchange {
                 }
                 case UPDATE -> {
                     if (existing == null) throw new IllegalStateException("unknown venue order: " + delta.orderId());
-                    existing.price = delta.price();
+                    existing.price = delta.price().asDouble();
                     existing.quantity = delta.quantity();
                     if (existing.quantity.isZero()) levels.remove(existing);
                 }
@@ -821,7 +821,7 @@ public final class SimulatedExchange {
             }
             for (WorkingOrder clientOrder : currentQueueOrders) {
                 if (!clientOrder.queueInitialized || clientOrder.side != delta.side()
-                        || Double.compare(clientOrder.price, delta.price()) != 0
+                        || Double.compare(clientOrder.price, delta.price().asDouble()) != 0
                         && !clientOrder.queueAheadOrders.containsKey(delta.orderId())) continue;
                 Quantity previous = clientOrder.queueAheadOrders.get(delta.orderId());
                 switch (delta.action()) {
@@ -833,7 +833,7 @@ public final class SimulatedExchange {
                     }
                     case UPDATE -> {
                         if (previous != null) {
-                            if (Double.compare(clientOrder.price, delta.price()) != 0) {
+                            if (Double.compare(clientOrder.price, delta.price().asDouble()) != 0) {
                                 clientOrder.queueAhead = clientOrder.queueAhead.subtract(previous);
                                 clientOrder.queueAheadOrders.remove(delta.orderId());
                             } else {
@@ -869,7 +869,7 @@ public final class SimulatedExchange {
             List<WorkingOrder> candidates = new ArrayList<>();
             for (WorkingOrder order : currentQueueOrders) {
                 if (!order.queueInitialized || order.queueAhead.isZero()
-                        || Double.compare(order.price, trade.price()) != 0) continue;
+                        || Double.compare(order.price, trade.price().asDouble()) != 0) continue;
                 boolean passiveSide = switch (trade.aggressorSide()) {
                     case BUYER -> order.side == SignalDirection.SELL;
                     case SELLER -> order.side == SignalDirection.BUY;
@@ -887,7 +887,7 @@ public final class SimulatedExchange {
                 remaining = remaining.subtract(consumedAhead);
                 if (remaining.isZero()) continue;
                 Quantity fillQuantity = remaining.min(order.quantity.subtract(order.filledQuantity)).min(exchange.maxFillQuantity);
-                exchange.fill(order, trade.price(), fillQuantity, LiquiditySide.MAKER);
+                exchange.fill(order, trade.price().asDouble(), fillQuantity, LiquiditySide.MAKER);
                 remaining = remaining.subtract(fillQuantity);
             }
         }
@@ -956,7 +956,7 @@ public final class SimulatedExchange {
         private MutableVenueOrder(VenueOrder order) {
             this.orderId = order.orderId();
             this.side = order.side();
-            this.price = order.price();
+            this.price = order.price().asDouble();
             this.quantity = order.quantity();
             this.sequence = order.sequence();
         }
@@ -991,7 +991,7 @@ public final class SimulatedExchange {
             List<MutableLevel> levels = levels(delta.side());
             MutableLevel existing = null;
             for (MutableLevel level : levels) {
-                if (Double.compare(level.price, delta.price()) == 0) {
+                if (Double.compare(level.price, delta.price().asDouble()) == 0) {
                     existing = level;
                     break;
                 }
@@ -1047,7 +1047,7 @@ public final class SimulatedExchange {
         private Quantity quantity;
 
         private MutableLevel(BookLevel level) {
-            this.price = level.price();
+            this.price = level.price().asDouble();
             this.quantity = level.quantity();
         }
 

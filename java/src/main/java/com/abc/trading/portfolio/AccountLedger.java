@@ -183,7 +183,7 @@ public final class AccountLedger {
         if (account == null) return;
         String currency = instrument == null ? account.currency : marginCurrency(instrument);
         if (account.type == AccountType.CASH) {
-            BigDecimal notional = fill.quantity().asDecimal().multiply(BigDecimal.valueOf(fill.price()), DECIMAL_CONTEXT);
+            BigDecimal notional = fill.quantity().asDecimal().multiply(fill.price().asDecimal(), DECIMAL_CONTEXT);
             BigDecimal cashDelta = fill.side() == SignalDirection.BUY ? notional.negate() : notional;
             BigDecimal commission = convert(fill.commission().amountDecimal(), fill.commission().currency(), currency);
             if (commission == null) return;

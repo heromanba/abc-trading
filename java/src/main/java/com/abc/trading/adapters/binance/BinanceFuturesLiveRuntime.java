@@ -233,7 +233,7 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
         last = event.price().doubleValue();
         sequence++;
         try {
-                tradeSink.accept(new TradeTick(event.symbol(), event.tradeTimeMs(), last,
+                tradeSink.accept(new TradeTick(event.symbol(), event.tradeTimeMs(), com.abc.trading.data.Price.fromDouble(last),
                     toQuantity(event.quantity()), event.buyerIsMaker() ? AggressorSide.SELLER : AggressorSide.BUYER,
                     sequence));
             } catch (RuntimeException error) {

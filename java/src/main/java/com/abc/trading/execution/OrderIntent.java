@@ -1,6 +1,7 @@
 package com.abc.trading.execution;
 
 import com.abc.trading.data.Quantity;
+import com.abc.trading.data.Price;
 import java.math.BigDecimal;
 
 public record OrderIntent(
@@ -23,6 +24,9 @@ public record OrderIntent(
         double trailingOffset,
         TrailingOffsetType trailingOffsetType
 ) {
+        public Price priceValue(int precision) { return Price.fromDecimal(java.math.BigDecimal.valueOf(price), precision); }
+        public Price triggerPriceValue(int precision) { return Price.fromDecimal(java.math.BigDecimal.valueOf(triggerPrice), precision); }
+        public Price activationPriceValue(int precision) { return Price.fromDecimal(java.math.BigDecimal.valueOf(activationPrice), precision); }
         public BigDecimal priceDecimal() { return BigDecimal.valueOf(price); }
         public BigDecimal realizedPnlDecimal() { return BigDecimal.valueOf(realizedPnl); }
         public OrderIntent(String strategyId, String symbol, long inputSequence, long marketTimestamp,

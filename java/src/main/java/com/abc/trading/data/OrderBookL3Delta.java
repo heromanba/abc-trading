@@ -9,11 +9,16 @@ public record OrderBookL3Delta(
         SignalDirection side,
         BookAction action,
         String orderId,
-        double price,
+        Price price,
         Quantity quantity,
         long sequence) {
     public OrderBookL3Delta(String symbol, long tsInit, SignalDirection side, BookAction action,
             String orderId, double price, int quantity, long sequence) {
+        this(symbol, tsInit, side, action, orderId, Price.fromDouble(price), Quantity.fromInt(quantity), sequence);
+    }
+
+    public OrderBookL3Delta(String symbol, long tsInit, SignalDirection side, BookAction action,
+            String orderId, Price price, int quantity, long sequence) {
         this(symbol, tsInit, side, action, orderId, price, Quantity.fromInt(quantity), sequence);
     }
 
@@ -22,7 +27,7 @@ public record OrderBookL3Delta(
         if (side == null || side == SignalDirection.HOLD) throw new IllegalArgumentException("side is required");
         if (action == null) throw new IllegalArgumentException("action is required");
         if (action != BookAction.CLEAR && (orderId == null || orderId.isBlank())) throw new IllegalArgumentException("orderId is required");
-        if (action != BookAction.CLEAR && (!Double.isFinite(price) || price <= 0.0)) throw new IllegalArgumentException("price must be positive");
+        if (action != BookAction.CLEAR && price == null) throw new IllegalArgumentException("price is required");
         if (action == BookAction.ADD && (quantity == null || quantity.isZero())) throw new IllegalArgumentException("ADD quantity must be positive");
         if (action == BookAction.UPDATE && quantity == null) throw new IllegalArgumentException("UPDATE quantity is required");
     }

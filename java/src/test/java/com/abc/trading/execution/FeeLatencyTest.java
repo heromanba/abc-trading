@@ -38,7 +38,7 @@ class FeeLatencyTest {
         exchange.processBar(new Bar("AAPL", 110, 102.0, 3));
 
         assertEquals(1, fills.size());
-        assertEquals(102.0, fills.get(0).price());
+        assertEquals(102.0, fills.get(0).price().asDouble());
     }
 
     @Test

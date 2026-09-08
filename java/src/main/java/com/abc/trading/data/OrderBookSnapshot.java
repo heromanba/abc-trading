@@ -16,9 +16,9 @@ public record OrderBookSnapshot(
         if (bids == null || asks == null || (bids.isEmpty() && asks.isEmpty())) {
             throw new IllegalArgumentException("at least one book side is required");
         }
-        bids = sortedLevels(bids, Comparator.comparingDouble(BookLevel::price).reversed(), "bids");
-        asks = sortedLevels(asks, Comparator.comparingDouble(BookLevel::price), "asks");
-        if (!bids.isEmpty() && !asks.isEmpty() && bids.get(0).price() > asks.get(0).price()) {
+        bids = sortedLevels(bids, Comparator.comparing(BookLevel::price).reversed(), "bids");
+        asks = sortedLevels(asks, Comparator.comparing(BookLevel::price), "asks");
+        if (!bids.isEmpty() && !asks.isEmpty() && bids.get(0).price().compareTo(asks.get(0).price()) > 0) {
             throw new IllegalArgumentException("best bid must not exceed best ask");
         }
     }

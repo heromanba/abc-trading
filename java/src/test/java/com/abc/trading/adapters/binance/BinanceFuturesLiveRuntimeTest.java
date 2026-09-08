@@ -52,7 +52,7 @@ class BinanceFuturesLiveRuntimeTest {
         OrderFill fill = events.stream().filter(OrderFill.class::isInstance)
                 .map(OrderFill.class::cast).findFirst().orElseThrow();
         assertEquals("client-1", fill.orderId());
-        assertEquals(100.20, fill.price());
+        assertEquals(100.20, fill.price().asDouble());
         assertEquals(com.abc.trading.data.Quantity.fromString("1", 0), fill.quantity());
         AccountStateEvent account = events.stream().filter(AccountStateEvent.class::isInstance)
             .map(AccountStateEvent.class::cast).findFirst().orElseThrow();

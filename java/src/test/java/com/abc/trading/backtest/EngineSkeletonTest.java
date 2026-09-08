@@ -35,11 +35,11 @@ class EngineSkeletonTest {
                 SignalDirection.BUY, 2, 999.0, 0, 0.0);
         OrderMatchingEngine matchingEngine = new OrderMatchingEngine();
 
-        assertEquals(123.45, matchingEngine.matchMarketOrder(order, 123.45).price());
+        assertEquals(123.45, matchingEngine.matchMarketOrder(order, 123.45).price().asDouble());
         LimitOrderIntent limit = new LimitOrderIntent(
                 "strategy", "AAPL", 1, 100, "correlation", "limit-order",
                 SignalDirection.BUY, 2, 120.0, 0, 0.0);
-        assertEquals(120.0, matchingEngine.matchLimitOrder(limit, 110.0).price());
+        assertEquals(120.0, matchingEngine.matchLimitOrder(limit, 110.0).price().asDouble());
         assertEquals(null, matchingEngine.matchLimitOrder(limit, 130.0));
     }
 
@@ -57,7 +57,7 @@ class EngineSkeletonTest {
         exchange.processBar(new com.abc.trading.data.Bar("AAPL", 200, 119.0, 2));
 
         assertEquals(1, fills.size());
-        assertEquals(119.0, fills.get(0).price());
+        assertEquals(119.0, fills.get(0).price().asDouble());
         assertEquals(0, exchange.pendingLimitOrderCount());
     }
 

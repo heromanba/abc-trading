@@ -1,6 +1,7 @@
 package com.abc.trading.execution;
 
 import com.abc.trading.data.Quantity;
+import com.abc.trading.data.Price;
 
 import java.math.BigDecimal;
 
@@ -13,7 +14,7 @@ public record OrderFill(
         String orderId,
         SignalDirection side,
         Quantity quantity,
-        double price,
+        Price price,
         BigDecimal position,
         double realizedPnl,
         Commission commission,
@@ -24,7 +25,7 @@ public record OrderFill(
             String correlationId, String orderId, SignalDirection side, Quantity quantity,
             double price, BigDecimal position, double realizedPnl) {
         this(strategyId, symbol, inputSequence, marketTimestamp, correlationId, orderId,
-                side, quantity, price, position, realizedPnl, Commission.zero("USD"),
+                side, quantity, Price.fromDouble(price), position, realizedPnl, Commission.zero("USD"),
                 LiquiditySide.TAKER, "");
     }
 
@@ -32,21 +33,23 @@ public record OrderFill(
             String correlationId, String orderId, SignalDirection side, Quantity quantity,
             double price, int position, double realizedPnl) {
         this(strategyId, symbol, inputSequence, marketTimestamp, correlationId, orderId,
-                side, quantity, price, BigDecimal.valueOf(position), realizedPnl);
+            side, quantity, Price.fromDouble(price), BigDecimal.valueOf(position), realizedPnl,
+            Commission.zero("USD"), LiquiditySide.TAKER, "");
     }
 
     public OrderFill(String strategyId, String symbol, long inputSequence, long marketTimestamp,
             String correlationId, String orderId, SignalDirection side, int quantity,
             double price, int position, double realizedPnl) {
         this(strategyId, symbol, inputSequence, marketTimestamp, correlationId, orderId,
-                side, Quantity.fromInt(quantity), price, BigDecimal.valueOf(position), realizedPnl);
+            side, Quantity.fromInt(quantity), Price.fromDouble(price), BigDecimal.valueOf(position), realizedPnl,
+            Commission.zero("USD"), LiquiditySide.TAKER, "");
     }
 
     public OrderFill(String strategyId, String symbol, long inputSequence, long marketTimestamp,
             String correlationId, String orderId, SignalDirection side, int quantity,
             double price, int position, double realizedPnl, Commission commission) {
         this(strategyId, symbol, inputSequence, marketTimestamp, correlationId, orderId,
-                side, Quantity.fromInt(quantity), price, BigDecimal.valueOf(position), realizedPnl,
+                side, Quantity.fromInt(quantity), Price.fromDouble(price), BigDecimal.valueOf(position), realizedPnl,
                 commission, LiquiditySide.TAKER, "");
     }
 
@@ -55,8 +58,16 @@ public record OrderFill(
             double price, int position, double realizedPnl, Commission commission,
             LiquiditySide liquiditySide, String venueOrderId) {
         this(strategyId, symbol, inputSequence, marketTimestamp, correlationId, orderId,
-                side, Quantity.fromInt(quantity), price, BigDecimal.valueOf(position), realizedPnl,
+                side, Quantity.fromInt(quantity), Price.fromDouble(price), BigDecimal.valueOf(position), realizedPnl,
                 commission, liquiditySide, venueOrderId);
+    }
+
+    public OrderFill(String strategyId, String symbol, long inputSequence, long marketTimestamp,
+            String correlationId, String orderId, SignalDirection side, Quantity quantity,
+            double price, BigDecimal position, double realizedPnl, Commission commission,
+            LiquiditySide liquiditySide, String venueOrderId) {
+        this(strategyId, symbol, inputSequence, marketTimestamp, correlationId, orderId, side,
+                quantity, Price.fromDouble(price), position, realizedPnl, commission, liquiditySide, venueOrderId);
     }
 
     public OrderFill withState(int nextPosition, double nextRealizedPnl) {
@@ -69,7 +80,8 @@ public record OrderFill(
                 liquiditySide, venueOrderId);
     }
 
-        public BigDecimal priceDecimal() { return BigDecimal.valueOf(price); }
+        public BigDecimal priceDecimal() { return price.asDecimal(); }
+        public double priceDouble() { return price.asDouble(); }
         public BigDecimal realizedPnlDecimal() { return BigDecimal.valueOf(realizedPnl); }
 
     public OrderFill withCommission(Commission nextCommission) {

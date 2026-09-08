@@ -90,7 +90,7 @@ class NautilusKernelTest {
             List<Double> fillPrices = new ArrayList<>();
             kernel.addVenue("XNAS");
             kernel.addInstrument("AAPL", "XNAS");
-            kernel.bus().subscribe(OrderFill.class, fill -> fillPrices.add(fill.price()), 100);
+            kernel.bus().subscribe(OrderFill.class, fill -> fillPrices.add(fill.price().asDouble()), 100);
             kernel.start();
             kernel.runBars(new Bar[] {new Bar("AAPL", 100, 123.45, 1)});
 
@@ -128,7 +128,7 @@ class NautilusKernelTest {
             kernel.runBars(new Bar[] {new Bar("AAPL", 110, 110.0, 3)});
 
             assertEquals(1, fills.size());
-            assertEquals(110.0, fills.get(0).price());
+            assertEquals(110.0, fills.get(0).price().asDouble());
             assertEquals(2.2, fills.get(0).commission().amount());
             assertEquals(BigDecimal.valueOf(2), kernel.portfolio().position("AAPL"));
             assertEquals(-2.2, kernel.portfolio().realizedPnl("AAPL"));

@@ -225,7 +225,7 @@ public final class BacktestEngine implements AutoCloseable {
         log(new Event(
                 fill.inputSequence(), nextLifecycleSequence(), fill.marketTimestamp(), fill.symbol(),
                 SettledOrderFill.class.getSimpleName(), EventType.ORDER_FILL, fill.strategyId(), fill.side(),
-                fill.correlationId(), fill.orderId(), fill.price(), fill.quantity(),
+                fill.correlationId(), fill.orderId(), fill.price().asDouble(), fill.quantity(),
                 settledFill.position(), fill.realizedPnl(),
                 fill.commission().amount(), fill.commission().currency(), fill.liquiditySide(),
                 fill.venueOrderId()));
@@ -282,7 +282,7 @@ public final class BacktestEngine implements AutoCloseable {
     private void logLiquidationFill(OrderFill fill) {
         log(new Event(fill.inputSequence(), nextLifecycleSequence(), fill.marketTimestamp(), fill.symbol(),
                 LiquidationFill.class.getSimpleName(), EventType.LIQUIDATION_FILL,
-                fill.strategyId(), fill.side(), fill.correlationId(), fill.orderId(), fill.price(), fill.quantity(),
+                fill.strategyId(), fill.side(), fill.correlationId(), fill.orderId(), fill.price().asDouble(), fill.quantity(),
                 fill.position(), fill.realizedPnl(), fill.commission().amount(), fill.commission().currency(),
                 fill.liquiditySide(), fill.venueOrderId()));
     }

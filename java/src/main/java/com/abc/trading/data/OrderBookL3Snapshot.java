@@ -24,8 +24,8 @@ public record OrderBookL3Snapshot(
         if (orders == null) throw new IllegalArgumentException("orders are required");
         List<VenueOrder> copy = new ArrayList<>(orders);
         Comparator<VenueOrder> comparator = side == SignalDirection.BUY
-                ? Comparator.comparingDouble(VenueOrder::price).reversed()
-                : Comparator.comparingDouble(VenueOrder::price);
+                ? Comparator.comparing(VenueOrder::price).reversed()
+                : Comparator.comparing(VenueOrder::price);
         copy.sort(comparator.thenComparingLong(VenueOrder::sequence)
                 .thenComparing(VenueOrder::orderId));
         return List.copyOf(copy);

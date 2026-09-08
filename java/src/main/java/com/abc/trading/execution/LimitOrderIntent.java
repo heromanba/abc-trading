@@ -1,6 +1,7 @@
 package com.abc.trading.execution;
 
 import com.abc.trading.data.Quantity;
+import com.abc.trading.data.Price;
 import java.math.BigDecimal;
 
 public record LimitOrderIntent(
@@ -24,6 +25,9 @@ public record LimitOrderIntent(
         TrailingOffsetType trailingOffsetType,
         double limitOffset
 ) {
+        public Price limitPriceValue(int precision) { return Price.fromDecimal(java.math.BigDecimal.valueOf(limitPrice), precision); }
+        public Price triggerPriceValue(int precision) { return Price.fromDecimal(java.math.BigDecimal.valueOf(triggerPrice), precision); }
+        public Price activationPriceValue(int precision) { return Price.fromDecimal(java.math.BigDecimal.valueOf(activationPrice), precision); }
         public BigDecimal limitPriceDecimal() { return BigDecimal.valueOf(limitPrice); }
         public BigDecimal realizedPnlDecimal() { return BigDecimal.valueOf(realizedPnl); }
         public LimitOrderIntent(String strategyId, String symbol, long inputSequence, long marketTimestamp,

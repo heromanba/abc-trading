@@ -93,7 +93,7 @@ public final class ExecutionEngine {
         bus.subscribe(OrderRejected.class, rejected -> portfolio.releaseOrder(rejected.order().symbol(), rejected.order().orderId()));
         bus.subscribe(LimitOrderRejected.class, rejected -> portfolio.releaseOrder(rejected.order().symbol(), rejected.order().orderId()));
         bus.subscribe(OrderFill.class, fill -> {
-            stateMachine.fill(fill.orderId(), fill.quantity(), fill.price());
+            stateMachine.fill(fill.orderId(), fill.quantity(), fill.price().asDouble());
             PositionUpdate positionUpdate = portfolio.applyFill(fill);
             if (liquidationOrders.containsKey(fill.orderId())) bus.publish(new LiquidationFill(fill));
             bus.publish(new SettledOrderFill(fill, positionUpdate.position(), positionUpdate.realizedPnl()));

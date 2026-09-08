@@ -10,7 +10,7 @@ public final class Price implements Comparable<Price> {
     private final int precision;
 
     private Price(long raw, int precision) {
-        if (raw <= 0) throw new IllegalArgumentException("price must be positive");
+        if (raw < 0) throw new IllegalArgumentException("price must be non-negative");
         if (precision < 0 || precision > 18) throw new IllegalArgumentException("precision must be in 0..18");
         this.raw = raw;
         this.precision = precision;
@@ -27,6 +27,10 @@ public final class Price implements Comparable<Price> {
         }
     }
     public static Price fromString(String value, int precision) { return fromDecimal(new BigDecimal(value), precision); }
+    public static Price fromDouble(double value) {
+        BigDecimal decimal = BigDecimal.valueOf(value);
+        return fromDecimal(decimal, Math.max(0, decimal.stripTrailingZeros().scale()));
+    }
     public long raw() { return raw; }
     public int precision() { return precision; }
     public BigDecimal asDecimal() { return BigDecimal.valueOf(raw, precision); }

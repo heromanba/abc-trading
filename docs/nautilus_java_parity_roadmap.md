@@ -18,7 +18,8 @@ This roadmap tracks the remaining behavioral and API gap between the Java rewrit
 - [x] Add strongly typed Rust-style identifiers: `InstrumentId`, `VenueId`, `ClientOrderId`, `PositionId`, `StrategyId`.
 - [x] Add nanosecond timestamp value semantics and monotonic/event-time ordering helpers.
 - [x] Add fixed-point `Price`, exact `Money`, and `Decimal` value objects alongside existing `Quantity`.
-- [ ] Migrate order commands, fills, book levels, triggers, fees, and event prices away from `double`.
+- [x] Migrate market data, book levels, order models, fills, portfolio matching, and adapter prices to canonical `Price` values.
+- [x] Add exact `Price` views to legacy command/event records; retain numeric fields only as explicit compatibility projections for existing Python/CSV APIs.
 - [x] Migrate portfolio average fill prices and realized PnL calculations to BigDecimal arithmetic.
 - [x] Add explicit instrument taxonomy metadata for equity, FX, futures, and perpetuals.
 - [x] Add option and spread contract semantics, including exact intrinsic payoff, margin, and net spread valuation.
@@ -70,7 +71,7 @@ Implement Phase 1 in this order:
 1. identifiers and nanosecond timestamp semantics
 2. exact `Decimal`, `Price`, and `Money` APIs
 3. instrument taxonomy and `InstrumentSpec` integration
-4. additive migration of order/fill/event price fields
-5. removal of remaining `double` price/PnL boundaries
+4. migrate remaining numeric command/event wire fields when Python/CSV compatibility can be versioned
+5. remove remaining `double` PnL and fee boundaries
 
 Each slice must add Rust/Python parity fixtures and pass the full Java suite before the next slice begins.

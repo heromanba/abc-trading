@@ -38,7 +38,7 @@ public final class TwapExecutionAlgorithm extends ExecutionAlgorithm {
     }
 
     private void onMarketData(MarketDataSnapshot snapshot) {
-        if (config.symbol().equals(snapshot.symbol())) schedule(snapshot.tsInit(), snapshot.last());
+        if (config.symbol().equals(snapshot.symbol())) schedule(snapshot.tsInit(), snapshot.last().asDouble());
     }
 
     private void schedule(long timestampNs, double price) {
