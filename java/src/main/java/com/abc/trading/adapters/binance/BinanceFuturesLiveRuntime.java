@@ -32,8 +32,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.HashSet;
-import java.util.Set;
+import com.abc.trading.execution.ExecutionReportReconciler;
 import java.util.function.Consumer;
 
 /** Bridges Binance protocol events into the Java kernel's typed runtime. */
@@ -44,7 +43,7 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
     private final Consumer<TradeTick> tradeSink;
     private final Map<String, OrderIntent> marketOrders = new LinkedHashMap<>();
     private final Map<String, LimitOrderIntent> limitOrders = new LinkedHashMap<>();
-    private final Set<String> processedExecutionReports = new HashSet<>();
+    private final ExecutionReportReconciler executionReportReconciler = new ExecutionReportReconciler();
     private final Map<String, Map<String, BigDecimal>> bids = new LinkedHashMap<>();
     private final Map<String, Map<String, BigDecimal>> asks = new LinkedHashMap<>();
     private final Map<String, BinanceInstrumentMetadata> instrumentMetadata = new LinkedHashMap<>();
@@ -254,9 +253,10 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
 
     private void handleOrder(BinanceOrderUpdate update) {
         ExecutionReport report = BinanceExecutionReportNormalizer.normalize(update);
-        if (!processedExecutionReports.add(report.deduplicationKey())) return;
+        java.util.Optional<com.abc.trading.execution.OrderEvent> canonical = executionReportReconciler.accept(report);
+        if (canonical.isEmpty()) return;
         eventSink.accept(report);
-        eventSink.accept(report.toOrderEvent());
+        eventSink.accept(canonical.get());
         OrderIntent market = marketOrders.get(update.clientOrderId());
         LimitOrderIntent limit = limitOrders.get(update.clientOrderId());
         if (!update.isTrade()) {
