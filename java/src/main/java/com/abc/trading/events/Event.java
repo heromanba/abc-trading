@@ -43,6 +43,25 @@ public record Event(
     public Event(long inputSequence, long lifecycleSequence, long marketTimestamp, String symbol,
             String sourceEventType, EventType eventType, String strategyId,
             SignalDirection signalDirection, String correlationId, String orderId,
+            Price price, Quantity quantity, BigDecimal currentPosition, BigDecimal realizedPnl) {
+        this(inputSequence, lifecycleSequence, marketTimestamp, symbol, sourceEventType, eventType,
+                strategyId, signalDirection, correlationId, orderId, price.asDouble(), quantity,
+                currentPosition, realizedPnl);
+    }
+
+    public Event(long inputSequence, long lifecycleSequence, long marketTimestamp, String symbol,
+            String sourceEventType, EventType eventType, String strategyId,
+            SignalDirection signalDirection, String correlationId, String orderId,
+            Price price, Quantity quantity, BigDecimal currentPosition, BigDecimal realizedPnl,
+            BigDecimal commission, String commissionCurrency, LiquiditySide liquiditySide,
+            String venueOrderId) {
+        this(inputSequence, lifecycleSequence, marketTimestamp, symbol, sourceEventType, eventType,
+                strategyId, signalDirection, correlationId, orderId, price.asDouble(), quantity,
+                currentPosition, realizedPnl, commission, commissionCurrency, liquiditySide, venueOrderId);
+    }
+    public Event(long inputSequence, long lifecycleSequence, long marketTimestamp, String symbol,
+            String sourceEventType, EventType eventType, String strategyId,
+            SignalDirection signalDirection, String correlationId, String orderId,
             double price, Quantity quantity, BigDecimal currentPosition, BigDecimal realizedPnl) {
         this(inputSequence, lifecycleSequence, marketTimestamp, symbol, sourceEventType, eventType,
                 strategyId, signalDirection, correlationId, orderId, price, quantity, currentPosition,

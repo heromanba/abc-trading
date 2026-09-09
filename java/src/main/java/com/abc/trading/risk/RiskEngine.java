@@ -53,7 +53,7 @@ public final class RiskEngine {
         if (order.quantity().asDouble() > maxQuantity) {
             return RiskDecision.rejected("quantity exceeds maxQuantity");
         }
-        if (order.trailingOffsetType() == null && (!Double.isFinite(order.price()) || order.price() <= 0.0)) {
+        if (order.trailingOffsetType() == null && order.price().asDouble() <= 0.0) {
             return RiskDecision.rejected("price must be finite and positive");
         }
         if (cache != null && order.trailingOffsetType() == null) {
@@ -64,7 +64,7 @@ public final class RiskEngine {
             }
         }
         Double maxNotional = maxNotionalPerOrder.get(order.symbol());
-        if (maxNotional != null && order.quantity().asDouble() * order.price() > maxNotional) {
+        if (maxNotional != null && order.quantity().asDouble() * order.price().asDouble() > maxNotional) {
             return RiskDecision.rejected("notional exceeds maxNotionalPerOrder");
         }
         if (tradingState == TradingState.REDUCING && cache != null) {
@@ -99,7 +99,7 @@ public final class RiskEngine {
         if (order.quantity().asDouble() > maxQuantity) {
             return RiskDecision.rejected("quantity exceeds maxQuantity");
         }
-        if (order.trailingOffsetType() == null && (!Double.isFinite(order.limitPrice()) || order.limitPrice() <= 0.0)) {
+        if (order.trailingOffsetType() == null && order.limitPrice().asDouble() <= 0.0) {
             return RiskDecision.rejected("limitPrice must be finite and positive");
         }
         if (cache != null && order.trailingOffsetType() == null) {
@@ -110,7 +110,7 @@ public final class RiskEngine {
             }
         }
         Double maxNotional = maxNotionalPerOrder.get(order.symbol());
-        if (maxNotional != null && order.quantity().asDouble() * order.limitPrice() > maxNotional) {
+        if (maxNotional != null && order.quantity().asDouble() * order.limitPrice().asDouble() > maxNotional) {
             return RiskDecision.rejected("notional exceeds maxNotionalPerOrder");
         }
         if (tradingState == TradingState.REDUCING && cache != null) {

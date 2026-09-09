@@ -9,7 +9,7 @@ public final class OrderMatchingEngine {
         return new OrderFill(
                 order.strategyId(), order.symbol(), order.inputSequence(), order.marketTimestamp(),
                 order.correlationId(), order.orderId(), order.side(), order.quantity(), marketPrice,
-                order.currentPosition(), order.realizedPnl());
+                order.currentPosition(), order.realizedPnlDouble());
     }
 
     public OrderFill matchLimitOrder(OrderIntent order, double marketPrice) {
@@ -21,12 +21,12 @@ public final class OrderMatchingEngine {
             throw new IllegalArgumentException("marketPrice must be finite and positive");
         }
         boolean crossed = order.side() == SignalDirection.BUY
-                ? marketPrice <= order.limitPrice()
-                : marketPrice >= order.limitPrice();
+                ? marketPrice <= order.limitPrice().asDouble()
+                : marketPrice >= order.limitPrice().asDouble();
         if (!crossed) return null;
         return new OrderFill(
                 order.strategyId(), order.symbol(), order.inputSequence(), order.marketTimestamp(),
-                order.correlationId(), order.orderId(), order.side(), order.quantity(), order.limitPrice(),
-                order.currentPosition(), order.realizedPnl());
+                order.correlationId(), order.orderId(), order.side(), order.quantity(), order.limitPrice().asDouble(),
+                order.currentPosition(), order.realizedPnlDouble());
     }
 }

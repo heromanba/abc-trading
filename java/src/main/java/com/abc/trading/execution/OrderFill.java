@@ -29,6 +29,21 @@ public record OrderFill(
                 LiquiditySide.TAKER, "");
     }
 
+        public OrderFill(String strategyId, String symbol, long inputSequence, long marketTimestamp,
+            String correlationId, String orderId, SignalDirection side, Quantity quantity,
+            Price price, BigDecimal position, BigDecimal realizedPnl) {
+        this(strategyId, symbol, inputSequence, marketTimestamp, correlationId, orderId, side,
+            quantity, price, position, realizedPnl.doubleValue(), Commission.zero("USD"), LiquiditySide.TAKER, "");
+        }
+
+        public OrderFill(String strategyId, String symbol, long inputSequence, long marketTimestamp,
+            String correlationId, String orderId, SignalDirection side, Quantity quantity,
+            Price price, BigDecimal position, BigDecimal realizedPnl,
+            Commission commission, LiquiditySide liquiditySide, String venueOrderId) {
+        this(strategyId, symbol, inputSequence, marketTimestamp, correlationId, orderId, side,
+            quantity, price, position, realizedPnl.doubleValue(), commission, liquiditySide, venueOrderId);
+        }
+
     public OrderFill(String strategyId, String symbol, long inputSequence, long marketTimestamp,
             String correlationId, String orderId, SignalDirection side, Quantity quantity,
             double price, int position, double realizedPnl) {

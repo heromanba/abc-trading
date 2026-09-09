@@ -171,13 +171,13 @@ public final class BinanceFuturesAdapter implements DataClient, ExecutionClient 
     @Override
     public void submitMarketOrder(OrderIntent order) {
         String type = order.trailingOffsetType() != null ? "TRAILING_STOP_MARKET"
-            : order.triggerPrice() > 0.0 ? "STOP_MARKET" : "MARKET";
+            : order.triggerPrice().asDouble() > 0.0 ? "STOP_MARKET" : "MARKET";
         if ("TRAILING_STOP_MARKET".equals(type) && order.trailingOffset() <= 0.0) {
             throw new IllegalArgumentException("trailingOffset must be positive");
         }
         placeOrder(order.symbol(), order.side(), type, order.quantity(), null,
             order.timeInForce(), order.orderId(), false, 0L,
-            order.triggerPrice(), order.activationPrice(),
+            order.triggerPrice().asDouble(), order.activationPrice().asDouble(),
             order.trailingOffset() / 100.0);
     }
 
@@ -186,10 +186,10 @@ public final class BinanceFuturesAdapter implements DataClient, ExecutionClient 
         if (order.trailingOffsetType() != null) {
             throw new IllegalArgumentException("Binance USD-M does not support trailing stop-limit orders");
         }
-        String type = order.triggerPrice() > 0.0 ? "STOP" : "LIMIT";
-        placeOrder(order.symbol(), order.side(), type, order.quantity(), order.limitPrice(),
+        String type = order.triggerPrice().asDouble() > 0.0 ? "STOP" : "LIMIT";
+        placeOrder(order.symbol(), order.side(), type, order.quantity(), order.limitPrice().asDouble(),
                 order.timeInForce(), order.orderId(), false, order.expireTimeNs(),
-                order.triggerPrice(), 0.0, 0.0);
+                order.triggerPrice().asDouble(), 0.0, 0.0);
     }
 
     public void submitLimitOrderDecimal(String symbol, SignalDirection side, BigDecimal quantity,

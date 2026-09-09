@@ -13,22 +13,33 @@ public record OrderIntent(
         String orderId,
         SignalDirection side,
         Quantity quantity,
-        double price,
+        Price price,
         BigDecimal currentPosition,
-        double realizedPnl,
+        BigDecimal realizedPnl,
         TimeInForce timeInForce,
         long expireTimeNs,
-        double triggerPrice,
+        Price triggerPrice,
         TriggerType triggerType,
-        double activationPrice,
+        Price activationPrice,
         double trailingOffset,
         TrailingOffsetType trailingOffsetType
 ) {
-        public Price priceValue(int precision) { return Price.fromDecimal(java.math.BigDecimal.valueOf(price), precision); }
-        public Price triggerPriceValue(int precision) { return Price.fromDecimal(java.math.BigDecimal.valueOf(triggerPrice), precision); }
-        public Price activationPriceValue(int precision) { return Price.fromDecimal(java.math.BigDecimal.valueOf(activationPrice), precision); }
-        public BigDecimal priceDecimal() { return BigDecimal.valueOf(price); }
-        public BigDecimal realizedPnlDecimal() { return BigDecimal.valueOf(realizedPnl); }
+        public OrderIntent(String strategyId, String symbol, long inputSequence, long marketTimestamp,
+                String correlationId, String orderId, SignalDirection side, Quantity quantity, double price,
+                BigDecimal currentPosition, double realizedPnl, TimeInForce timeInForce, long expireTimeNs,
+                double triggerPrice, TriggerType triggerType, double activationPrice,
+                double trailingOffset, TrailingOffsetType trailingOffsetType) {
+            this(strategyId, symbol, inputSequence, marketTimestamp, correlationId, orderId, side, quantity,
+                    Price.fromDouble(price), currentPosition, BigDecimal.valueOf(realizedPnl), timeInForce,
+                    expireTimeNs, Price.fromDouble(triggerPrice), triggerType, Price.fromDouble(activationPrice),
+                    trailingOffset, trailingOffsetType);
+        }
+
+        public double priceDouble() { return price.asDouble(); }
+        public Price triggerPriceValue(int precision) { return triggerPrice; }
+        public Price activationPriceValue(int precision) { return activationPrice; }
+        public BigDecimal priceDecimal() { return price.asDecimal(); }
+        public double realizedPnlDouble() { return realizedPnl.doubleValue(); }
         public OrderIntent(String strategyId, String symbol, long inputSequence, long marketTimestamp,
                         String correlationId, String orderId, SignalDirection side, Quantity quantity, double price,
                         BigDecimal currentPosition, double realizedPnl, TimeInForce timeInForce, long expireTimeNs,

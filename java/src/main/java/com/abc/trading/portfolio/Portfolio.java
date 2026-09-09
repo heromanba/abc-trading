@@ -25,13 +25,13 @@ public final class Portfolio {
     }
 
     public void applyOrderIntent(OrderIntent order) {
-        accountLedger.reserve(cache.venue(order.symbol()), order.orderId(), order.quantity(), order.price(),
+        accountLedger.reserve(cache.venue(order.symbol()), order.orderId(), order.quantity(), order.price().asDouble(),
             cache.instrument(order.symbol()), order.side(), cache.position(order.symbol()));
         cache.recordOrder(order);
     }
 
     public void applyLimitOrderIntent(LimitOrderIntent order) {
-        accountLedger.reserve(cache.venue(order.symbol()), order.orderId(), order.quantity(), order.limitPrice(),
+        accountLedger.reserve(cache.venue(order.symbol()), order.orderId(), order.quantity(), order.limitPrice().asDouble(),
             cache.instrument(order.symbol()), order.side(), cache.position(order.symbol()));
     }
 
@@ -161,12 +161,12 @@ public final class Portfolio {
     }
 
     public boolean canReserve(OrderIntent order) {
-        return accountLedger.canReserve(cache.venue(order.symbol()), order.quantity(), order.price(),
+        return accountLedger.canReserve(cache.venue(order.symbol()), order.quantity(), order.price().asDouble(),
             cache.instrument(order.symbol()), order.side(), cache.position(order.symbol()));
     }
 
     public boolean canReserve(LimitOrderIntent order) {
-        return accountLedger.canReserve(cache.venue(order.symbol()), order.quantity(), order.limitPrice(),
+        return accountLedger.canReserve(cache.venue(order.symbol()), order.quantity(), order.limitPrice().asDouble(),
             cache.instrument(order.symbol()), order.side(), cache.position(order.symbol()));
     }
 

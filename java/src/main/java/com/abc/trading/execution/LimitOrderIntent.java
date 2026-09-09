@@ -13,23 +13,34 @@ public record LimitOrderIntent(
         String orderId,
         SignalDirection side,
         Quantity quantity,
-        double limitPrice,
+        Price limitPrice,
         BigDecimal currentPosition,
-        double realizedPnl,
+        BigDecimal realizedPnl,
         TimeInForce timeInForce,
         long expireTimeNs,
-        double triggerPrice,
+        Price triggerPrice,
         TriggerType triggerType,
-        double activationPrice,
+        Price activationPrice,
         double trailingOffset,
         TrailingOffsetType trailingOffsetType,
         double limitOffset
 ) {
-        public Price limitPriceValue(int precision) { return Price.fromDecimal(java.math.BigDecimal.valueOf(limitPrice), precision); }
-        public Price triggerPriceValue(int precision) { return Price.fromDecimal(java.math.BigDecimal.valueOf(triggerPrice), precision); }
-        public Price activationPriceValue(int precision) { return Price.fromDecimal(java.math.BigDecimal.valueOf(activationPrice), precision); }
-        public BigDecimal limitPriceDecimal() { return BigDecimal.valueOf(limitPrice); }
-        public BigDecimal realizedPnlDecimal() { return BigDecimal.valueOf(realizedPnl); }
+        public LimitOrderIntent(String strategyId, String symbol, long inputSequence, long marketTimestamp,
+                String correlationId, String orderId, SignalDirection side, Quantity quantity, double limitPrice,
+                BigDecimal currentPosition, double realizedPnl, TimeInForce timeInForce, long expireTimeNs,
+                double triggerPrice, TriggerType triggerType, double activationPrice,
+                double trailingOffset, TrailingOffsetType trailingOffsetType, double limitOffset) {
+            this(strategyId, symbol, inputSequence, marketTimestamp, correlationId, orderId, side, quantity,
+                    Price.fromDouble(limitPrice), currentPosition, BigDecimal.valueOf(realizedPnl), timeInForce,
+                    expireTimeNs, Price.fromDouble(triggerPrice), triggerType, Price.fromDouble(activationPrice),
+                    trailingOffset, trailingOffsetType, limitOffset);
+        }
+
+        public Price limitPriceValue(int precision) { return limitPrice; }
+        public Price triggerPriceValue(int precision) { return triggerPrice; }
+        public Price activationPriceValue(int precision) { return activationPrice; }
+        public BigDecimal limitPriceDecimal() { return limitPrice.asDecimal(); }
+        public double realizedPnlDouble() { return realizedPnl.doubleValue(); }
         public LimitOrderIntent(String strategyId, String symbol, long inputSequence, long marketTimestamp,
                         String correlationId, String orderId, SignalDirection side, Quantity quantity, double limitPrice,
                         BigDecimal currentPosition, double realizedPnl, TimeInForce timeInForce, long expireTimeNs,

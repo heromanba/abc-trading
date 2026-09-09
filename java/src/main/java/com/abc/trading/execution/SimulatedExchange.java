@@ -185,8 +185,8 @@ public final class SimulatedExchange {
 
     public void submitLimitOrder(LimitOrderIntent order) {
         validateQuantity(order.quantity());
-        if (order.trailingOffsetType() == null) validatePrice(order.limitPrice());
-        else if (!Double.isFinite(order.limitPrice()) || order.limitPrice() < 0.0) {
+        if (order.trailingOffsetType() == null) validatePrice(order.limitPrice().asDouble());
+        else if (!Double.isFinite(order.limitPrice().asDouble()) || order.limitPrice().asDouble() < 0.0) {
             throw new IllegalArgumentException("limitPrice must be finite and non-negative");
         }
         schedule(order, latencyModel.getInsertLatencyNs());
@@ -194,8 +194,8 @@ public final class SimulatedExchange {
 
     public void submitMarketOrder(OrderIntent order) {
         validateQuantity(order.quantity());
-        if (order.trailingOffsetType() == null) validatePrice(order.price());
-        else if (!Double.isFinite(order.price()) || order.price() < 0.0) {
+        if (order.trailingOffsetType() == null) validatePrice(order.price().asDouble());
+        else if (!Double.isFinite(order.price().asDouble()) || order.price().asDouble() < 0.0) {
             throw new IllegalArgumentException("price must be finite and non-negative");
         }
         schedule(order, latencyModel.getInsertLatencyNs());
@@ -740,19 +740,19 @@ public final class SimulatedExchange {
             if (order instanceof OrderIntent market) {
                 return new WorkingOrder(market.strategyId(), market.symbol(), market.inputSequence(),
                         market.marketTimestamp(), market.correlationId(), market.orderId(), market.side(),
-                        market.quantity(), market.price(), market.currentPosition(), market.realizedPnl(),
+                        market.quantity(), market.price().asDouble(), market.currentPosition(), market.realizedPnlDouble(),
                         market.timeInForce(), market.expireTimeNs(), false,
-                        market.triggerPrice() > 0.0 || market.trailingOffsetType() != null,
-                        market.triggerPrice(), market.triggerType(), market.activationPrice(),
+                        market.triggerPrice().asDouble() > 0.0 || market.trailingOffsetType() != null,
+                        market.triggerPrice().asDouble(), market.triggerType(), market.activationPrice().asDouble(),
                         market.trailingOffset(), market.trailingOffsetType(), 0.0);
             }
             LimitOrderIntent limit = (LimitOrderIntent) order;
             return new WorkingOrder(limit.strategyId(), limit.symbol(), limit.inputSequence(),
                     limit.marketTimestamp(), limit.correlationId(), limit.orderId(), limit.side(),
-                    limit.quantity(), limit.limitPrice(), limit.currentPosition(), limit.realizedPnl(),
+                        limit.quantity(), limit.limitPrice().asDouble(), limit.currentPosition(), limit.realizedPnlDouble(),
                     limit.timeInForce(), limit.expireTimeNs(), true,
-                    limit.triggerPrice() > 0.0 || limit.trailingOffsetType() != null,
-                    limit.triggerPrice(), limit.triggerType(), limit.activationPrice(), limit.trailingOffset(),
+                    limit.triggerPrice().asDouble() > 0.0 || limit.trailingOffsetType() != null,
+                    limit.triggerPrice().asDouble(), limit.triggerType(), limit.activationPrice().asDouble(), limit.trailingOffset(),
                     limit.trailingOffsetType(), limit.limitOffset());
         }
     }
