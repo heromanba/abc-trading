@@ -213,7 +213,7 @@ public final class OrderStateMachine {
     }
 
     private void emit(String orderId, OrderEventType type, OrderStatus previous, OrderState state) {
-        OrderEvent event = new OrderEvent(orderId, type, previous, state.status(), state.submittedQuantity(),
+        OrderEvent event = new OrderEvent(orderId, "", type, previous, state.status(), state.submittedQuantity(),
                 state.filledQuantity(), state.remainingQuantity(), Price.fromDouble(state.averageFillPrice()));
         events.add(event);
         eventSink.accept(event);

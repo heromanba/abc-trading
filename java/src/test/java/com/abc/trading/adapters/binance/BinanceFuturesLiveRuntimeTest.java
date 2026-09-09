@@ -3,6 +3,7 @@ package com.abc.trading.adapters.binance;
 import com.abc.trading.data.MarketDataSnapshot;
 import com.abc.trading.data.OrderBookSnapshot;
 import com.abc.trading.execution.OrderFill;
+import com.abc.trading.execution.ExecutionReport;
 import com.abc.trading.portfolio.AccountStateEvent;
 import com.abc.trading.msgbus.DisruptorMarketDataIngress;
 import org.junit.jupiter.api.Test;
@@ -45,6 +46,7 @@ class BinanceFuturesLiveRuntimeTest {
         wired.acceptMarketPayload("{\"stream\":\"btcusdt@depth@100ms\",\"data\":{\"e\":\"depthUpdate\",\"E\":1000,\"T\":999,\"s\":\"BTCUSDT\",\"U\":10,\"u\":12,\"pu\":9,\"b\":[[\"100.10\",\"2\"]],\"a\":[[\"100.20\",\"3\"]]}}");
         wired.acceptMarketPayload("{\"e\":\"markPriceUpdate\",\"E\":1001,\"s\":\"BTCUSDT\",\"p\":\"100.15\",\"i\":\"100.10\",\"T\":2000}");
         wired.acceptUserPayload("{\"e\":\"ORDER_TRADE_UPDATE\",\"E\":1002,\"o\":{\"s\":\"BTCUSDT\",\"i\":42,\"c\":\"client-1\",\"S\":\"BUY\",\"o\":\"MARKET\",\"f\":\"GTC\",\"x\":\"TRADE\",\"X\":\"FILLED\",\"l\":\"1\",\"L\":\"100.20\",\"n\":\"0\",\"N\":\"USDT\",\"R\":false}}");
+        wired.acceptUserPayload("{\"e\":\"ORDER_TRADE_UPDATE\",\"E\":1002,\"o\":{\"s\":\"BTCUSDT\",\"i\":42,\"c\":\"client-1\",\"S\":\"BUY\",\"o\":\"MARKET\",\"f\":\"GTC\",\"x\":\"TRADE\",\"X\":\"FILLED\",\"l\":\"1\",\"L\":\"100.20\",\"n\":\"0\",\"N\":\"USDT\",\"R\":false}}");
         wired.acceptUserPayload("{\"e\":\"ACCOUNT_UPDATE\",\"E\":1003,\"a\":{\"B\":[{\"a\":\"USDT\",\"wb\":\"1000.5\",\"cw\":\"900.25\"}],\"P\":[{\"s\":\"BTCUSDT\",\"up\":\"-2.5\"}]}}");
 
         assertTrue(events.stream().anyMatch(OrderBookSnapshot.class::isInstance));
@@ -53,6 +55,7 @@ class BinanceFuturesLiveRuntimeTest {
                 .map(OrderFill.class::cast).findFirst().orElseThrow();
         assertEquals("client-1", fill.orderId());
         assertEquals(100.20, fill.price().asDouble());
+        assertEquals(1, events.stream().filter(ExecutionReport.class::isInstance).count());
         assertEquals(com.abc.trading.data.Quantity.fromString("1", 0), fill.quantity());
         AccountStateEvent account = events.stream().filter(AccountStateEvent.class::isInstance)
             .map(AccountStateEvent.class::cast).findFirst().orElseThrow();

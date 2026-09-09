@@ -47,6 +47,7 @@ import com.abc.trading.execution.commands.CancelOrder;
 import com.abc.trading.execution.commands.ModifyOrder;
 import com.abc.trading.execution.OrderFill;
 import com.abc.trading.execution.SettledOrderFill;
+import com.abc.trading.execution.ExecutionReport;
 import com.abc.trading.execution.TwapExecutionAlgorithm;
 import com.abc.trading.execution.TwapExecutionConfig;
 import com.abc.trading.execution.VwapExecutionAlgorithm;
@@ -106,6 +107,7 @@ public final class BacktestEngine implements AutoCloseable {
         kernel.bus().subscribe(LimitOrderDenied.class, denied -> logLimitOrderDenied(denied.order()));
         kernel.bus().subscribe(OrderFill.class, this::logOrderFill, 100);
         kernel.bus().subscribe(SettledOrderFill.class, this::logSettledOrderFill, 100);
+        kernel.bus().subscribe(ExecutionReport.class, this::logExecutionReport, 110);
         kernel.bus().subscribe(PositionUpdate.class, this::logPositionUpdate);
         kernel.bus().subscribe(FundingPayment.class, this::logFundingPayment);
         kernel.bus().subscribe(AccountStateEvent.class, this::logAccountState);
@@ -218,6 +220,14 @@ public final class BacktestEngine implements AutoCloseable {
 
     private void logOrderFill(OrderFill fill) {
         // Raw fills are settled by ExecutionEngine before the canonical fill event is logged.
+    }
+
+    private void logExecutionReport(ExecutionReport report) {
+        log(new Event(0, nextLifecycleSequence(), report.eventTimeNs(), report.symbol(),
+                ExecutionReport.class.getSimpleName(), EventType.EXECUTION_REPORT, "",
+                report.side(), "", report.clientOrderId(), report.lastPrice(), report.lastQuantity(),
+                kernelPosition(report.symbol()), BigDecimal.ZERO, report.commission(),
+                report.commissionCurrency(), null, report.exchangeOrderId()));
     }
 
     private void logSettledOrderFill(SettledOrderFill settledFill) {

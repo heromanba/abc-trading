@@ -10,6 +10,7 @@ import com.abc.trading.data.Quantity;
 import com.abc.trading.execution.ExecutionClient;
 import com.abc.trading.execution.LimitOrderIntent;
 import com.abc.trading.execution.OrderFill;
+import com.abc.trading.execution.ExecutionReport;
 import com.abc.trading.execution.OrderIntent;
 import com.abc.trading.execution.SignalDirection;
 import com.abc.trading.execution.VenueId;
@@ -31,6 +32,8 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.function.Consumer;
 
 /** Bridges Binance protocol events into the Java kernel's typed runtime. */
@@ -41,6 +44,7 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
     private final Consumer<TradeTick> tradeSink;
     private final Map<String, OrderIntent> marketOrders = new LinkedHashMap<>();
     private final Map<String, LimitOrderIntent> limitOrders = new LinkedHashMap<>();
+    private final Set<String> processedExecutionReports = new HashSet<>();
     private final Map<String, Map<String, BigDecimal>> bids = new LinkedHashMap<>();
     private final Map<String, Map<String, BigDecimal>> asks = new LinkedHashMap<>();
     private final Map<String, BinanceInstrumentMetadata> instrumentMetadata = new LinkedHashMap<>();
@@ -249,6 +253,10 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
     }
 
     private void handleOrder(BinanceOrderUpdate update) {
+        ExecutionReport report = BinanceExecutionReportNormalizer.normalize(update);
+        if (!processedExecutionReports.add(report.deduplicationKey())) return;
+        eventSink.accept(report);
+        eventSink.accept(report.toOrderEvent());
         OrderIntent market = marketOrders.get(update.clientOrderId());
         LimitOrderIntent limit = limitOrders.get(update.clientOrderId());
         if (!update.isTrade()) {
@@ -258,7 +266,7 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
         String symbol = update.symbol();
         SignalDirection side = "BUY".equals(update.side()) ? SignalDirection.BUY : SignalDirection.SELL;
         Quantity quantity = toQuantity(update.lastQuantity());
-        double price = update.lastPrice().doubleValue();
+        double price = report.lastPrice().asDouble();
         String strategy = market != null ? market.strategyId() : limit != null ? limit.strategyId() : "BINANCE";
         long input = market != null ? market.inputSequence() : limit != null ? limit.inputSequence() : 0L;
         String correlation = market != null ? market.correlationId() : limit != null ? limit.correlationId() : update.clientOrderId();
