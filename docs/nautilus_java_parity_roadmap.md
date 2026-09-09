@@ -27,7 +27,8 @@ This roadmap tracks the remaining behavioral and API gap between the Java rewrit
 
 ## Phase 2: Order and Execution Parity
 
-- [ ] Match Nautilus order-event variants and transition rules exactly.
+- [x] Add canonical lifecycle event variants and deterministic transition history to `OrderStateMachine`.
+- [ ] Match all remaining Nautilus order-event variants and venue execution-report semantics exactly.
 - [ ] Add venue/client/server order ID mapping and execution-report reconciliation.
 - [ ] Add reduce-only, post-only, close-position, quote-quantity, and self-trade-prevention semantics.
 - [ ] Add slippage, fill-probability, and market-impact models.

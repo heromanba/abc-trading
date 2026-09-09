@@ -54,4 +54,24 @@ class OrderStateMachineTest {
         assertThrows(IllegalStateException.class, () -> machine.trigger("order-2"));
         assertThrows(IllegalStateException.class, () -> machine.voidOrder("order-2"));
     }
+
+    @Test
+    void emitsCanonicalLifecycleEventsWithExactAveragePrice() {
+        OrderStateMachine machine = new OrderStateMachine();
+        machine.initialize("order-events", 10, TimeInForce.GTC, 0L);
+        machine.submit("order-events");
+        machine.accept("order-events");
+        machine.fill("order-events", 4, 100.25);
+        machine.fill("order-events", 6, 102.25);
+
+        assertEquals(java.util.List.of(
+                OrderEventType.INITIALIZED,
+                OrderEventType.SUBMITTED,
+                OrderEventType.ACCEPTED,
+                OrderEventType.PARTIALLY_FILLED,
+                OrderEventType.FILLED),
+                machine.events().stream().map(OrderEvent::type).toList());
+        assertEquals(0, new java.math.BigDecimal("101.45")
+                .compareTo(machine.events().get(4).averageFillPrice().asDecimal()));
+    }
 }

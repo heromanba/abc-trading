@@ -1,13 +1,27 @@
 package com.abc.trading.execution;
 
 import com.abc.trading.data.Quantity;
+import com.abc.trading.data.Price;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
 
 public final class OrderStateMachine {
     private final Map<String, OrderState> states = new LinkedHashMap<>();
     private final Map<String, OrderStatus> pendingPreviousStatuses = new LinkedHashMap<>();
+    private final List<OrderEvent> events = new ArrayList<>();
+    private final Consumer<OrderEvent> eventSink;
+
+    public OrderStateMachine() {
+        this(event -> { });
+    }
+
+    public OrderStateMachine(Consumer<OrderEvent> eventSink) {
+        this.eventSink = eventSink == null ? event -> { } : eventSink;
+    }
 
     public OrderState initialize(String orderId, int quantity, TimeInForce timeInForce, long expireTimeNs) {
         return initialize(orderId, Quantity.fromInt(quantity), timeInForce, expireTimeNs);
@@ -18,6 +32,7 @@ public final class OrderStateMachine {
         OrderState state = new OrderState(orderId, OrderStatus.INITIALIZED, quantity, Quantity.fromInt(0), quantity,
                 0.0, timeInForce, expireTimeNs);
         states.put(orderId, state);
+        emit(orderId, OrderEventType.INITIALIZED, null, state);
         return state;
     }
 
@@ -104,6 +119,7 @@ public final class OrderStateMachine {
                 current.filledQuantity(), quantity.subtract(current.filledQuantity()), current.averageFillPrice(),
                 current.timeInForce(), current.expireTimeNs());
         states.put(orderId, updated);
+        emit(orderId, OrderEventType.UPDATED, current.status(), updated);
         return updated;
     }
 
@@ -138,6 +154,8 @@ public final class OrderStateMachine {
         OrderState updated = new OrderState(orderId, status, current.submittedQuantity(), filledQuantity,
                 remainingQuantity, averagePrice, current.timeInForce(), current.expireTimeNs());
         states.put(orderId, updated);
+        emit(orderId, remainingQuantity.isZero() ? OrderEventType.FILLED : OrderEventType.PARTIALLY_FILLED,
+            current.status(), updated);
         return updated;
     }
 
@@ -169,6 +187,7 @@ public final class OrderStateMachine {
                         current.filledQuantity(), current.remainingQuantity(), current.averageFillPrice(),
                         current.timeInForce(), current.expireTimeNs());
                 states.put(orderId, updated);
+                emit(orderId, eventType(target), current.status(), updated);
                 return updated;
             }
         }
@@ -184,7 +203,40 @@ public final class OrderStateMachine {
                 current.filledQuantity(), current.remainingQuantity(), current.averageFillPrice(),
                 current.timeInForce(), current.expireTimeNs());
         states.put(current.orderId(), restored);
+        emit(current.orderId(), current.status() == OrderStatus.PENDING_CANCEL
+                ? OrderEventType.CANCEL_REJECTED : OrderEventType.UPDATE_REJECTED, current.status(), restored);
         return restored;
+    }
+
+    public List<OrderEvent> events() {
+        return List.copyOf(events);
+    }
+
+    private void emit(String orderId, OrderEventType type, OrderStatus previous, OrderState state) {
+        OrderEvent event = new OrderEvent(orderId, type, previous, state.status(), state.submittedQuantity(),
+                state.filledQuantity(), state.remainingQuantity(), Price.fromDouble(state.averageFillPrice()));
+        events.add(event);
+        eventSink.accept(event);
+    }
+
+    private static OrderEventType eventType(OrderStatus status) {
+        return switch (status) {
+            case INITIALIZED -> OrderEventType.INITIALIZED;
+            case SUBMITTED -> OrderEventType.SUBMITTED;
+            case EMULATED -> OrderEventType.EMULATED;
+            case RELEASED -> OrderEventType.RELEASED;
+            case ACCEPTED -> OrderEventType.ACCEPTED;
+            case TRIGGERED -> OrderEventType.TRIGGERED;
+            case DENIED -> OrderEventType.DENIED;
+            case REJECTED -> OrderEventType.REJECTED;
+            case PENDING_CANCEL -> OrderEventType.PENDING_CANCEL;
+            case CANCELED -> OrderEventType.CANCELED;
+            case PENDING_UPDATE -> OrderEventType.PENDING_UPDATE;
+            case PARTIALLY_FILLED -> OrderEventType.PARTIALLY_FILLED;
+            case FILLED -> OrderEventType.FILLED;
+            case EXPIRED -> OrderEventType.EXPIRED;
+            case VOIDED -> OrderEventType.VOIDED;
+        };
     }
 
     private static boolean isCancellable(OrderStatus status) {
