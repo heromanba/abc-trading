@@ -49,6 +49,7 @@ import com.abc.trading.execution.MakerTakerFeeModel;
 import com.abc.trading.execution.StaticLatencyModel;
 import com.abc.trading.backtest.SimulatedVenueConfig;
 import com.abc.trading.trading.StrategyHandler;
+import com.abc.trading.trading.ActorRuntime;
 
 import java.util.Arrays;
 import java.util.Comparator;
@@ -75,6 +76,7 @@ public final class NautilusKernel implements AutoCloseable {
     private final Map<VenueId, SimulatedExchange> exchanges = new LinkedHashMap<>();
     private final List<DataClient> liveClients = new ArrayList<>();
     private final List<ExecutionAlgorithm> executionAlgorithms = new ArrayList<>();
+    private final List<ActorRuntime<?>> actors = new ArrayList<>();
     private final ComponentLifecycle lifecycle = new ComponentLifecycle();
     private long inputSequence;
 
@@ -206,6 +208,16 @@ public final class NautilusKernel implements AutoCloseable {
         addVenue(SimulatedVenueConfig.defaults(new VenueId(venue)));
     }
 
+    public <M> ActorRuntime<M> registerActor(String actorId, ActorRuntime.ActorLifecycle<M> actor,
+            int mailboxCapacity) {
+        if (lifecycle.state() != ComponentState.PRE_INITIALIZED && lifecycle.state() != ComponentState.READY) {
+            throw new IllegalStateException("Cannot register actors after initialization");
+        }
+        ActorRuntime<M> runtime = new ActorRuntime<>(actorId, actor, mailboxCapacity);
+        actors.add(runtime);
+        return runtime;
+    }
+
     public void addVenue(SimulatedVenueConfig config) {
         VenueId venueId = config.venue();
         LatencyModel latencyModel = config.latencyModel() == null
@@ -312,6 +324,7 @@ public final class NautilusKernel implements AutoCloseable {
             throw new IllegalStateException("Kernel cannot start from state: " + lifecycle.state());
         }
         lifecycle.start();
+        actors.forEach(actor -> actor.start(clock.timestampNs()));
         trader.start();
         for (DataClient client : liveClients) client.start();
         lifecycle.startCompleted();
@@ -446,6 +459,7 @@ public final class NautilusKernel implements AutoCloseable {
         if (lifecycle.state() != ComponentState.RUNNING) return;
         executionAlgorithms.forEach(ExecutionAlgorithm::close);
         executionAlgorithms.clear();
+        actors.forEach(ActorRuntime::stop);
         lifecycle.stop();
         for (DataClient client : liveClients) client.stop();
         marketDataIngress.drain();
@@ -460,6 +474,7 @@ public final class NautilusKernel implements AutoCloseable {
         lifecycle.reset();
         inputSequence = 0;
         trader.reset();
+        actors.forEach(actor -> actor.reset(clock.timestampNs()));
         lifecycle.resetCompleted();
     }
 
@@ -478,6 +493,8 @@ public final class NautilusKernel implements AutoCloseable {
             aeronExternalSubscription = null;
         }
         if (externalBacking != null) externalBacking.close();
+        actors.forEach(ActorRuntime::close);
+        actors.clear();
         marketDataIngress.close();
         trader.dispose();
         lifecycle.disposeCompleted();

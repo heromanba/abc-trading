@@ -56,7 +56,7 @@ This roadmap tracks the remaining behavioral and API gap between the Java rewrit
 
 ## Phase 5: Actors, Python, and Adapters
 
-- [ ] Implement actor mailbox, timers, scheduled tasks, restart, and fault semantics.
+- [x] Implement actor mailbox, timers, scheduled tasks, restart, and fault semantics.
 - [ ] Match Python object names/signatures and callback lifecycle.
 - [ ] Add native Python event subscriptions and exact Decimal reporting.
 - [ ] Generalize adapter contracts and add high-value venues beyond Binance.
