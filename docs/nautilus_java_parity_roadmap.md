@@ -50,7 +50,7 @@ This roadmap tracks the remaining behavioral and API gap between the Java rewrit
 
 - [ ] Add complete leverage tiers and instrument-specific risk limits.
 - [ ] Complete isolated collateral, cross-margin netting, and bankruptcy/insurance behavior.
-- [ ] Add options Greeks and options margin.
+- [x] Add Black-Scholes option Greeks, premium, expiry settlement, and cross/isolated long/short option margin helpers.
 - [ ] Add funding, borrow, dividends, settlements, expiry, and contract rollover behavior.
 - [ ] Remove remaining double-based accounting projections where exact values are required.
 

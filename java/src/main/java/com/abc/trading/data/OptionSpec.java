@@ -51,4 +51,27 @@ public record OptionSpec(
         return underlyingPrice.asDecimal().multiply(quantity.asDecimal(), CONTEXT)
                 .multiply(contractMultiplier, CONTEXT).multiply(marginRate, CONTEXT);
     }
+
+    public OptionGreeks greeks(Price spot, BigDecimal volatility, BigDecimal riskFreeRate,
+            BigDecimal timeToExpiryYears) {
+        return OptionPricing.blackScholes(this, spot, volatility, riskFreeRate, timeToExpiryYears);
+    }
+
+    public BigDecimal premium(Price spot, BigDecimal volatility, BigDecimal riskFreeRate,
+            BigDecimal timeToExpiryYears, Quantity quantity) {
+        return greeks(spot, volatility, riskFreeRate, timeToExpiryYears).theoreticalPrice()
+                .multiply(quantity.asDecimal(), CONTEXT);
+    }
+
+    public BigDecimal expirySettlement(Price underlyingPrice, Quantity signedQuantity) {
+        return intrinsicValue(underlyingPrice).multiply(signedQuantity.asDecimal(), CONTEXT);
+    }
+
+    public BigDecimal marginRequirement(Price underlyingPrice, Quantity signedQuantity, boolean shortPosition) {
+        Quantity absolute = signedQuantity.asDecimal().signum() < 0
+            ? Quantity.fromDecimal(signedQuantity.asDecimal().negate(), signedQuantity.precision())
+            : signedQuantity;
+        BigDecimal base = marginRequirement(underlyingPrice, absolute);
+        return shortPosition ? base : BigDecimal.ZERO;
+    }
 }
