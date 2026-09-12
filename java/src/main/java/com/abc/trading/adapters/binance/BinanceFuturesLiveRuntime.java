@@ -20,6 +20,8 @@ import com.abc.trading.execution.OrderRejected;
 import com.abc.trading.execution.LimitOrderRejected;
 import com.abc.trading.execution.commands.CancelOrder;
 import com.abc.trading.execution.commands.ModifyOrder;
+import com.abc.trading.execution.OrderModified;
+import com.abc.trading.execution.OrderModifyRejected;
 import com.abc.trading.portfolio.AccountStateEvent;
 import com.abc.trading.portfolio.AccountState;
 import com.abc.trading.portfolio.AccountBalance;
@@ -43,6 +45,7 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
     private final Consumer<TradeTick> tradeSink;
     private final Map<String, OrderIntent> marketOrders = new LinkedHashMap<>();
     private final Map<String, LimitOrderIntent> limitOrders = new LinkedHashMap<>();
+    private final Map<String, ModifyOrder> pendingModifications = new LinkedHashMap<>();
     private final ExecutionReportReconciler executionReportReconciler = new ExecutionReportReconciler();
     private final Map<String, Map<String, BigDecimal>> bids = new LinkedHashMap<>();
     private final Map<String, Map<String, BigDecimal>> asks = new LinkedHashMap<>();
@@ -122,7 +125,12 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
 
     @Override public boolean cancelOrder(CancelOrder command) { return adapter.cancelOrder(command); }
     @Override public int cancelAllOrders(String symbol, long timestampNs) { return adapter.cancelAllOrders(symbol, timestampNs); }
-    @Override public boolean modifyOrder(ModifyOrder command) { return adapter.modifyOrder(command); }
+    @Override public boolean modifyOrder(ModifyOrder command) {
+        pendingModifications.put(command.clientOrderId(), command);
+        boolean accepted = adapter.modifyOrder(command);
+        if (!accepted) pendingModifications.remove(command.clientOrderId());
+        return accepted;
+    }
     @Override public void executeLiquidation(OrderIntent order) { marketOrders.put(order.orderId(), order); adapter.executeLiquidation(order); }
 
     public BinanceInstrumentMetadata parseInstrument(JsonNode symbol) {
@@ -257,6 +265,17 @@ public final class BinanceFuturesLiveRuntime implements DataClient, ExecutionCli
         if (canonical.isEmpty()) return;
         eventSink.accept(report);
         eventSink.accept(canonical.get());
+        ModifyOrder pendingModify = pendingModifications.get(update.clientOrderId());
+        if (pendingModify != null && !update.isTrade()) {
+            if ("NEW".equals(update.orderStatus())) {
+                eventSink.accept(new OrderModified(pendingModify));
+                pendingModifications.remove(update.clientOrderId());
+            } else if ("REJECTED".equals(update.orderStatus()) || update.isTerminal()) {
+                eventSink.accept(new OrderModifyRejected(pendingModify,
+                        "Binance modify acknowledgement: " + update.orderStatus()));
+                pendingModifications.remove(update.clientOrderId());
+            }
+        }
         OrderIntent market = marketOrders.get(update.clientOrderId());
         LimitOrderIntent limit = limitOrders.get(update.clientOrderId());
         if (!update.isTrade()) {

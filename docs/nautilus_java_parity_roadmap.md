@@ -31,7 +31,8 @@ This roadmap tracks the remaining behavioral and API gap between the Java rewrit
 - [x] Add server/exchange order identity, Binance execution-report normalization, duplicate suppression, and canonical `OrderEvent` conversion.
 - [x] Persist normalized execution reports through the canonical event store with deterministic event-time identity.
 - [x] Add stale/duplicate/terminal race reconciliation for partial fills, fills, cancel, reject, and expiry reports.
-- [ ] Match all remaining Nautilus venue execution-report variants and modify-request race semantics exactly.
+- [x] Correlate modify acknowledgements by command ID and invalidate stale modify acknowledgements when cancellation wins.
+- [ ] Match all remaining Nautilus venue execution-report variants and exchange-specific modify semantics exactly.
 - [ ] Add venue/client/server order ID mapping and execution-report reconciliation.
 - [ ] Add reduce-only, post-only, close-position, quote-quantity, and self-trade-prevention semantics.
 - [ ] Add slippage, fill-probability, and market-impact models.

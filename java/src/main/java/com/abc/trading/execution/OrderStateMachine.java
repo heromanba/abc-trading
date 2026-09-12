@@ -12,6 +12,7 @@ import java.util.function.Consumer;
 public final class OrderStateMachine {
     private final Map<String, OrderState> states = new LinkedHashMap<>();
     private final Map<String, OrderStatus> pendingPreviousStatuses = new LinkedHashMap<>();
+    private final Map<String, String> pendingUpdateCommands = new LinkedHashMap<>();
     private final List<OrderEvent> events = new ArrayList<>();
     private final Consumer<OrderEvent> eventSink;
 
@@ -71,6 +72,7 @@ public final class OrderStateMachine {
             throw new IllegalStateException("Cannot cancel order from " + current.status());
         }
         pendingPreviousStatuses.put(orderId, current.status());
+        pendingUpdateCommands.remove(orderId);
         return transition(orderId, OrderStatus.PENDING_CANCEL, current.status());
     }
 
@@ -91,11 +93,17 @@ public final class OrderStateMachine {
     }
 
     public OrderState pendingUpdate(String orderId) {
+        return pendingUpdate(orderId, "legacy-update-" + orderId);
+    }
+
+    public OrderState pendingUpdate(String orderId, String commandId) {
+        if (commandId == null || commandId.isBlank()) throw new IllegalArgumentException("commandId is required");
         OrderState current = state(orderId);
         if (!isModifiable(current.status())) {
             throw new IllegalStateException("Cannot modify order from " + current.status());
         }
         pendingPreviousStatuses.put(orderId, current.status());
+        pendingUpdateCommands.put(orderId, commandId);
         return transition(orderId, OrderStatus.PENDING_UPDATE, current.status());
     }
 
@@ -104,14 +112,22 @@ public final class OrderStateMachine {
     }
 
     public OrderState update(String orderId, Quantity quantity) {
+        return update(orderId, quantity, pendingUpdateCommands.get(orderId));
+    }
+
+    public OrderState update(String orderId, Quantity quantity, String commandId) {
         OrderState current = state(orderId);
         if (current.status() != OrderStatus.PENDING_UPDATE) {
             throw new IllegalStateException("Cannot update order from " + current.status());
+        }
+        if (commandId == null || !commandId.equals(pendingUpdateCommands.get(orderId))) {
+            throw new IllegalStateException("stale modify acknowledgement for " + orderId);
         }
         if (quantity.compareTo(current.filledQuantity()) < 0 || quantity.isZero()) {
             throw new IllegalArgumentException("updated quantity must cover existing fills");
         }
         OrderStatus previousStatus = pendingPreviousStatuses.remove(orderId);
+        pendingUpdateCommands.remove(orderId);
         OrderStatus updatedStatus = previousStatus == OrderStatus.TRIGGERED
             ? OrderStatus.TRIGGERED
             : current.filledQuantity().isZero() ? OrderStatus.ACCEPTED : OrderStatus.PARTIALLY_FILLED;
@@ -124,9 +140,16 @@ public final class OrderStateMachine {
     }
 
     public OrderState updateReject(String orderId) {
+        return updateReject(orderId, pendingUpdateCommands.get(orderId));
+    }
+
+    public OrderState updateReject(String orderId, String commandId) {
         OrderState current = state(orderId);
         if (current.status() != OrderStatus.PENDING_UPDATE) {
             throw new IllegalStateException("Cannot reject update from " + current.status());
+        }
+        if (commandId == null || !commandId.equals(pendingUpdateCommands.get(orderId))) {
+            throw new IllegalStateException("stale modify rejection for " + orderId);
         }
         return restoreOpenState(current);
     }
@@ -196,6 +219,7 @@ public final class OrderStateMachine {
 
     private OrderState restoreOpenState(OrderState current) {
         OrderStatus previousStatus = pendingPreviousStatuses.remove(current.orderId());
+        pendingUpdateCommands.remove(current.orderId());
         OrderStatus restoredStatus = previousStatus == OrderStatus.TRIGGERED
             ? OrderStatus.TRIGGERED
             : current.filledQuantity().isZero() ? OrderStatus.ACCEPTED : OrderStatus.PARTIALLY_FILLED;

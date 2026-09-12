@@ -271,19 +271,19 @@ public final class ExecutionEngine {
         try {
             OrderState current = stateMachine.state(command.clientOrderId());
             if (!current.status().isOpen()) throw new IllegalStateException("order is not open");
-            stateMachine.pendingUpdate(command.clientOrderId());
+            stateMachine.pendingUpdate(command.clientOrderId(), command.commandId());
             if (clientFor(command.symbol()).modifyOrder(command)) {
                 Quantity quantity = command.quantity() == null ? current.submittedQuantity() : command.quantity();
-                stateMachine.update(command.clientOrderId(), quantity);
+                stateMachine.update(command.clientOrderId(), quantity, command.commandId());
                 bus.publish(new OrderModified(command));
             } else {
-                stateMachine.updateReject(command.clientOrderId());
+                stateMachine.updateReject(command.clientOrderId(), command.commandId());
                 bus.publish(new OrderModifyRejected(command, "order cannot be modified"));
             }
         } catch (RuntimeException error) {
             try {
                 if (stateMachine.state(command.clientOrderId()).status() == OrderStatus.PENDING_UPDATE) {
-                    stateMachine.updateReject(command.clientOrderId());
+                    stateMachine.updateReject(command.clientOrderId(), command.commandId());
                 }
             } catch (IllegalArgumentException ignored) { }
             bus.publish(new OrderModifyRejected(command, error.getMessage()));

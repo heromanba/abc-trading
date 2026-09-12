@@ -74,4 +74,33 @@ class OrderStateMachineTest {
         assertEquals(0, new java.math.BigDecimal("101.45")
                 .compareTo(machine.events().get(4).averageFillPrice().asDecimal()));
     }
+
+    @Test
+    void rejectsLateModifyAcknowledgementFromAnOlderAttempt() {
+        OrderStateMachine machine = new OrderStateMachine();
+        machine.initialize("modify-race", 10, TimeInForce.GTC, 0L);
+        machine.submit("modify-race");
+        machine.accept("modify-race");
+        machine.pendingUpdate("modify-race", "modify-1");
+        assertThrows(IllegalStateException.class,
+                () -> machine.update("modify-race", Quantity.fromInt(10), "modify-stale"));
+        assertEquals(OrderStatus.PENDING_UPDATE, machine.state("modify-race").status());
+        machine.update("modify-race", Quantity.fromInt(8), "modify-1");
+        assertEquals(OrderStatus.ACCEPTED, machine.state("modify-race").status());
+    }
+
+    @Test
+    void cancellationInvalidatesAnInFlightModifyAcknowledgement() {
+        OrderStateMachine machine = new OrderStateMachine();
+        machine.initialize("cancel-modify-race", 10, TimeInForce.GTC, 0L);
+        machine.submit("cancel-modify-race");
+        machine.accept("cancel-modify-race");
+        machine.pendingUpdate("cancel-modify-race", "modify-1");
+        machine.pendingCancel("cancel-modify-race");
+        machine.cancel("cancel-modify-race");
+
+        assertThrows(IllegalStateException.class,
+                () -> machine.update("cancel-modify-race", Quantity.fromInt(9), "modify-1"));
+        assertEquals(OrderStatus.CANCELED, machine.state("cancel-modify-race").status());
+    }
 }
