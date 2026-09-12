@@ -41,10 +41,12 @@ This roadmap tracks the remaining behavioral and API gap between the Java rewrit
 ## Phase 3: Backtest and Data Parity
 
 - [ ] Merge bars, quotes, trades, L2/L3 books, funding, FX, and custom data into one deterministic timeline.
-- [ ] Add multi-instrument and multi-venue ordering guarantees.
+- [x] Add multi-instrument event ordering guarantees.
 - [ ] Add catalog/streaming data interfaces and warm-up behavior.
-- [ ] Match checkpoint/resume and deterministic replay across all input types.
-- [ ] Add feature parity fixtures generated from Rust/Python outputs.
+- [x] Add checkpoint/resume equivalence coverage for persisted order/position/PnL projections.
+- [x] Add Java full-event sequence reconciliation with exact decimal normalization.
+- [x] Add replay/checkpoint equivalence and multi-instrument ordering fixtures.
+- [ ] Add feature parity fixtures generated directly from Rust/Python outputs.
 
 ## Phase 4: Portfolio and Risk Parity
 

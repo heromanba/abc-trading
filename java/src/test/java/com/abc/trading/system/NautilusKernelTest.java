@@ -50,6 +50,30 @@ class NautilusKernelTest {
     }
 
     @Test
+    void ordersMultiInstrumentBarsByTimestampThenSymbol() {
+        try (NautilusKernel kernel = new NautilusKernel()) {
+            List<String> order = new ArrayList<>();
+            kernel.addInstrument("MSFT", "XNAS");
+            kernel.addInstrument("AAPL", "XNAS");
+            kernel.addStrategy("MSFT", new StrategyHandler() {
+                @Override public void onBar(Bar bar) { order.add(bar.symbol() + ":" + bar.tsInit()); }
+            });
+            kernel.addStrategy("AAPL", new StrategyHandler() {
+                @Override public void onBar(Bar bar) { order.add(bar.symbol() + ":" + bar.tsInit()); }
+            });
+            kernel.start();
+            kernel.runBars(new Bar[] {
+                    new Bar("MSFT", 200, 20.0, 2),
+                    new Bar("AAPL", 100, 10.0, 1),
+                    new Bar("MSFT", 100, 21.0, 3),
+                    new Bar("AAPL", 200, 11.0, 4)
+            });
+
+            assertEquals(List.of("AAPL:100", "MSFT:100", "AAPL:200", "MSFT:200"), order);
+        }
+    }
+
+    @Test
     void enforcesKernelLifecycleTransitions() {
         try (NautilusKernel kernel = new NautilusKernel()) {
             assertEquals(ComponentState.PRE_INITIALIZED, kernel.state());

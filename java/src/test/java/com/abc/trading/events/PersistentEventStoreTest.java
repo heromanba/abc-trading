@@ -39,7 +39,7 @@ class PersistentEventStoreTest {
         MessageBus bus = new MessageBus(null);
         bus.subscribe(Event.class, event -> delivered.incrementAndGet());
         Path checkpointPath = tempDir.resolve("checkpoint.json");
-        EventCheckpoint.from(new PersistentEventStore(storePath).readRecords().get(0)).save(checkpointPath);
+        EventCheckpoint.from(readRecords(storePath).get(0)).save(checkpointPath);
 
         EventReplayResult result = EventReplayer.replay(storePath, bus, checkpointPath);
 
@@ -63,10 +63,10 @@ class PersistentEventStoreTest {
         try (PersistentEventStore store = new PersistentEventStore(storePath)) {
             store.log(event);
         }
-        assertEquals(2, new PersistentEventStore(storePath).readRecords().size());
+        assertEquals(2, readRecords(storePath).size());
 
         Files.writeString(storePath, Files.readString(storePath).replace("\"offset\":1", "\"offset\":9"));
-        assertThrows(IllegalStateException.class, () -> new PersistentEventStore(storePath).readRecords());
+        assertThrows(IllegalStateException.class, () -> readRecords(storePath));
     }
 
     @Test
@@ -89,7 +89,7 @@ class PersistentEventStoreTest {
         String json = Files.readString(storePath);
         assertTrue(json.contains("\"quantity\":\"0.001\""));
         assertTrue(json.contains("\"realizedPnl\":\"1234567890.123456789\""));
-        Event restored = new PersistentEventStore(storePath).readEvents().get(0);
+        Event restored = readEvents(storePath).get(0);
         assertEquals(event.quantity(), restored.quantity());
         assertEquals(event.realizedPnl(), restored.realizedPnl());
         assertEquals(event.accountTotal(), restored.accountTotal());
@@ -137,5 +137,41 @@ class PersistentEventStoreTest {
         assertEquals(new BigDecimal("1"), result.state().positions().get("PERP"));
         assertEquals(new BigDecimal("-1.000"), result.state().realizedPnl().get("PERP"));
         assertEquals(999.0, result.state().accounts().get("USDT").total(), 1e-9);
+    }
+
+    @Test
+    void replayFromCheckpointMatchesFullReplayProjection(@TempDir Path tempDir) {
+        Path storePath = tempDir.resolve("checkpoint-equivalence.jsonl");
+        Event first = new Event(1, 1, 100, "AAPL", "OrderIntent", EventType.ORDER_SUBMIT,
+                "strategy", SignalDirection.BUY, "corr", "order", 100.0, 2, 0, 0.0);
+        Event second = new Event(1, 2, 101, "AAPL", "SettledOrderFill", EventType.ORDER_FILL,
+                "strategy", SignalDirection.BUY, "corr", "order", 101.0, 2, 2, 1.0,
+                0.0, "USD", LiquiditySide.TAKER, "server-1");
+        try (PersistentEventStore store = new PersistentEventStore(storePath)) {
+            store.log(first);
+            store.log(second);
+        }
+
+        EventReplayResult full = EventReplayer.replay(storePath, new MessageBus(null));
+        Path checkpoint = tempDir.resolve("checkpoint.json");
+        EventCheckpoint.from(readRecords(storePath).get(0)).save(checkpoint);
+        EventReplayResult resumed = EventReplayer.replay(storePath, new MessageBus(null), checkpoint);
+
+        assertEquals(full.state().positions(), resumed.state().positions());
+        assertEquals(full.state().realizedPnl(), resumed.state().realizedPnl());
+        assertEquals(full.state().orders().get("order").filledQuantity(),
+                resumed.state().orders().get("order").filledQuantity());
+    }
+
+    private static java.util.List<EventStoreRecord> readRecords(Path path) {
+        try (PersistentEventStore store = new PersistentEventStore(path)) {
+            return store.readRecords();
+        }
+    }
+
+    private static java.util.List<Event> readEvents(Path path) {
+        try (PersistentEventStore store = new PersistentEventStore(path)) {
+            return store.readEvents();
+        }
     }
 }
